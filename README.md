@@ -4,9 +4,13 @@ The dev environment of [OpenViCloud](https://github.com/OpenViCloud/titan): two 
 and a one-node Incus 7.0 LTS that is zone `local-mac`), and the GitOps that ArgoCD on that k3s follows.
 
 The manifests are staging's: every overlay here builds on the matching staging overlay in titan
-(`https://github.com/OpenViCloud/titan//gitops/<app>/overlays/staging?ref=main`) and changes only what the Mac needs —
-hostnames, the zone list, smaller requests, dev's own image tags. Staging and production are deployed from titan; this
-repository never reaches them.
+(`https://github.com/OpenViCloud/titan//gitops/<app>/overlays/staging?ref=<commit>`) and changes only what the Mac
+needs — hostnames, the zone list, the token issuer, no Incus tunnel sidecar, smaller requests, dev's own image tags. Staging is deployed from titan;
+this repository never reaches it.
+
+Every reference to titan (remote bases, Helm values, the realm import) names the same full titan commit: ArgoCD caches
+a render by the revision of this repository, so a change to a base on a moving branch is neither rendered nor applied without a hard refresh and a manual sync. Dev takes a newer
+titan commit when that commit is written here; `tests/render_test.py` checks that every titan reference in the YAML names one full commit.
 
 Design, rules and runbook live in titan:
 [docs/infra/environments/local-cluster/](https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md).
@@ -15,14 +19,14 @@ Design, rules and runbook live in titan:
 
 | Path | What |
 |---|---|
-| `mac/` | Lima VM definitions, their provisioning, `scripts/up.sh` · `down.sh`, the secrets bootstrap, the regression runner overlay |
+| `mac/` | Lima VM definitions and their provisioning; `scripts/`: `up.sh` · `down.sh`, the secrets bootstrap, a Terraform acceptance token for dev; `tests/` of the provisioning; the regression runner overlay |
 | `gitops/apps/` | ArgoCD app-of-apps: `root-local-mac` and one Application per app |
 | `gitops/<app>/` | Dev's overlay of each app |
 | `tests/` | Render checks of the overlays, and the guest-log sweeper compared with titan's template |
 
 ## Run
 
-Needs: an Apple silicon Mac with 16 GB, [Lima](https://lima-vm.io/), `kubectl`, and `infisical login` done (the bootstrap
+Needs: an Apple M3 or later (titan-incus runs KVM guests, so it needs nested virtualization) with 16 GB, [Lima](https://lima-vm.io/), `kubectl`, and `infisical login` done (the bootstrap
 reads two read-only tokens from Infisical environment `local`). Docker Desktop must be quit.
 
 ```sh
@@ -41,7 +45,7 @@ bash mac/tests/incus-log-sweeper_test.sh
 bash mac/tests/incus-uplink_test.sh
 ```
 
-CI runs all four on every push and pull request.
+CI runs all four on every push to `main` and every pull request into it.
 
 ## License
 

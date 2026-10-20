@@ -5,7 +5,7 @@ metadata:
   name: portal-local-mac
   namespace: argocd
   annotations:
-    # wave 2 — deploy cùng control-plane
+    # wave 2, with control-plane
     argocd.argoproj.io/sync-wave: "2"
 spec:
   project: default

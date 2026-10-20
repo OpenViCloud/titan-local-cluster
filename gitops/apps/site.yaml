@@ -1,11 +1,11 @@
-# Local cluster on the Mac: copy of titan's gitops/apps-staging/portal.yaml with dev's overlay from this repository (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# Local cluster on the Mac: copy of titan's gitops/apps-staging/site.yaml with dev's overlay from this repository (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: site-local-mac
   namespace: argocd
   annotations:
-    # wave 2 — deploy cùng control-plane
+    # wave 2, with control-plane
     argocd.argoproj.io/sync-wave: "2"
 spec:
   project: default
