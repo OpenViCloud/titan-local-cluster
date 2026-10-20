@@ -9,7 +9,7 @@ needs — hostnames, the zone list, the token issuer, no Incus tunnel sidecar, s
 this repository never reaches it.
 
 Every reference to titan (remote bases, Helm values, the realm import) names the same full titan commit: ArgoCD caches
-a render by the revision of this repository, so a base on a moving branch would never re-render. Dev takes a newer
+a render by the revision of this repository, so a change to a base on a moving branch is neither rendered nor applied without a hard refresh and a manual sync. Dev takes a newer
 titan commit when that commit is written here; `tests/render_test.py` checks that every titan reference in the YAML names one full commit.
 
 Design, rules and runbook live in titan:

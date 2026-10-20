@@ -67,8 +67,9 @@ class DevRender(unittest.TestCase):
 
 
 class TitanIsPinned(unittest.TestCase):
-    """Dev runs one titan commit: ArgoCD caches a render by the revision of this repository, so a remote base on a
-    moving branch never re-renders (measured on ArgoCD v2.11.2: the old base stayed and the app reported Synced)."""
+    """Dev runs one titan commit: ArgoCD caches a render by the revision of this repository, so a change to a remote base
+    on a moving branch is neither rendered nor applied without a hard refresh and a manual sync (measured on ArgoCD
+    v2.11.2: the old base stayed for ten minutes and the app reported Synced)."""
 
     def references(self):
         found = []
@@ -93,7 +94,7 @@ class TitanIsPinned(unittest.TestCase):
                 continue
             text = path.read_text()
             mentions += len(re.findall(r"OpenViCloud/titan//", text))
-            mentions += len(re.findall(r"repoURL: https://github\.com/OpenViCloud/titan\s*$", text, re.MULTILINE))
+            mentions += len(re.findall(r"""repoURL:\s*["']?https://github\.com/OpenViCloud/titan(?:\.git)?["']?\s*$""", text, re.MULTILINE))
         self.assertEqual(mentions, len(self.references()))
 
     def test_every_titan_reference_is_one_full_commit(self):
