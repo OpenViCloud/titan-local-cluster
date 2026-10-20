@@ -5,7 +5,7 @@ metadata:
   name: titan-db-local-mac
   namespace: argocd
   annotations:
-    # Deploy after cnpg-operator (wave -1) — CRDs phải tồn tại trước
+    # Deploy after cnpg-operator (wave -1): its CRDs must exist first
     argocd.argoproj.io/sync-wave: "0"
 spec:
   project: default

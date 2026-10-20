@@ -5,7 +5,7 @@ metadata:
   name: cnpg-operator
   namespace: argocd
   annotations:
-    # Cluster-scoped — phải deploy trước titan-db (sync-wave -1)
+    # Cluster-scoped: before titan-db (sync-wave -1)
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   project: default

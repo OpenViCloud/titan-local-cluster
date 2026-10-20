@@ -1,11 +1,11 @@
-# Local cluster on the Mac: copy of titan's gitops/apps-staging/keycloak.yaml (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# Local cluster on the Mac: copy of titan's gitops/apps-staging/keycloak.yaml with dev's values and ingress from this repository (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: keycloak-local-mac
   namespace: argocd
   annotations:
-    # wave 1 — deploy sau titan-db (wave 0): keycloak_staging database phải tồn tại trước
+    # wave 1, after titan-db (wave 0): the keycloak_staging database must exist first
     argocd.argoproj.io/sync-wave: "1"
 spec:
   project: default

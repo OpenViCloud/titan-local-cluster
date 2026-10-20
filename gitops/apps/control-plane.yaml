@@ -5,7 +5,7 @@ metadata:
   name: control-plane-local-mac
   namespace: argocd
   annotations:
-    # wave 2 — deploy sau keycloak (wave 1)
+    # wave 2, after keycloak (wave 1)
     argocd.argoproj.io/sync-wave: "2"
 spec:
   project: default
