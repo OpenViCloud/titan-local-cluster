@@ -6,7 +6,8 @@
 It writes, and only writes; committing and pushing to main is the deploy (ArgoCD on dev follows main here):
 - newTag of each dev overlay in IMAGES: the newest commit every workflow of that repository published from main
   (images of one repository move together);
-- every titan reference ArgoCD renders (remote bases, Helm values, sources): titan's main, or --titan;
+- every titan reference ArgoCD renders (remote bases, Helm values, sources): titan's main, or --titan, a commit
+  titan's main contains (anything else is an error);
 - each overlay's `images` entry: the name staging's overlay gives the image at that titan commit. The entry matches
   the image by that name; when a promotion renames it in titan and the entry keeps the old name, the entry matches
   nothing and dev silently runs staging's tag.

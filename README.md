@@ -44,7 +44,7 @@ python3 scripts/pull-images.py      # writes newTag, the titan commit and the im
 git commit -am "Pull published images into dev" && git push   # ArgoCD on dev follows main: the push is the deploy
 ```
 
-`--titan <commit>` takes another titan commit than its main. One bad row writes nothing.
+`--titan <commit>` pins an older commit on titan's main instead of its head; a commit off main is an ERROR. One bad row writes nothing.
 
 ## Tests
 
