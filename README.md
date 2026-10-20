@@ -4,9 +4,13 @@ The dev environment of [OpenViCloud](https://github.com/OpenViCloud/titan): two 
 and a one-node Incus 7.0 LTS that is zone `local-mac`), and the GitOps that ArgoCD on that k3s follows.
 
 The manifests are staging's: every overlay here builds on the matching staging overlay in titan
-(`https://github.com/OpenViCloud/titan//gitops/<app>/overlays/staging?ref=main`) and changes only what the Mac needs —
-hostnames, the zone list, smaller requests, dev's own image tags. Staging and production are deployed from titan; this
-repository never reaches them.
+(`https://github.com/OpenViCloud/titan//gitops/<app>/overlays/staging?ref=<commit>`) and changes only what the Mac
+needs — hostnames, the zone list, smaller requests, dev's own image tags. Staging and production are deployed from titan;
+this repository never reaches them.
+
+Every reference to titan (remote bases, Helm values, the realm import) names the same full titan commit: ArgoCD caches
+a render by the revision of this repository, so a base on a moving branch would never re-render. Dev takes a newer
+titan commit when that commit is written here; `tests/render_test.py` checks that all references agree.
 
 Design, rules and runbook live in titan:
 [docs/infra/environments/local-cluster/](https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md).

@@ -66,6 +66,32 @@ class DevRender(unittest.TestCase):
         self.assertEqual(zones(render("control-plane")), {"Zones__0__Id": "local-mac", "Zones__0__Name": "Local Mac"})
 
 
+class TitanIsPinned(unittest.TestCase):
+    """Dev runs one titan commit: ArgoCD caches a render by the revision of this repository, so a remote base on a
+    moving branch never re-renders (https://github.com/OpenViCloud/titan/blob/main/docs/architecture/platform-infra.md#gitops-flow)."""
+
+    def references(self):
+        found = []
+        for path in sorted(GITOPS.parent.rglob("*.yaml")):
+            if ".git" in path.parts:
+                continue
+            text = path.read_text()
+            found += [(path.name, ref) for ref in re.findall(r"OpenViCloud/titan//\S+\?ref=(\S+)", text)]
+            found += [(path.name, rev) for rev in re.findall(
+                r"repoURL: https://github\.com/OpenViCloud/titan\n\s+targetRevision: (\S+)", text)]
+        return found
+
+    def test_reads_both_kinds_of_reference(self):
+        files = {file for file, _ in self.references()}
+        self.assertIn("kustomization.yaml", files)
+        self.assertIn("keycloak.yaml", files)
+
+    def test_every_titan_reference_is_one_full_commit(self):
+        refs = {ref for _, ref in self.references()}
+        self.assertEqual(len(refs), 1, sorted(self.references()))
+        self.assertRegex(refs.pop(), r"^[0-9a-f]{40}$")
+
+
 class NoFakeService(unittest.TestCase):
     def test_reads_the_applications(self):
         names = [name for _, name, _ in applications()]
