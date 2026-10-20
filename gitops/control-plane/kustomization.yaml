@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: titan-staging
+
+# The local cluster on the Mac runs staging's manifests with its own image (below); the hostnames, the zone list
+# and the token issuer change (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+resources:
+  - https://github.com/OpenViCloud/titan//gitops/control-plane/overlays/staging?ref=main
+  - ingress.yaml
+
+configMapGenerator:
+  - name: control-plane-zones
+    behavior: replace
+    literals:
+      - Zones__0__Id=local-mac
+      - Zones__0__Name=Local Mac
+
+patches:
+  - path: patch-env.yaml
+  - path: patch-no-incus-tunnel.yaml
+
+# Dev's own image: a commit OpenViCloud/control-plane published from main. Staging's name and tag move only by promotion in
+# titan (https://github.com/OpenViCloud/titan/blob/main/docs/architecture/platform-infra.md#gitops-flow).
+images:
+  # Matched by the name staging's overlay gives the image, not by the base name.
+  - name: ghcr.io/openvicloud/titan-control-plane
+    newName: ghcr.io/openvicloud/control-plane
+    newTag: "627786c"

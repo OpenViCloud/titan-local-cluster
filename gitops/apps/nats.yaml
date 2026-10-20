@@ -1,0 +1,40 @@
+# Local cluster on the Mac: copy of titan's gitops/apps-staging/nats.yaml (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# https://github.com/OpenViCloud/titan/blob/main/docs/architecture/money-and-wallet.md#single-writer-outbox S3 — NATS core for the wallet-mutation notify bus (staging).
+# NATS core, non-persistent (OD-2): the DB is the durable queue, the bus only notifies; a lost notify
+# is a delayed apply (the sweeper, S6, re-drives it), never lost money. Single server; control-plane
+# runs at replicas: 1, so one subscriber is one writer per wallet (OD-3, iteration 1).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nats-local-mac
+  namespace: argocd
+  annotations:
+    # wave 0 — no dependency on titan-db; just needs to exist before control-plane connects.
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  sources:
+    - repoURL: https://nats-io.github.io/k8s/helm/charts/
+      chart: nats
+      targetRevision: "1.2.2"  # pin — update intentionally
+      helm:
+        releaseName: nats
+        valueFiles:
+          - '$values/gitops/nats/staging-values.yaml'
+    - repoURL: https://github.com/OpenViCloud/titan
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: titan-nats
+  syncPolicy:
+    automated:
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 3m

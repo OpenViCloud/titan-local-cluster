@@ -1,0 +1,46 @@
+# Local cluster on the Mac: copy of titan's gitops/apps-staging/keycloak.yaml (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keycloak-local-mac
+  namespace: argocd
+  annotations:
+    # wave 1 — deploy sau titan-db (wave 0): keycloak_staging database phải tồn tại trước
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  sources:
+    - repoURL: https://codecentric.github.io/helm-charts
+      chart: keycloakx
+      targetRevision: "7.1.9"
+      helm:
+        releaseName: keycloak
+        valueFiles:
+          - $values/gitops/keycloak/staging-values.yaml
+          - $local/gitops/keycloak/values.yaml
+    - repoURL: https://github.com/OpenViCloud/titan
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/OpenViCloud/titan-local-cluster
+      targetRevision: main
+      ref: local
+    - repoURL: https://github.com/OpenViCloud/titan
+      targetRevision: main
+      path: gitops/keycloak/realm-import
+    - repoURL: https://github.com/OpenViCloud/titan-local-cluster
+      targetRevision: main
+      path: gitops/keycloak/ingress
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: titan-auth-staging
+  syncPolicy:
+    automated:
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 3m

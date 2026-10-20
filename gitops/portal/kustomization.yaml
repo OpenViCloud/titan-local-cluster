@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: titan-staging
+
+# Staging's manifests with dev's own image tag (below) and local hostnames (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/network.md#host-access).
+resources:
+  - https://github.com/OpenViCloud/titan//gitops/portal/overlays/staging?ref=main
+  - ingress.yaml
+
+patches:
+  - path: configmap-patch.yaml
+
+# Dev's own image: a commit OpenViCloud/frontend published from main. Staging's name and tag move only by promotion in
+# titan (https://github.com/OpenViCloud/titan/blob/main/docs/architecture/platform-infra.md#gitops-flow).
+images:
+  # Matched by the name staging's overlay gives the image, not by the base name.
+  - name: ghcr.io/openvicloud/titan-portal
+    newName: ghcr.io/openvicloud/frontend-portal
+    newTag: "4d5209a"

@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Staging's database with a smaller memory request: on titan-k3s (3 GiB) PostgreSQL uses about 100 MiB, and a
+# 512 MiB request only blocks scheduling (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget). The limit stays.
+# The Application ignores /spec/resources, so a running cluster takes this on a manual sync; a new one at creation.
+resources:
+  - https://github.com/OpenViCloud/titan//gitops/titan-db/overlays/staging?ref=main
+
+patches:
+  - target:
+      kind: Cluster
+      name: titan-db
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/memory
+        value: 256Mi
+  # Integration tests on the Mac create and drop throwaway databases here instead of in a Docker container
+  # (test-all.sh of OpenViCloud/control-plane). Dev only: staging has no such role. Password: Secret titan-it-credentials,
+  # written by mac/scripts/bootstrap-secrets.sh.
+  - target:
+      kind: Cluster
+      name: titan-db
+    patch: |-
+      - op: add
+        path: /spec/managed
+        value:
+          roles:
+            # connectionLimit and inherit are CNPG's defaults, written out: left implicit, ArgoCD diffs the
+            # defaulted live object against this and keeps the app OutOfSync, which blocks promotion.
+            - name: titan_it
+              ensure: present
+              login: true
+              createdb: true
+              connectionLimit: -1
+              inherit: true
+              passwordSecret:
+                name: titan-it-credentials

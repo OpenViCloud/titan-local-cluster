@@ -1,0 +1,42 @@
+# The staging regression runner, pointed at the local cluster (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#secrets):
+# the pod reads the generated test-account passwords through secretKeyRef, the agent never sees them.
+#   kubectl --kubeconfig ~/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml apply -k mac/regression-runner
+# The browser in the pod must reach *.localhost:8080 like the Mac does, because Keycloak's issuer carries that
+# port: a spec starts a loopback proxy on 8080 towards Traefik (z1/local-proxy.ts).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - https://github.com/OpenViCloud/titan//gitops/regression-runner?ref=main
+
+patches:
+  - target:
+      kind: CronJob
+      name: titan-regression
+    patch: |-
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/1/value
+        value: http://portal.localhost:8080
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/value
+        value: http://admin.localhost:8080
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/3/value
+        value: http://api.localhost:8080
+      # titan-k3s has 3 GiB; the staging request of 1 GiB leaves the cluster no headroom.
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "2"
+            memory: 1Gi
+      # Node's own HTTP client (the request fixture) resolves through /etc/hosts; Chromium maps *.localhost to
+      # loopback by itself.
+      - op: add
+        path: /spec/jobTemplate/spec/template/spec/hostAliases
+        value:
+          - ip: 127.0.0.1
+            hostnames: [portal.localhost, admin.localhost, api.localhost, auth.localhost]

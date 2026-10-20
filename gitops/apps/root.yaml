@@ -1,0 +1,24 @@
+# Local cluster on the Mac: copy of titan's gitops/apps-staging/root.yaml (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-local-mac
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/OpenViCloud/titan-local-cluster
+    targetRevision: main
+    path: gitops/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  # Unlike staging's root, it follows main by itself (L-8): nobody syncs the local cluster by hand.
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

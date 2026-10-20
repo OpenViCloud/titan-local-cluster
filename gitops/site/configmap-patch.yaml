@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: site-config
+data:
+  config.json: |
+    {
+      "apiBaseUrl": "http://api.localhost:8080",
+      "portalUrl": "http://portal.localhost:8080"
+    }

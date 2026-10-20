@@ -1,0 +1,29 @@
+# Local cluster on the Mac: copy of titan's gitops/apps-staging/incus-worker.yaml (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: incus-worker-local-mac
+  namespace: argocd
+  annotations:
+    # After the control plane (wave 2) it talks to.
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/OpenViCloud/titan-local-cluster
+    targetRevision: main
+    path: gitops/incus-worker
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: titan-staging
+  syncPolicy:
+    automated:
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 3m

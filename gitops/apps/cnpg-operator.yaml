@@ -1,0 +1,39 @@
+# Local cluster on the Mac: copy of titan's gitops/apps-staging/cnpg-operator.yaml (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cnpg-operator
+  namespace: argocd
+  annotations:
+    # Cluster-scoped — phải deploy trước titan-db (sync-wave -1)
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+  sources:
+    - repoURL: https://cloudnative-pg.github.io/charts
+      chart: cloudnative-pg
+      targetRevision: "0.25.0"  # min for managed.roles+passwordSecret (1.24) and Database CRD (1.25)
+      helm:
+        valueFiles:
+          - $values/gitops/cnpg/operator-values.yaml
+    - repoURL: https://github.com/OpenViCloud/titan
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+
+
+  syncPolicy:
+    automated:
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 3m

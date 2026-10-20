@@ -1,0 +1,32 @@
+# titan-k3s: the k3s node of the local cluster: ArgoCD and Titan's services
+# (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#layout).
+#   limactl create --name titan-k3s mac/titan-k3s.yaml
+base: template://ubuntu-24.04
+vmType: vz
+cpus: 2
+memory: 3GiB
+disk: 30GiB
+mounts: []
+containerd:
+  system: false
+  user: false
+# user-v2 lets the worker pod reach titan-incus (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/network.md#vm-to-vm).
+networks:
+- lima: user-v2
+# Only the ingress and the Kubernetes API reach the Mac, on 127.0.0.1 (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/network.md#ports).
+# Host port 8080, not 80: for a port below 1024 Lima listened on every interface (*:80), not on 127.0.0.1.
+portForwards:
+- guestPort: 80
+  hostPort: 8080
+- guestPort: 6443
+- guestPortRange: [1, 65535]
+  proto: any
+  ignore: true
+provision:
+- mode: system
+  file:
+    url: provision/k3s.sh
+copyToHost:
+- guest: /etc/rancher/k3s/k3s.yaml
+  host: "{{.Dir}}/copied-from-guest/kubeconfig.yaml"
+  deleteOnStop: true

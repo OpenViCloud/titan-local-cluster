@@ -1,0 +1,11 @@
+# Dev reaches its Incus (titan-incus on the Mac) directly; staging's tunnel sidecar does not belong here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-plane
+spec:
+  template:
+    spec:
+      containers:
+        - name: incus-tunnel
+          $patch: delete

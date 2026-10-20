@@ -1,0 +1,31 @@
+name: CI
+
+# Render checks of dev's overlays (they build on titan's staging overlays over the network), the guest-log sweeper
+# compared with titan's template, and the provisioning tests of the Incus VM.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render dev's overlays
+        run: python3 tests/render_test.py
+
+      - name: Sweeper matches titan's template
+        run: bash tests/sweeper_test.sh
+
+      - name: Guest-log sweeper
+        run: bash mac/tests/incus-log-sweeper_test.sh
+
+      - name: OVN uplink
+        run: bash mac/tests/incus-uplink_test.sh

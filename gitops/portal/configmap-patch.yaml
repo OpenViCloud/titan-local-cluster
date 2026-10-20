@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: portal-config
+data:
+  config.json: |
+    {
+      "keycloakUrl": "http://auth.localhost:8080/auth",
+      "keycloakRealm": "titan",
+      "keycloakClientId": "titan-portal",
+      "apiBaseUrl": "http://api.localhost:8080"
+    }

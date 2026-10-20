@@ -1,0 +1,29 @@
+# Local cluster on the Mac: copy of titan's gitops/apps-staging/control-plane.yaml with dev's overlay from this repository (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: control-plane-local-mac
+  namespace: argocd
+  annotations:
+    # wave 2 — deploy sau keycloak (wave 1)
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/OpenViCloud/titan-local-cluster
+    targetRevision: main
+    path: gitops/control-plane
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: titan-staging
+  syncPolicy:
+    automated:
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 3m
