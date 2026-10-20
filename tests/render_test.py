@@ -100,8 +100,8 @@ class TitanIsPinned(unittest.TestCase):
 
     def references(self):
         found = []
-        for path in sorted(GITOPS.parent.rglob("*.yaml")):
-            if ".git" in path.parts:
+        for path in sorted(list(GITOPS.parent.rglob("*.yaml")) + list(GITOPS.parent.rglob("*.yml"))):
+            if ".git" in path.parts or ".github" in path.parts:
                 continue
             text = path.read_text()
             found += [(path.name, ref) for ref in re.findall(r"OpenViCloud/titan//\S+\?ref=(\S+)", text)]
@@ -116,8 +116,8 @@ class TitanIsPinned(unittest.TestCase):
 
     def test_every_titan_mention_is_a_reference_read_here(self):
         mentions = 0
-        for path in sorted(GITOPS.parent.rglob("*.yaml")):
-            if ".git" in path.parts:
+        for path in sorted(list(GITOPS.parent.rglob("*.yaml")) + list(GITOPS.parent.rglob("*.yml"))):
+            if ".git" in path.parts or ".github" in path.parts:
                 continue
             text = path.read_text()
             mentions += len(re.findall(r"OpenViCloud/titan//", text))

@@ -121,8 +121,8 @@ def repository_commit(run, repo, workflows):
 def titan_references(root):
     """Every file here naming titan, with the commits it names; ArgoCD renders them all."""
     found = {}
-    for path in sorted(root.rglob("*.yaml")):
-        if ".git" in path.parts:
+    for path in sorted(list(root.rglob("*.yaml")) + list(root.rglob("*.yml"))):
+        if ".git" in path.parts or ".github" in path.parts:
             continue
         text = path.read_text()
         commits = [ref for _, ref in REMOTE_BASE.findall(text)] + [rev for _, rev in SOURCE.findall(text)]
@@ -133,7 +133,7 @@ def titan_references(root):
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(description="Move dev to the images and the titan commit main publishes.")
-    parser.add_argument("--titan", help="full 40-hex titan commit (default: titan's main)")
+    parser.add_argument("--titan", help="full 40-hex commit on titan's main (default: titan's main)")
     return parser.parse_args(argv)
 
 
@@ -148,6 +148,11 @@ def main(argv, images, run, root):
         titan = args.titan or json.loads(gh_api(run, "repos/" + TITAN + "/commits/main"))["sha"]
         if not GIT_SHA.match(titan):
             raise ToolError("the titan commit must be a full 40-hex commit, got " + titan)
+        if args.titan:
+            # Dev runs only what titan merged; compare <commit>...main is "ahead" or "identical" when main contains it.
+            status = json.loads(gh_api(run, "repos/" + TITAN + "/compare/" + titan + "...main"))["status"]
+            if status not in ("ahead", "identical"):
+                raise ToolError(titan + " is not on titan's main (compare: " + status + ")")
 
         references = titan_references(root)
         current = {commit for _, commits in references.values() for commit in commits}

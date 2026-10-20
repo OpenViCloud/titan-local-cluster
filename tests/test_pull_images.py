@@ -44,12 +44,13 @@ APP_WITH_VALUES = ("  sources:\n    - repoURL: https://github.com/OpenViCloud/ti
 class FakeGitHub:
     """Answers workflow runs (head shas newest first, per workflow file), titan's main, and titan files at a commit."""
 
-    def __init__(self, head_shas, titan_main=NEW_TITAN, staging_names=None, fail=None):
+    def __init__(self, head_shas, titan_main=NEW_TITAN, staging_names=None, fail=None, on_main=True):
         self.head_shas = head_shas
         self.titan_main = titan_main
         # Name staging's overlay gives each app's image at NEW_TITAN.
         self.staging_names = staging_names or {}
         self.fail = fail
+        self.on_main = on_main
         self.calls = []
 
     def __call__(self, cmd):
@@ -57,6 +58,8 @@ class FakeGitHub:
         joined = " ".join(cmd)
         if self.fail is not None and self.fail in joined:
             return subprocess.CompletedProcess(cmd, 1, "", "boom: " + self.fail)
+        if "repos/OpenViCloud/titan/compare/" in joined:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"status": "ahead" if self.on_main else "diverged"}), "")
         if "repos/OpenViCloud/titan/commits/main" in joined:
             return subprocess.CompletedProcess(cmd, 0, json.dumps({"sha": self.titan_main}), "")
         if "repos/OpenViCloud/titan/contents/gitops/" in joined:
@@ -124,6 +127,21 @@ class PullTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("ref=" + NEW_TITAN, self.read("site"))
         self.assertFalse(any("commits/main" in " ".join(c) for c in runner.calls))
+
+    def test_a_given_titan_commit_off_main_is_an_error_and_writes_nothing(self):
+        # Dev runs only what titan merged: a commit of a branch would test manifests staging never gets.
+        text = self.read("site")
+        code, out, err = run([SITE], FakeGitHub({"ci-site.yml": SHA}, on_main=False), self.root, ["--titan", NEW_TITAN])
+        self.assertEqual(code, 2)
+        self.assertEqual(self.read("site"), text)
+        self.assertIn("not on titan's main", err)
+        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
+
+    def test_a_titan_reference_in_a_yml_file_is_moved_too(self):
+        (self.apps / "nats.yml").write_text(APP_WITH_VALUES)
+        code, _, _ = run([SITE], FakeGitHub({"ci-site.yml": SHA}), self.root)
+        self.assertEqual(code, 0)
+        self.assertEqual((self.apps / "nats.yml").read_text(), APP_WITH_VALUES.replace(OLD_TITAN, NEW_TITAN))
 
     def test_a_short_titan_commit_is_a_usage_error(self):
         text = self.read("site")
