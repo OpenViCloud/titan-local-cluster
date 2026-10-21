@@ -22,7 +22,8 @@ Design, rules and runbook live in titan:
 | `mac/` | Lima VM definitions and their provisioning; `scripts/`: `up.sh` · `down.sh`, the secrets bootstrap, a Terraform acceptance token for dev; `tests/` of the provisioning; the regression runner overlay |
 | `gitops/apps/` | ArgoCD app-of-apps: `root-local-mac` and one Application per app |
 | `gitops/<app>/` | Dev's overlay of each app |
-| `tests/` | Render checks of the overlays, and the guest-log sweeper compared with titan's template |
+| `scripts/pull-images.py` | Moves dev to what main publishes: other repositories' images, titan's commit, and the image names staging gives |
+| `tests/` | Render checks of the overlays, the pull script, and the guest-log sweeper compared with titan's template |
 
 ## Run
 
@@ -36,16 +37,26 @@ bash mac/scripts/down.sh    # stops both VMs; disks and data stay
 
 ArgoCD: http://argocd.localhost:8080 · portal: http://portal.localhost:8080.
 
+## Move dev to main
+
+```sh
+python3 scripts/pull-images.py      # writes newTag, the titan commit and the image entry names; needs `gh` logged in
+git commit -am "Pull published images into dev" && git push   # ArgoCD on dev follows main: the push is the deploy
+```
+
+`--titan <commit>` pins an older commit on titan's main instead of its head; a commit off main is an ERROR. One bad row writes nothing.
+
 ## Tests
 
 ```sh
 python3 tests/render_test.py          # kubectl, ruby, network (remote bases on GitHub)
+python3 tests/test_pull_images.py
 bash tests/sweeper_test.sh            # network (titan's template on GitHub)
 bash mac/tests/incus-log-sweeper_test.sh
 bash mac/tests/incus-uplink_test.sh
 ```
 
-CI runs all four on every push to `main` and every pull request into it.
+CI runs all five on every push to `main` and every pull request into it.
 
 ## License
 

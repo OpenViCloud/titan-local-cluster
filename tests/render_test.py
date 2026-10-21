@@ -66,6 +66,33 @@ class DevRender(unittest.TestCase):
         self.assertEqual(zones(render("control-plane")), {"Zones__0__Id": "local-mac", "Zones__0__Name": "Local Mac"})
 
 
+def overlay_image(app):
+    """The image an overlay sets: its single `images` entry's newName (else the entry name) and newTag."""
+    text = (GITOPS / app / "kustomization.yaml").read_text().split("\nimages:\n", 1)[1]
+    name = re.search(r"newName:\s*(\S+)", text) or re.search(r"-\s*name:\s*(\S+)", text)
+    return name.group(1) + ":" + re.search(r'newTag:\s*"([^"]+)"', text).group(1)
+
+
+class DevImages(unittest.TestCase):
+    """An `images` entry matches the name staging's overlay gives the image. When titan renames it and the entry here
+    keeps the old name, the entry matches nothing and dev silently runs staging's tag."""
+
+    APPS = ["control-plane", "incus-worker", "portal", "admin-portal", "site"]
+
+    def test_every_openvicloud_image_rendered_is_the_overlay_image(self):
+        for app in self.APPS:
+            wanted = overlay_image(app)
+            rendered = set()
+            for obj in render(app):
+                spec = obj.get("spec", {})
+                pod = spec.get("template", {}).get("spec") or spec.get("jobTemplate", {}).get("spec", {}).get(
+                    "template", {}).get("spec") or {}
+                for container in pod.get("containers", []) + pod.get("initContainers", []):
+                    if container["image"].startswith("ghcr.io/openvicloud/"):
+                        rendered.add(container["image"])
+            self.assertEqual(rendered, {wanted}, app)
+
+
 class TitanIsPinned(unittest.TestCase):
     """Dev runs one titan commit: ArgoCD caches a render by the revision of this repository, so a change to a remote base
     on a moving branch is neither rendered nor applied without a hard refresh and a manual sync (measured on ArgoCD
@@ -73,8 +100,8 @@ class TitanIsPinned(unittest.TestCase):
 
     def references(self):
         found = []
-        for path in sorted(GITOPS.parent.rglob("*.yaml")):
-            if ".git" in path.parts:
+        for path in sorted(list(GITOPS.parent.rglob("*.yaml")) + list(GITOPS.parent.rglob("*.yml"))):
+            if ".git" in path.parts or ".github" in path.parts:
                 continue
             text = path.read_text()
             found += [(path.name, ref) for ref in re.findall(r"OpenViCloud/titan//\S+\?ref=(\S+)", text)]
@@ -89,8 +116,8 @@ class TitanIsPinned(unittest.TestCase):
 
     def test_every_titan_mention_is_a_reference_read_here(self):
         mentions = 0
-        for path in sorted(GITOPS.parent.rglob("*.yaml")):
-            if ".git" in path.parts:
+        for path in sorted(list(GITOPS.parent.rglob("*.yaml")) + list(GITOPS.parent.rglob("*.yml"))):
+            if ".git" in path.parts or ".github" in path.parts:
                 continue
             text = path.read_text()
             mentions += len(re.findall(r"OpenViCloud/titan//", text))
