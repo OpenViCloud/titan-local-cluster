@@ -5,16 +5,16 @@ namespace: titan-staging
 
 # Staging's manifests with dev's own image tag (below) and local hostnames (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/network.md#host-access).
 resources:
-  - https://github.com/OpenViCloud/titan//gitops/site/overlays/staging?ref=08914f654bb20ec6e23cba55ed5c1d268ee23e92
+  - https://github.com/OpenViCloud/titan//gitops/site/overlays/staging?ref=ebdbb5d2669cff1725d5fcbc96e653f56d25bcf2
   - ingress.yaml
 
 patches:
   - path: configmap-patch.yaml
 
-# Dev's own image: a commit OpenViCloud/frontend published from main. Staging's name and tag move only by promotion in
-# titan (https://github.com/OpenViCloud/titan/blob/main/docs/architecture/platform-infra.md#gitops-flow).
+# Dev's own image: a commit OpenViCloud/titan-landing published from main. Staging's name and tag move only by
+# promotion in titan (https://github.com/OpenViCloud/titan/blob/main/docs/architecture/platform-infra.md#gitops-flow).
 images:
   # Matched by the name staging's overlay gives the image, not by the base name.
   - name: ghcr.io/openvicloud/titan-site
-    newName: ghcr.io/openvicloud/frontend-site
-    newTag: "3bd925a"
+    newName: ghcr.io/openvicloud/titan-landing
+    newTag: "5cb385c"

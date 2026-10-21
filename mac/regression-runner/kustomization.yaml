@@ -7,7 +7,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - https://github.com/OpenViCloud/titan//gitops/regression-runner?ref=08914f654bb20ec6e23cba55ed5c1d268ee23e92
+  - https://github.com/OpenViCloud/titan//gitops/regression-runner?ref=ebdbb5d2669cff1725d5fcbc96e653f56d25bcf2
 
 patches:
   - target:
