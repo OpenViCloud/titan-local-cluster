@@ -26,4 +26,4 @@ images:
   # Matched by the name staging's overlay gives the image, not by the base name.
   - name: ghcr.io/openvicloud/titan-control-plane
     newName: ghcr.io/openvicloud/control-plane
-    newTag: "627786c"
+    newTag: "local-627786c799da"
