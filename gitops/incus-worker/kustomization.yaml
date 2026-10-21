@@ -14,4 +14,4 @@ images:
   # Matched by the name staging's overlay gives the image, not by the base name.
   - name: ghcr.io/openvicloud/titan-incus-worker
     newName: ghcr.io/openvicloud/incus-worker
-    newTag: "local-6b04b88b8a8d"
+    newTag: "6b04b88b8a8dcfc6661ae6f42e7b3e5d8b7bc8e2"
