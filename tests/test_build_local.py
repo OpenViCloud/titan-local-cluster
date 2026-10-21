@@ -33,8 +33,7 @@ def workflow(image, context, file=None, extra=""):
              "        uses: docker/build-push-action@v5", "        with:", "          context: " + context]
     if file is not None:
         lines.append("          file: " + file)
-    # The shape of a repository publishing two images from one tree (the frontend repository at 4d5209a), labels
-    # included.
+    # The shape of CI's docker/build-push-action step, labels included.
     lines += ["          platforms: linux/arm64", "          push: true",
               "          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}",
               "          tags: " + image + ":${{ env.SHORT_SHA }}"]
