@@ -17,7 +17,7 @@ spec:
         valueFiles:
           - $values/gitops/cnpg/operator-values.yaml
     - repoURL: https://github.com/OpenViCloud/titan
-      targetRevision: 4f01f6394c49ca8649966243decc8934e58e27e0
+      targetRevision: 08914f654bb20ec6e23cba55ed5c1d268ee23e92
       ref: values
   destination:
     server: https://kubernetes.default.svc
