@@ -341,7 +341,7 @@ class RepoTests(unittest.TestCase):
 
     def test_every_pulled_overlay_ends_with_its_image(self):
         self.assertEqual(sorted(image["app"] for image in pull.IMAGES),
-                         ["admin-portal", "control-plane", "incus-worker", "portal", "site"])
+                         ["admin-portal", "cloud-console", "control-plane", "incus-worker", "site"])
         for image in pull.IMAGES:
             path = "gitops/" + image["app"] + "/kustomization.yaml"
             self.assertEqual(pull.image_in((ROOT / path).read_text(), path), image["image"], path)

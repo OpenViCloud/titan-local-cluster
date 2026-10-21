@@ -41,7 +41,7 @@ IMAGES = [
     {"repo": "OpenViCloud/control-plane", "workflow": "ci.yml", "image": "ghcr.io/openvicloud/control-plane",
      "app": "control-plane", "tag_length": 7},
     {"repo": "OpenViCloud/titan-cloud-console", "workflow": "ci-portal.yml",
-     "image": "ghcr.io/openvicloud/titan-cloud-console", "app": "portal", "tag_length": 7},
+     "image": "ghcr.io/openvicloud/titan-cloud-console", "app": "cloud-console", "tag_length": 7},
     {"repo": "OpenViCloud/titan-admin-console", "workflow": "ci-admin-portal.yml",
      "image": "ghcr.io/openvicloud/titan-admin-console", "app": "admin-portal", "tag_length": 7},
     {"repo": "OpenViCloud/titan-landing", "workflow": "ci-site.yml", "image": "ghcr.io/openvicloud/titan-landing",
