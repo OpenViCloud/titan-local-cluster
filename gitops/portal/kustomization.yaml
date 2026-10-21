@@ -17,4 +17,4 @@ images:
   # Matched by the name staging's overlay gives the image, not by the base name.
   - name: ghcr.io/openvicloud/titan-portal
     newName: ghcr.io/openvicloud/frontend-portal
-    newTag: "local-4d5209a5677e"
+    newTag: "4d5209a"
