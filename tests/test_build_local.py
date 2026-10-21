@@ -17,11 +17,11 @@ _spec = importlib.util.spec_from_file_location("build_local", ROOT / "scripts" /
 build = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(build)
 
-FRONTEND_IMAGES = [
-    {"repo": "OpenViCloud/frontend", "workflow": "ci-portal.yml", "image": "ghcr.io/openvicloud/frontend-portal",
+TWO_IMAGES = [
+    {"repo": "OpenViCloud/example-web", "workflow": "ci-portal.yml", "image": "ghcr.io/openvicloud/example-web-portal",
      "app": "portal", "tag_length": 7},
-    {"repo": "OpenViCloud/frontend", "workflow": "ci-admin-portal.yml",
-     "image": "ghcr.io/openvicloud/frontend-admin-portal", "app": "admin-portal", "tag_length": 7},
+    {"repo": "OpenViCloud/example-web", "workflow": "ci-admin-portal.yml",
+     "image": "ghcr.io/openvicloud/example-web-admin-portal", "app": "admin-portal", "tag_length": 7},
 ]
 WORKER = {"repo": "OpenViCloud/incus-worker", "workflow": "ci.yml", "image": "ghcr.io/openvicloud/incus-worker",
           "app": "incus-worker", "tag_length": 40}
@@ -33,7 +33,7 @@ def workflow(image, context, file=None, extra=""):
              "        uses: docker/build-push-action@v5", "        with:", "          context: " + context]
     if file is not None:
         lines.append("          file: " + file)
-    # The shape of OpenViCloud/frontend's workflows at 4d5209a, labels included.
+    # The shape of the docker/build-push-action step of the console and landing repositories' CI, labels included.
     lines += ["          platforms: linux/arm64", "          push: true",
               "          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}",
               "          tags: " + image + ":${{ env.SHORT_SHA }}"]
@@ -110,22 +110,22 @@ class BuildTests(unittest.TestCase):
         base = pathlib.Path(self.dir.name)
         self.origin = base / "origin.git"
         subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(self.origin)], check=True)
-        self.checkout = base / "frontend"
+        self.checkout = base / "example-web"
         subprocess.run(["git", "clone", "-q", str(self.origin), str(self.checkout)], check=True,
                        capture_output=True)
         git(self.checkout, "config", "user.email", "t@example.com")
         git(self.checkout, "config", "user.name", "t")
         # origin names the GitHub repository, as a real checkout's does; insteadOf sends fetch and push to the temp one.
-        git(self.checkout, "remote", "set-url", "origin", "https://github.com/OpenViCloud/frontend.git")
+        git(self.checkout, "remote", "set-url", "origin", "https://github.com/OpenViCloud/example-web.git")
         git(self.checkout, "config", "url." + str(self.origin) + ".insteadOf",
-            "https://github.com/OpenViCloud/frontend.git")
-        self.write_checkout(".github/workflows/ci-portal.yml", workflow(FRONTEND_IMAGES[0]["image"], "portal"))
+            "https://github.com/OpenViCloud/example-web.git")
+        self.write_checkout(".github/workflows/ci-portal.yml", workflow(TWO_IMAGES[0]["image"], "portal"))
         self.write_checkout(".github/workflows/ci-admin-portal.yml",
-                            workflow(FRONTEND_IMAGES[1]["image"], "portal", "portal/Dockerfile.admin"))
+                            workflow(TWO_IMAGES[1]["image"], "portal", "portal/Dockerfile.admin"))
         self.write_checkout("portal/Dockerfile", "FROM scratch\n")
         self.commit_and_push("first")
         self.root = base / "dev"
-        for image in FRONTEND_IMAGES + [WORKER]:
+        for image in TWO_IMAGES + [WORKER]:
             self.write_overlay(image["app"], overlay(image["image"], "4d5209a"))
 
     def tearDown(self):
@@ -155,7 +155,7 @@ class BuildTests(unittest.TestCase):
         return {app: self.read_overlay(app) for app in ("portal", "admin-portal", "incus-worker")}
 
     def run_build(self, lima, images=None):
-        return run([str(self.checkout)], images or FRONTEND_IMAGES + [WORKER], lima, self.root)
+        return run([str(self.checkout)], images or TWO_IMAGES + [WORKER], lima, self.root)
 
     def head(self):
         return git(self.checkout, "rev-parse", "HEAD")
@@ -165,8 +165,8 @@ class BuildTests(unittest.TestCase):
         code, out, err = self.run_build(lima)
         self.assertEqual(code, 0, err)
         tag = "local-" + self.head()[:12]
-        self.assertEqual(self.read_overlay("portal"), overlay(FRONTEND_IMAGES[0]["image"], tag))
-        self.assertEqual(self.read_overlay("admin-portal"), overlay(FRONTEND_IMAGES[1]["image"], tag))
+        self.assertEqual(self.read_overlay("portal"), overlay(TWO_IMAGES[0]["image"], tag))
+        self.assertEqual(self.read_overlay("admin-portal"), overlay(TWO_IMAGES[1]["image"], tag))
         self.assertEqual(self.read_overlay("incus-worker"), overlay(WORKER["image"], "4d5209a"))
         self.assertEqual(last_line(out), "BUILD_RESULT=WRITTEN")
         self.assertEqual(len(lima.builds()), 2)
@@ -177,16 +177,16 @@ class BuildTests(unittest.TestCase):
         code, _, err = self.run_build(lima)
         self.assertEqual(code, 0, err)
         portal, admin = lima.builds()
-        self.assertIn("context=/var/tmp/build-local/frontend/src/portal ", portal + " ")
-        self.assertIn("dockerfile=/var/tmp/build-local/frontend/src/portal ", portal + " ")
+        self.assertIn("context=/var/tmp/build-local/example-web/src/portal ", portal + " ")
+        self.assertIn("dockerfile=/var/tmp/build-local/example-web/src/portal ", portal + " ")
         self.assertIn("filename=Dockerfile ", portal + " ")
         self.assertIn("filename=Dockerfile.admin ", admin + " ")
         self.assertIn("platform=linux/arm64", admin)
-        self.assertIn("name=ghcr.io/openvicloud/frontend-admin-portal:local-" + self.head()[:12], admin)
-        self.assertIn("label:org.opencontainers.image.source=https://github.com/OpenViCloud/frontend", admin)
+        self.assertIn("name=ghcr.io/openvicloud/example-web-admin-portal:local-" + self.head()[:12], admin)
+        self.assertIn("label:org.opencontainers.image.source=https://github.com/OpenViCloud/example-web", admin)
 
     def test_a_label_with_another_expression_is_an_error(self):
-        self.write_checkout(".github/workflows/ci-portal.yml", workflow(FRONTEND_IMAGES[0]["image"], "portal").replace(
+        self.write_checkout(".github/workflows/ci-portal.yml", workflow(TWO_IMAGES[0]["image"], "portal").replace(
             "${{ github.repository }}", "${{ github.sha }}"))
         self.commit_and_push("label sha")
         before, lima = self.overlays(), FakeLima()
@@ -194,7 +194,7 @@ class BuildTests(unittest.TestCase):
         self.assert_error_and_nothing_done(lima, code, out, before, "labels", err)
 
     def test_a_commented_out_build_step_is_not_a_second_one(self):
-        self.write_checkout(".github/workflows/ci-portal.yml", workflow(FRONTEND_IMAGES[0]["image"], "portal")
+        self.write_checkout(".github/workflows/ci-portal.yml", workflow(TWO_IMAGES[0]["image"], "portal")
                             + "      # - uses: docker/build-push-action@v5\n")
         self.commit_and_push("comment")
         code, _, err = self.run_build(FakeLima())
@@ -258,18 +258,18 @@ class BuildTests(unittest.TestCase):
     def test_a_repository_without_images_is_an_error(self):
         before, lima = self.overlays(), FakeLima()
         code, out, err = self.run_build(lima, images=[WORKER])
-        self.assert_error_and_nothing_done(lima, code, out, before, "OpenViCloud/frontend", err)
+        self.assert_error_and_nothing_done(lima, code, out, before, "OpenViCloud/example-web", err)
 
     def test_the_repository_is_read_from_origin(self):
-        self.assertEqual(build.repository_of("https://github.com/OpenViCloud/frontend.git"), "OpenViCloud/frontend")
-        self.assertEqual(build.repository_of("https://github.com/OpenViCloud/frontend"), "OpenViCloud/frontend")
+        self.assertEqual(build.repository_of("https://github.com/OpenViCloud/example-web.git"), "OpenViCloud/example-web")
+        self.assertEqual(build.repository_of("https://github.com/OpenViCloud/example-web"), "OpenViCloud/example-web")
         self.assertEqual(build.repository_of("git@github.com:OpenViCloud/incus-worker.git"), "OpenViCloud/incus-worker")
         self.assertIsNone(build.repository_of("/tmp/origin.git"))
 
     def test_a_build_argument_in_the_workflow_is_an_error(self):
         # A local build without it would differ from CI's image and nobody would see it.
         self.write_checkout(".github/workflows/ci-portal.yml",
-                            workflow(FRONTEND_IMAGES[0]["image"], "portal").replace(
+                            workflow(TWO_IMAGES[0]["image"], "portal").replace(
                                 "          platforms:", "          build-args: |\n            A=1\n          platforms:"))
         self.commit_and_push("args")
         before, lima = self.overlays(), FakeLima()
@@ -294,7 +294,7 @@ class BuildTests(unittest.TestCase):
         self.write_overlay("portal", overlay("ghcr.io/openvicloud/titan-portal", "4d5209a"))
         before, lima = self.overlays(), FakeLima()
         code, out, err = self.run_build(lima)
-        self.assert_error_and_nothing_done(lima, code, out, before, FRONTEND_IMAGES[0]["image"], err)
+        self.assert_error_and_nothing_done(lima, code, out, before, TWO_IMAGES[0]["image"], err)
 
     def test_build_steps_outside_the_buildkit_slice_are_an_error(self):
         # Without defaultCgroupParent a build step runs outside the slice: its memory cap stops nothing (measured).
@@ -330,7 +330,7 @@ class BuildTests(unittest.TestCase):
         # containerd may hold that tag from an earlier build of other content (a changed recipe, a rebuilt titan-k3s
         # missing it): importing every time keeps the tag on what was just built.
         tag = "local-" + self.head()[:12]
-        for image in FRONTEND_IMAGES:
+        for image in TWO_IMAGES:
             self.write_overlay(image["app"], overlay(image["image"], tag))
         before = self.overlays()
         lima = FakeLima()

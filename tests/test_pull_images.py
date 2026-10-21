@@ -20,9 +20,9 @@ _spec.loader.exec_module(pull)
 OLD_TITAN = "1" * 40
 NEW_TITAN = "2" * 40
 SHA = "4410205e4c9b5d152537a26fe1bd1ff08c04b108"
-SITE = {"repo": "OpenViCloud/frontend", "workflow": "ci-site.yml", "image": "ghcr.io/openvicloud/frontend-site",
+SITE = {"repo": "OpenViCloud/example-web", "workflow": "ci-site.yml", "image": "ghcr.io/openvicloud/example-web-site",
         "app": "site", "tag_length": 7}
-PORTAL = dict(SITE, workflow="ci-portal.yml", image="ghcr.io/openvicloud/frontend-portal", app="portal")
+PORTAL = dict(SITE, workflow="ci-portal.yml", image="ghcr.io/openvicloud/example-web-portal", app="portal")
 
 
 def overlay(app, name, new_name, tag, titan=OLD_TITAN):
@@ -117,7 +117,7 @@ class PullTests(unittest.TestCase):
         self.assertIn("titan: " + OLD_TITAN + " -> " + NEW_TITAN, out)
         self.assertEqual(last_line(out), "PULL_RESULT=WRITTEN")
         query = " ".join(next(c for c in runner.calls if "/runs" in " ".join(c)))
-        self.assertIn("repos/OpenViCloud/frontend/actions/workflows/ci-site.yml/runs", query)
+        self.assertIn("repos/OpenViCloud/example-web/actions/workflows/ci-site.yml/runs", query)
         for condition in ("branch=main", "event=push", "status=success", "per_page=30"):
             self.assertIn(condition, query)
 
@@ -183,7 +183,7 @@ class PullTests(unittest.TestCase):
                              self.root)
         self.assertEqual(code, 2)
         self.assertEqual((self.read("site"), self.read("portal"), (self.apps / "keycloak.yaml").read_text()), before)
-        self.assertIn("OpenViCloud/frontend", err)
+        self.assertIn("OpenViCloud/example-web", err)
         self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
 
     def test_titan_references_on_two_commits_are_an_error_and_write_nothing(self):
@@ -219,7 +219,7 @@ class PullTests(unittest.TestCase):
         self.assertEqual(last_line(out), "PULL_RESULT=NO_CHANGE")
 
     def test_an_overlay_that_does_not_end_with_the_image_is_an_error_and_is_not_written(self):
-        # Writing a frontend tag onto another image would make dev pull a tag that image never had.
+        # Writing one repository's tag onto another repository's image would make dev pull a tag that image never had.
         text = overlay("site", "ghcr.io/openvicloud/titan-site", None, "f5bcd6c")
         self.write("site", text)
         code, out, err = run([SITE], FakeGitHub({"ci-site.yml": SHA}), self.root)
@@ -292,10 +292,10 @@ class LocalTagTests(unittest.TestCase):
 
     def test_a_kept_repository_is_not_asked_what_main_published(self):
         self.pull()
-        self.assertFalse(any("OpenViCloud/frontend/actions" in " ".join(c) for c in self.runner.calls))
+        self.assertFalse(any("OpenViCloud/example-web/actions" in " ".join(c) for c in self.runner.calls))
 
     def test_replace_moves_that_repository_to_what_main_published(self):
-        code, out, err = self.pull("--replace", "OpenViCloud/frontend")
+        code, out, err = self.pull("--replace", "OpenViCloud/example-web")
         self.assertEqual(code, 0, err)
         self.assertIn('newTag: "4410205"', self.read("site"))
         self.assertIn('newTag: "4410205"', self.read("portal"))
@@ -324,7 +324,7 @@ class LocalTagTests(unittest.TestCase):
         self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
 
     def test_replace_and_all_together_are_a_usage_error(self):
-        code, out, _ = self.pull("--all", "--replace", "OpenViCloud/frontend")
+        code, out, _ = self.pull("--all", "--replace", "OpenViCloud/example-web")
         self.assertEqual(code, 2)
         self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
 
