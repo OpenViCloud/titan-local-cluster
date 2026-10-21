@@ -1,7 +1,7 @@
 name: CI
 
-# Render checks of dev's overlays (they build on titan's staging overlays over the network), the pull script, the
-# guest-log sweeper compared with titan's template, and the provisioning tests of the Incus VM.
+# Render checks of dev's overlays (they build on titan's staging overlays over the network), the pull and build-local
+# scripts, the guest-log sweeper compared with titan's template, and the provisioning tests of the Incus VM.
 on:
   push:
     branches: [main]
@@ -23,6 +23,9 @@ jobs:
 
       - name: Pull script
         run: python3 tests/test_pull_images.py
+
+      - name: Build-local script
+        run: python3 tests/test_build_local.py
 
       - name: Sweeper matches titan's template
         run: bash tests/sweeper_test.sh

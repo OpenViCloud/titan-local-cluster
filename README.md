@@ -23,7 +23,8 @@ Design, rules and runbook live in titan:
 | `gitops/apps/` | ArgoCD app-of-apps: `root-local-mac` and one Application per app |
 | `gitops/<app>/` | Dev's overlay of each app |
 | `scripts/pull-images.py` | Moves dev to what main publishes: other repositories' images, titan's commit, and the image names staging gives |
-| `tests/` | Render checks of the overlays, the pull script, and the guest-log sweeper compared with titan's template |
+| `scripts/build-local.py` | Builds a checkout's images in titan-incus (buildkit), imports them into titan-k3s, and points dev at them |
+| `tests/` | Render checks of the overlays, the pull and build-local scripts, buildkit's provisioning, and the guest-log sweeper compared with titan's template |
 
 ## Run
 
@@ -46,17 +47,37 @@ git commit -am "Pull published images into dev" && git push   # ArgoCD on dev fo
 
 `--titan <commit>` pins an older commit on titan's main instead of its head; a commit off main is an ERROR. One bad row writes nothing.
 
+A tag `local-<12 hex>` (below) stays: `--replace <owner/repo>` moves that repository to main's images (after its PR
+merged), `--all` moves every image (a release starts: promotion refuses a local tag).
+
+## Run a branch on dev
+
+```sh
+python3 scripts/build-local.py ../control-plane      # the checkout's HEAD: committed, and on a branch of origin
+git commit -am "Run control-plane <branch> on dev" && git push
+```
+
+The commit goes with `git archive` to buildkit in titan-incus (installed by `mac/provision/incus.sh`, build steps capped
+in `buildkit.slice`), every image of that repository is built the way its CI workflow builds it at that commit, imported
+into titan-k3s's containerd, and its overlay gets newTag `local-<12 hex>`. Uncommitted changes, a commit on no branch of
+origin, a workflow building with options this script does not repeat, or a buildkit outside its slice are an ERROR
+before anything is built. Building the same commit again writes nothing and imports again: after titan-k3s was rebuilt
+it brings the image back; a pod already running that tag keeps what it started with until it restarts. The last line
+is `BUILD_RESULT=WRITTEN|NO_CHANGE|ERROR`. Outside this repository it runs `git fetch --prune origin` in the checkout
+and leaves the source and image tars under `/var/tmp/build-local/` on titan-incus, replaced at the next build.
+
 ## Tests
 
 ```sh
 python3 tests/render_test.py          # kubectl, ruby, network (remote bases on GitHub)
 python3 tests/test_pull_images.py
+python3 tests/test_build_local.py
 bash tests/sweeper_test.sh            # network (titan's template on GitHub)
 bash mac/tests/incus-log-sweeper_test.sh
 bash mac/tests/incus-uplink_test.sh
 ```
 
-CI runs all five on every push to `main` and every pull request into it.
+CI runs all six on every push to `main` and every pull request into it.
 
 ## License
 

@@ -252,6 +252,90 @@ class PullTests(unittest.TestCase):
         self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
 
 
+class LocalTagTests(unittest.TestCase):
+    """Dev may run images build-local made from a checkout (tag local-<12 hex>). A pull keeps them, except the
+    repositories it is told to replace: the one just merged, or all of them when a release starts."""
+
+    LOCAL = "local-0123456789ab"
+
+    write = PullTests.write
+    read = PullTests.read
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.root = pathlib.Path(self.dir.name)
+        (self.root / "gitops/apps").mkdir(parents=True)
+        (self.root / "gitops/apps/keycloak.yaml").write_text(APP_WITH_VALUES)
+        self.write("site", overlay("site", SITE["image"], None, self.LOCAL))
+        self.write("portal", overlay("portal", PORTAL["image"], None, self.LOCAL))
+        self.worker = dict(SITE, repo="OpenViCloud/incus-worker", workflow="ci.yml",
+                           image="ghcr.io/openvicloud/incus-worker", app="incus-worker")
+        self.write("incus-worker", overlay("incus-worker", self.worker["image"], None, "f5bcd6c"))
+        self.runner = FakeGitHub({"ci-site.yml": SHA, "ci-portal.yml": SHA, "ci.yml": SHA},
+                                 staging_names={"site": SITE["image"], "portal": PORTAL["image"],
+                                                "incus-worker": self.worker["image"]})
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def pull(self, *argv):
+        return run([SITE, PORTAL, self.worker], self.runner, self.root, list(argv))
+
+    def test_a_local_tag_is_kept_and_other_tags_move(self):
+        code, out, err = self.pull()
+        self.assertEqual(code, 0, err)
+        self.assertIn('newTag: "' + self.LOCAL + '"', self.read("site"))
+        self.assertIn('newTag: "' + self.LOCAL + '"', self.read("portal"))
+        self.assertIn('newTag: "4410205"', self.read("incus-worker"))
+        self.assertIn("site: " + self.LOCAL + " kept", out)
+        self.assertEqual(last_line(out), "PULL_RESULT=WRITTEN")
+
+    def test_a_kept_repository_is_not_asked_what_main_published(self):
+        self.pull()
+        self.assertFalse(any("OpenViCloud/frontend/actions" in " ".join(c) for c in self.runner.calls))
+
+    def test_replace_moves_that_repository_to_what_main_published(self):
+        code, out, err = self.pull("--replace", "OpenViCloud/frontend")
+        self.assertEqual(code, 0, err)
+        self.assertIn('newTag: "4410205"', self.read("site"))
+        self.assertIn('newTag: "4410205"', self.read("portal"))
+        self.assertIn("site: " + self.LOCAL + " -> 4410205", out)
+
+    def test_replace_leaves_another_repositorys_local_tag(self):
+        self.write("incus-worker", overlay("incus-worker", self.worker["image"], None, self.LOCAL))
+        code, _, err = self.pull("--replace", "OpenViCloud/incus-worker")
+        self.assertEqual(code, 0, err)
+        self.assertIn('newTag: "4410205"', self.read("incus-worker"))
+        self.assertIn('newTag: "' + self.LOCAL + '"', self.read("site"))
+
+    def test_all_moves_every_local_tag(self):
+        # A release starts from dev on main's images: promotion refuses a local tag.
+        code, _, err = self.pull("--all")
+        self.assertEqual(code, 0, err)
+        for app in ("site", "portal", "incus-worker"):
+            self.assertIn('newTag: "4410205"', self.read(app), app)
+
+    def test_replacing_a_repository_without_images_is_an_error_and_writes_nothing(self):
+        before = (self.read("site"), self.read("portal"), self.read("incus-worker"))
+        code, out, err = self.pull("--replace", "OpenViCloud/cli")
+        self.assertEqual(code, 2)
+        self.assertEqual((self.read("site"), self.read("portal"), self.read("incus-worker")), before)
+        self.assertIn("OpenViCloud/cli", err)
+        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
+
+    def test_replace_and_all_together_are_a_usage_error(self):
+        code, out, _ = self.pull("--all", "--replace", "OpenViCloud/frontend")
+        self.assertEqual(code, 2)
+        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
+
+    def test_a_tag_that_only_starts_with_local_is_not_kept(self):
+        # Only build-local's exact shape is kept; anything else is a tag main never published and moves.
+        self.write("site", overlay("site", SITE["image"], None, "local-xyz"))
+        code, _, err = self.pull()
+        self.assertEqual(code, 0, err)
+        self.assertIn('newTag: "4410205"', self.read("site"))
+
+
 class RepoTests(unittest.TestCase):
     """This repository's real overlays: the shape pulling relies on."""
 
@@ -264,9 +348,12 @@ class RepoTests(unittest.TestCase):
 
     def test_every_pulled_overlay_has_a_tag_of_its_row_length(self):
         # A wrong tag_length writes a tag the other repository never published: dev pulls an image that does not exist.
+        # A tag build-local wrote has its own shape.
         for image in pull.IMAGES:
             tags = pull.TAG.findall((ROOT / "gitops" / image["app"] / "kustomization.yaml").read_text())
-            self.assertEqual([len(tag) for _, tag in tags], [image["tag_length"]], image["app"])
+            self.assertEqual(len(tags), 1, image["app"])
+            if not pull.LOCAL_TAG.match(tags[0][1]):
+                self.assertEqual(len(tags[0][1]), image["tag_length"], image["app"])
 
 
 if __name__ == "__main__":

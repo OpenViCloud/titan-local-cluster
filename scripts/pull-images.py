@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Move dev to what main publishes: the images other repositories last published from their main, and titan's main.
 
-    python3 scripts/pull-images.py [--titan <40 hex>]     (from the repo root, on the Mac; needs `gh` logged in)
+    python3 scripts/pull-images.py [--titan <40 hex>] [--replace <owner/repo> ... | --all]
+                                                            (from the repo root, on the Mac; needs `gh` logged in)
 
 It writes, and only writes; committing and pushing to main is the deploy (ArgoCD on dev follows main here):
 - newTag of each dev overlay in IMAGES: the newest commit every workflow of that repository published from main
-  (images of one repository move together);
+  (images of one repository move together). A tag scripts/build-local.py wrote (local-<12 hex>) is kept, unless its
+  repository is named with --replace (the one just merged) or --all is given (a release starts: promotion refuses a
+  local tag);
 - every titan reference ArgoCD renders (remote bases, Helm values, sources): titan's main, or --titan, a commit
   titan's main contains (anything else is an error);
 - each overlay's `images` entry: the name staging's overlay gives the image at that titan commit. The entry matches
@@ -25,6 +28,7 @@ import sys
 
 TITAN = "OpenViCloud/titan"
 GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+LOCAL_TAG = re.compile(r"^local-[0-9a-f]{12}$")
 TAG = re.compile(r'^(\s*newTag:\s*)"([^"]+)"', re.MULTILINE)
 NEW_NAME = re.compile(r"^(\s*newName:\s*)(\S+)\n", re.MULTILINE)
 ENTRY_NAME = re.compile(r"^(\s*-\s*name:\s*)(\S+)\n", re.MULTILINE)
@@ -135,12 +139,17 @@ def titan_references(root):
 def parse_args(argv):
     parser = argparse.ArgumentParser(description="Move dev to the images and the titan commit main publishes.")
     parser.add_argument("--titan", help="full 40-hex commit on titan's main (default: titan's main)")
+    moved = parser.add_mutually_exclusive_group()
+    moved.add_argument("--replace", action="append", default=[], metavar="OWNER/REPO",
+                       help="move this repository's images to main's even when dev runs a local build of it")
+    moved.add_argument("--all", action="store_true", help="move every image to main's, local builds included")
     return parser.parse_args(argv)
 
 
 def main(argv, images, run, root):
     writes = {}
     changes = []
+    notes = []
     try:
         try:
             args = parse_args(argv)
@@ -166,8 +175,25 @@ def main(argv, images, run, root):
                 writes[path] = SOURCE.sub(lambda match: match.group(1) + titan, text)
             changes.append("titan: " + old_titan + " -> " + titan)
 
+        for repo in args.replace:
+            if repo not in {image["repo"] for image in images}:
+                raise ToolError(repo + " has no image in IMAGES; --replace takes one of their repositories")
+
+        def kept(image, tag):
+            return LOCAL_TAG.match(tag) and not args.all and image["repo"] not in args.replace
+
+        current_tags = {}
+        for image in images:
+            where = "gitops/" + image["app"] + "/kustomization.yaml"
+            tags = TAG.findall(writes.get(root / where, (root / where).read_text()))
+            if len(tags) != 1:
+                raise ToolError(where + " has " + str(len(tags)) + " newTag lines; needs exactly one")
+            current_tags[image["app"]] = tags[0][1]
+
         workflows_by_repo = {}
         for image in images:
+            if kept(image, current_tags[image["app"]]):
+                continue
             workflows_by_repo.setdefault(image["repo"], [])
             if image["workflow"] not in workflows_by_repo[image["repo"]]:
                 workflows_by_repo[image["repo"]].append(image["workflow"])
@@ -189,6 +215,12 @@ def main(argv, images, run, root):
             new_text = with_entry(text, entry, image["image"], where)
             if old_entry != entry:
                 changes.append(image["app"] + " entry: " + old_entry + " -> " + entry)
+            if kept(image, tags[0][1]):
+                notes.append(image["app"] + ": " + tags[0][1] + " kept (a local build; --replace " + image["repo"]
+                             + " moves it)")
+                if new_text != path.read_text():
+                    writes[path] = new_text
+                continue
             wanted = commits[image["repo"]][:image["tag_length"]]
             if tags[0][1] != wanted:
                 new_text = TAG.sub(lambda match: match.group(1) + '"' + wanted + '"', new_text)
@@ -199,6 +231,8 @@ def main(argv, images, run, root):
         print("ERROR: " + str(failure), file=sys.stderr)
         print("PULL_RESULT=ERROR")
         return 2
+    for note in notes:
+        print("  " + note)
     if len(writes) == 0:
         print("PULL_RESULT=NO_CHANGE")
         return 0
