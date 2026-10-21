@@ -6,7 +6,7 @@ namespace: titan-staging
 # The local cluster on the Mac runs staging's manifests with its own image (below); the hostnames, the zone list
 # and the token issuer change (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
 resources:
-  - https://github.com/OpenViCloud/titan//gitops/control-plane/overlays/staging?ref=08914f654bb20ec6e23cba55ed5c1d268ee23e92
+  - https://github.com/OpenViCloud/titan//gitops/control-plane/overlays/staging?ref=ebdbb5d2669cff1725d5fcbc96e653f56d25bcf2
   - ingress.yaml
 
 configMapGenerator:
