@@ -10,6 +10,9 @@ https://github.com/OpenViCloud/titan/blob/main/docs/architecture/platform-infra.
   ArgoCD would keep rendering the old base. Move them all together. Links to titan's docs and the sweeper check read
   `main`.
 - Application names stay as they are (`*-local-mac`, `cnpg-operator`): ArgoCD on the running cluster knows them by those names.
+  An app renamed on purpose (as the customer portal's app when titan renamed its folder to `cloud-console`): root
+  prunes the old Application, which has no finalizer, so every object it rendered stays behind (for the customer
+  portal: Deployment, Service, ConfigMap and Ingress) and is deleted by hand on dev right after the merge.
 - Names, comments, README: English. A link to titan's docs is a full `https://github.com/OpenViCloud/titan/blob/main/…` URL.
 - Commits and PRs name the human author only: no AI attribution lines.
 - No `git worktree`: one checkout, isolate with branches.

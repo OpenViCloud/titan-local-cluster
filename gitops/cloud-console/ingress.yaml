@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: portal
+  name: cloud-console
 spec:
   ingressClassName: traefik
   rules:
@@ -12,6 +12,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: portal
+                name: cloud-console
                 port:
                   number: 80

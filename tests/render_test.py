@@ -77,7 +77,7 @@ class DevImages(unittest.TestCase):
     """An `images` entry matches the name staging's overlay gives the image. When titan renames it and the entry here
     keeps the old name, the entry matches nothing and dev silently runs staging's tag."""
 
-    APPS = ["control-plane", "incus-worker", "portal", "admin-portal", "site"]
+    APPS = ["control-plane", "incus-worker", "cloud-console", "admin-portal", "site"]
 
     def test_every_openvicloud_image_rendered_is_the_overlay_image(self):
         for app in self.APPS:

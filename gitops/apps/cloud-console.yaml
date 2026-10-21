@@ -1,8 +1,8 @@
-# Local cluster on the Mac: copy of titan's gitops/apps-staging/portal.yaml with dev's overlay from this repository (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# Local cluster on the Mac: copy of titan's gitops/apps-staging/cloud-console.yaml with dev's overlay from this repository (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: portal-local-mac
+  name: cloud-console-local-mac
   namespace: argocd
   annotations:
     # wave 2, with control-plane
@@ -12,7 +12,7 @@ spec:
   source:
     repoURL: https://github.com/OpenViCloud/titan-local-cluster
     targetRevision: main
-    path: gitops/portal
+    path: gitops/cloud-console
   destination:
     server: https://kubernetes.default.svc
     namespace: titan-staging

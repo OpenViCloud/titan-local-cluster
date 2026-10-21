@@ -346,7 +346,7 @@ class SharedTableTests(unittest.TestCase):
         # One table: a row added for pulling is a row build-local builds.
         self.assertIs(build.IMAGES, build.pull.IMAGES)
         self.assertEqual(sorted(image["app"] for image in build.IMAGES),
-                         ["admin-portal", "control-plane", "incus-worker", "portal", "site"])
+                         ["admin-portal", "cloud-console", "control-plane", "incus-worker", "site"])
 
 
 class ProvisionTests(unittest.TestCase):

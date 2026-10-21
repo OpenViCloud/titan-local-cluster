@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: portal-config
+  name: cloud-console-config
 data:
   config.json: |
     {
