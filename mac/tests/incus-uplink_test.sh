@@ -78,11 +78,11 @@ if any(re.match(r"incus network (set|unset) ovnup\b", l) for l in lines):
     problems.append("ovnup is changed after it is created: its keys belong to the create line")
 print("; ".join(problems))
 PY
-)
+) || shape="python3 exited $?: $shape"
 if [ -z "$shape" ]; then
   ok "ovnup: physical on ovnbr, gateway ::1 and routers in the first /64, routes = the other /64s, private IPv4 anycast, no IPv4 gateway, no NAT"
 else
-  bad "$shape"
+  bad "ovnup shape: $shape"
 fi
 
 host=$(python3 - "$SECTION" <<'PY'
@@ -103,11 +103,11 @@ if any(re.search(r"\bdev ovnup\b", l) for l in lines):
     problems.append("a host address or route still on ovnup, which is no longer a host interface")
 print("; ".join(problems))
 PY
-)
+) || host="python3 exited $?: $host"
 if [ -z "$host" ]; then
   ok "host: IPv6 on ovnbr, then the gateway ::1/64 on it, then the 255 routes via ovnbr"
 else
-  bad "$host"
+  bad "host side of ovnbr: $host"
 fi
 
 echo "== the section run against a fake incus =="
