@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move dev to what main publishes: the images other repositories last published from their main, and titan's main.
+"""Move dev to what main publishes: the images other repositories last published from their main, and titan-ops's main.
 
     python3 scripts/pull-images.py [--titan <40 hex>]
                                                             (from the repo root, on the Mac; needs `gh` logged in)
@@ -7,10 +7,10 @@
 It writes, and only writes; committing and pushing to main is the deploy (ArgoCD on dev follows main here):
 - newTag of each dev overlay in IMAGES: the newest commit every workflow of that repository published from main
   (images of one repository move together). Every tag moves: dev runs only images CI published;
-- every titan reference ArgoCD renders (remote bases, Helm values, sources): titan's main, or --titan, a commit
-  titan's main contains (anything else is an error);
-- each overlay's `images` entry: the name staging's overlay gives the image at that titan commit. The entry matches
-  the image by that name; when a promotion renames it in titan and the entry keeps the old name, the entry matches
+- every titan-ops reference ArgoCD renders (remote bases, Helm values, sources): titan-ops's main, or --titan, a commit
+  titan-ops's main contains (anything else is an error);
+- each overlay's `images` entry: the name staging's overlay gives the image at that titan-ops commit. The entry matches
+  the image by that name; when a promotion renames it in titan-ops and the entry keeps the old name, the entry matches
   nothing and dev silently runs staging's tag.
 Everything is read and checked before anything is written: one bad row writes nothing.
 
@@ -24,18 +24,18 @@ import re
 import subprocess
 import sys
 
-TITAN = "OpenViCloud/titan"
+TITAN = "OpenViCloud/titan-ops"
 GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 TAG = re.compile(r'^(\s*newTag:\s*)"([^"]+)"', re.MULTILINE)
 NEW_NAME = re.compile(r"^(\s*newName:\s*)(\S+)\n", re.MULTILINE)
 ENTRY_NAME = re.compile(r"^(\s*-\s*name:\s*)(\S+)\n", re.MULTILINE)
-REMOTE_BASE = re.compile(r"(https://github\.com/OpenViCloud/titan//\S+\?ref=)(\S+)")
-SOURCE = re.compile(r"(repoURL: https://github\.com/OpenViCloud/titan\n\s+targetRevision: )(\S+)")
+REMOTE_BASE = re.compile(r"(https://github\.com/OpenViCloud/titan-ops//\S+\?ref=)(\S+)")
+SOURCE = re.compile(r"(repoURL: https://github\.com/OpenViCloud/titan-ops\n\s+targetRevision: )(\S+)")
 
 # One row per image another repository publishes. tag_length: how many characters of the commit that repository
-# tags its image with. app: gitops/<app>/ here, gitops/<app>/overlays/staging in titan.
+# tags its image with. app: gitops/<app>/ here, gitops/<app>/overlays/staging in titan-ops.
 IMAGES = [
-    {"repo": "OpenViCloud/control-plane", "workflow": "ci.yml", "image": "ghcr.io/openvicloud/control-plane",
+    {"repo": "OpenViCloud/titan-control-plane", "workflow": "ci.yml", "image": "ghcr.io/openvicloud/titan-control-plane",
      "app": "control-plane", "tag_length": 7},
     {"repo": "OpenViCloud/titan-cloud-console", "workflow": "ci-portal.yml",
      "image": "ghcr.io/openvicloud/titan-cloud-console", "app": "cloud-console", "tag_length": 7},
@@ -43,7 +43,7 @@ IMAGES = [
      "image": "ghcr.io/openvicloud/titan-admin-console", "app": "admin-portal", "tag_length": 7},
     {"repo": "OpenViCloud/titan-landing", "workflow": "ci-site.yml", "image": "ghcr.io/openvicloud/titan-landing",
      "app": "site", "tag_length": 7},
-    {"repo": "OpenViCloud/incus-worker", "workflow": "ci.yml", "image": "ghcr.io/openvicloud/incus-worker",
+    {"repo": "OpenViCloud/titan-incus-worker", "workflow": "ci.yml", "image": "ghcr.io/openvicloud/titan-incus-worker",
      "app": "incus-worker", "tag_length": 40},
 ]
 
@@ -121,7 +121,7 @@ def repository_commit(run, repo, workflows):
 
 
 def titan_references(root):
-    """Every file here naming titan, with the commits it names; ArgoCD renders them all."""
+    """Every file here naming titan-ops, with the commits it names; ArgoCD renders them all."""
     found = {}
     for path in sorted(list(root.rglob("*.yaml")) + list(root.rglob("*.yml"))):
         if ".git" in path.parts or ".github" in path.parts:
@@ -134,8 +134,8 @@ def titan_references(root):
 
 
 def parse_args(argv):
-    parser = argparse.ArgumentParser(description="Move dev to the images and the titan commit main publishes.")
-    parser.add_argument("--titan", help="full 40-hex commit on titan's main (default: titan's main)")
+    parser = argparse.ArgumentParser(description="Move dev to the images and the titan-ops commit main publishes.")
+    parser.add_argument("--titan", help="full 40-hex commit on titan-ops's main (default: titan-ops's main)")
     return parser.parse_args(argv)
 
 
@@ -151,7 +151,7 @@ def main(argv, images, run, root):
         if not GIT_SHA.match(titan):
             raise ToolError("the titan commit must be a full 40-hex commit, got " + titan)
         if args.titan:
-            # Dev runs only what titan merged; compare <commit>...main is "ahead" or "identical" when main contains it.
+            # Dev runs only what titan-ops merged; compare <commit>...main is "ahead" or "identical" when main contains it.
             status = json.loads(gh_api(run, "repos/" + TITAN + "/compare/" + titan + "...main"))["status"]
             if status not in ("ahead", "identical"):
                 raise ToolError(titan + " is not on titan's main (compare: " + status + ")")

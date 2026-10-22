@@ -1,5 +1,5 @@
 #!/bin/bash
-# Puts the local cluster's secrets into titan-k3s (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#secrets):
+# Puts the local cluster's secrets into titan-k3s (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets):
 # - the two GitHub tokens from Infisical env "local" (re-applied every run, so a rotated token lands);
 # - the fixed test password of the integration-test role titan_it (re-applied every run);
 # - the internal ones (DB password, internal token, cluster key, Keycloak passwords), generated once: a second
@@ -62,7 +62,7 @@ unset ghcr_token
 # ── Test values, re-applied every run ─────────────────────────────────────────
 # Role titan_it of the dev database (gitops/titan-db): integration tests create and drop
 # their own databases with it. A fixed test value, not a secret: the cluster only listens on 127.0.0.1, and
-# test-all.sh of OpenViCloud/control-plane needs the same value.
+# test-all.sh of OpenViCloud/titan-control-plane needs the same value.
 printf 'username=titan_it\npassword=titan-it-local-only\n' |
   k create secret generic titan-it-credentials -n titan-db-staging --type=kubernetes.io/basic-auth \
     --from-env-file=/dev/stdin --dry-run=client -o yaml | k apply -f - >/dev/null

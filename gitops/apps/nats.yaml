@@ -1,5 +1,5 @@
-# Local cluster on the Mac: copy of titan's gitops/apps-staging/nats.yaml (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
-# https://github.com/OpenViCloud/titan/blob/main/docs/architecture/money-and-wallet.md#single-writer-outbox S3 — NATS core for the wallet-mutation notify bus (staging).
+# Local cluster on the Mac: copy of titan-ops's gitops/apps-staging/nats.yaml (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/money-and-wallet.md#single-writer-outbox S3 — NATS core for the wallet-mutation notify bus (staging).
 # NATS core, non-persistent (OD-2): the DB is the durable queue, the bus only notifies; a lost notify
 # is a delayed apply (the sweeper, S6, re-drives it), never lost money. Single server; control-plane
 # runs at replicas: 1, so one subscriber is one writer per wallet (OD-3, iteration 1).
@@ -21,7 +21,7 @@ spec:
         releaseName: nats
         valueFiles:
           - '$values/gitops/nats/staging-values.yaml'
-    - repoURL: https://github.com/OpenViCloud/titan
+    - repoURL: https://github.com/OpenViCloud/titan-ops
       targetRevision: cdc28e7b84f34ba32f2e9fcee9ac6e6e494b60a1
       ref: values
   destination:

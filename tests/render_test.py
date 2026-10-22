@@ -6,7 +6,7 @@ is removed), the control plane lists zone local-mac only, and no Application or 
 (Titan's rule: doubles only in unit tests).
 
 Run:  python3 tests/render_test.py     (needs kubectl for `kubectl kustomize`, ruby, and network: the overlays build on
-      staging's overlays in OpenViCloud/titan)
+      staging's overlays in OpenViCloud/titan-ops)
 """
 import json
 import pathlib
@@ -74,7 +74,7 @@ def overlay_image(app):
 
 
 class DevImages(unittest.TestCase):
-    """An `images` entry matches the name staging's overlay gives the image. When titan renames it and the entry here
+    """An `images` entry matches the name staging's overlay gives the image. When titan-ops renames it and the entry here
     keeps the old name, the entry matches nothing and dev silently runs staging's tag."""
 
     APPS = ["control-plane", "incus-worker", "cloud-console", "admin-portal", "site"]
@@ -94,7 +94,7 @@ class DevImages(unittest.TestCase):
 
 
 class TitanIsPinned(unittest.TestCase):
-    """Dev runs one titan commit: ArgoCD caches a render by the revision of this repository, so a change to a remote base
+    """Dev runs one titan-ops commit: ArgoCD caches a render by the revision of this repository, so a change to a remote base
     on a moving branch is neither rendered nor applied without a hard refresh and a manual sync (measured on ArgoCD
     v2.11.2: the old base stayed for ten minutes and the app reported Synced)."""
 
@@ -104,9 +104,9 @@ class TitanIsPinned(unittest.TestCase):
             if ".git" in path.parts or ".github" in path.parts:
                 continue
             text = path.read_text()
-            found += [(path.name, ref) for ref in re.findall(r"OpenViCloud/titan//\S+\?ref=(\S+)", text)]
+            found += [(path.name, ref) for ref in re.findall(r"OpenViCloud/titan-ops//\S+\?ref=(\S+)", text)]
             found += [(path.name, rev) for rev in re.findall(
-                r"repoURL: https://github\.com/OpenViCloud/titan\n\s+targetRevision: (\S+)", text)]
+                r"repoURL: https://github\.com/OpenViCloud/titan-ops\n\s+targetRevision: (\S+)", text)]
         return found
 
     def test_reads_both_kinds_of_reference(self):
@@ -120,8 +120,8 @@ class TitanIsPinned(unittest.TestCase):
             if ".git" in path.parts or ".github" in path.parts:
                 continue
             text = path.read_text()
-            mentions += len(re.findall(r"OpenViCloud/titan//", text))
-            mentions += len(re.findall(r"""repoURL:\s*["']?https://github\.com/OpenViCloud/titan(?:\.git)?["']?\s*$""", text, re.MULTILINE))
+            mentions += len(re.findall(r"OpenViCloud/titan-ops//", text))
+            mentions += len(re.findall(r"""repoURL:\s*["']?https://github\.com/OpenViCloud/titan-ops(?:\.git)?["']?\s*$""", text, re.MULTILINE))
         self.assertEqual(mentions, len(self.references()))
 
     def test_every_titan_reference_is_one_full_commit(self):

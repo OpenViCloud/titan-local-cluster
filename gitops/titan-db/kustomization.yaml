@@ -2,10 +2,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 # Staging's database with a smaller memory request: on titan-k3s (3 GiB) PostgreSQL uses about 100 MiB, and a
-# 512 MiB request only blocks scheduling (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget). The limit stays.
+# 512 MiB request only blocks scheduling (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget). The limit stays.
 # The Application ignores /spec/resources, so a running cluster takes this on a manual sync; a new one at creation.
 resources:
-  - https://github.com/OpenViCloud/titan//gitops/titan-db/overlays/staging?ref=cdc28e7b84f34ba32f2e9fcee9ac6e6e494b60a1
+  - https://github.com/OpenViCloud/titan-ops//gitops/titan-db/overlays/staging?ref=cdc28e7b84f34ba32f2e9fcee9ac6e6e494b60a1
 
 patches:
   - target:
@@ -16,7 +16,7 @@ patches:
         path: /spec/resources/requests/memory
         value: 256Mi
   # Integration tests on the Mac create and drop throwaway databases here instead of in a Docker container
-  # (test-all.sh of OpenViCloud/control-plane). Dev only: staging has no such role. Password: Secret titan-it-credentials,
+  # (test-all.sh of OpenViCloud/titan-control-plane). Dev only: staging has no such role. Password: Secret titan-it-credentials,
   # written by mac/scripts/bootstrap-secrets.sh.
   - target:
       kind: Cluster
