@@ -17,8 +17,7 @@ https://github.com/OpenViCloud/titan/blob/main/docs/architecture/platform-infra.
 - Commits and PRs name the human author only: no AI attribution lines.
 - No `git worktree`: one checkout, isolate with branches.
 - Image tags, the titan commit and image entry names move with `python3 scripts/pull-images.py` (images main published),
-  and image tags also with `python3 scripts/build-local.py ../<repo>` (images built here from a checkout), not by hand. A tag set by hand on
-  the cluster does not stay: ArgoCD syncs it back to git.
-- Before a push: `python3 tests/render_test.py`, `python3 tests/test_pull_images.py`, `python3 tests/test_build_local.py`,
-  `bash tests/sweeper_test.sh`, and
+  not by hand. Dev runs no image built from a branch. A tag set by hand on the cluster does not stay: ArgoCD syncs it
+  back to git. After a push or a merge to main: hard-refresh ArgoCD's Applications (README, "Move dev to main").
+- Before a push: `python3 tests/render_test.py`, `python3 tests/test_pull_images.py`, `bash tests/sweeper_test.sh`, and
   `for t in mac/tests/*.sh; do bash "$t" || break; done`.
