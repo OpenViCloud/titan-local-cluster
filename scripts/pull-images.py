@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 """Move dev to what main publishes: the images other repositories last published from their main, and titan-ops's main.
 
-    python3 scripts/pull-images.py [--titan <40 hex>] [--wait <repo>@<40 hex>]
+    python3 scripts/pull-images.py [--titan <40 hex>]
                                                             (from the repo root, on the Mac; needs `gh` logged in)
-
---wait <repo>@<commit> (right after merging a PR of an IMAGES repository, its merge commit) first waits until every
-workflow of that repository finished its push run on main for that commit, printing one line per finished workflow.
-A run not created yet is waited for; any conclusion but success, or a run still unfinished after WAIT_LIMIT_SECONDS,
-is an error and nothing is written.
 
 It writes, and only writes; committing and pushing to main is the deploy (ArgoCD on dev follows main here):
 - newTag of each dev overlay in IMAGES: the newest commit every workflow of that repository published from main
@@ -21,6 +16,15 @@ Everything is read and checked before anything is written: one bad row writes no
 
 Exit 0 written / nothing to do · 2 error, nothing written. The last stdout line is PULL_RESULT=WRITTEN|NO_CHANGE|ERROR;
 the error itself goes to stderr.
+
+    python3 scripts/pull-images.py --wait <repo>@<40 hex>
+
+--wait <repo>@<commit> (right after merging a PR of an IMAGES repository, its merge commit) only waits, and writes
+nothing: until every workflow IMAGES lists for that repository finished its push run on main for that commit, printing
+one line per finished workflow. A run not created yet is waited for. The last stdout line is WAIT_RESULT=OK (exit 0),
+or WAIT_RESULT=ERROR (exit 2) for any conclusion but success, a failed GitHub call, a run still unfinished after
+WAIT_LIMIT_SECONDS, or bad arguments (a repository outside IMAGES, a short commit, another flag). Pull after OK, in a
+separate run: the wait takes minutes, and other sessions push main here meanwhile.
 """
 import argparse
 import json
@@ -32,9 +36,11 @@ import time
 
 TITAN = "OpenViCloud/titan-ops"
 # A push run on main takes at most ~4 minutes (measured in titan's iteration:deploy); the rest is room for a queue.
-# It stays under the 25 minutes the Monitor that runs --wait is given, so the result line always gets out.
+# With a last poll and GH_TIMEOUT_SECONDS per call (one workflow per repository in IMAGES: about 21.5 minutes) it stays
+# under the 25 minutes the Monitor that runs --wait is given, so the result line gets out.
 WAIT_LIMIT_SECONDS = 20 * 60
 WAIT_POLL_SECONDS = 30
+GH_TIMEOUT_SECONDS = 60
 GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 TAG = re.compile(r'^(\s*newTag:\s*)"([^"]+)"', re.MULTILINE)
 NEW_NAME = re.compile(r"^(\s*newName:\s*)(\S+)\n", re.MULTILINE)
@@ -63,7 +69,7 @@ class ToolError(Exception):
 
 
 def run_command(cmd):
-    return subprocess.run(cmd, capture_output=True, text=True)
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=GH_TIMEOUT_SECONDS)
 
 
 def gh_api(run, query, raw=False):
@@ -177,15 +183,30 @@ def titan_references(root):
 
 
 def parse_args(argv):
-    parser = argparse.ArgumentParser(description="Move dev to the images and the titan-ops commit main publishes.")
+    # No abbreviations: `--wai` would wait yet report its errors as a pull.
+    parser = argparse.ArgumentParser(allow_abbrev=False, description="Move dev to the images and the titan-ops commit main publishes.")
     parser.add_argument("--titan", help="full 40-hex commit on titan-ops's main (default: titan-ops's main)")
-    parser.add_argument("--wait", help="<repo>@<full 40-hex commit>: wait for that repository's push runs on main first")
+    parser.add_argument("--wait", help="<repo>@<full 40-hex commit>: only wait for that repository's push runs on main")
     return parser.parse_args(argv)
+
+
+def wait(args, workflows_by_repo, run, sleep, clock):
+    if args.titan is not None:
+        raise ToolError("--wait takes no other flag: it only waits")
+    wait_repo, _, wait_sha = args.wait.partition("@")
+    if wait_repo not in workflows_by_repo:
+        raise ToolError("--wait names " + wait_repo + "; IMAGES has " + ", ".join(workflows_by_repo))
+    # GitHub matches head_sha only in full: a short commit finds no run and would wait out the limit.
+    if not GIT_SHA.match(wait_sha):
+        raise ToolError("--wait needs a full 40-hex commit, got " + (wait_sha or "none"))
+    wait_for_commit(run, wait_repo, workflows_by_repo[wait_repo], wait_sha, sleep, clock)
 
 
 def main(argv, images, run, root, sleep=time.sleep, clock=time.monotonic):
     writes = {}
     changes = []
+    # Read before parsing: a waiting run ends with WAIT_RESULT even when its arguments are bad.
+    result = "WAIT_RESULT" if any(arg.split("=")[0] == "--wait" for arg in argv) else "PULL_RESULT"
     try:
         try:
             args = parse_args(argv)
@@ -196,15 +217,11 @@ def main(argv, images, run, root, sleep=time.sleep, clock=time.monotonic):
             workflows_by_repo.setdefault(image["repo"], [])
             if image["workflow"] not in workflows_by_repo[image["repo"]]:
                 workflows_by_repo[image["repo"]].append(image["workflow"])
-        if args.wait:
-            wait_repo, _, wait_sha = args.wait.partition("@")
-            if wait_repo not in workflows_by_repo:
-                raise ToolError("--wait names " + wait_repo + "; IMAGES has " + ", ".join(workflows_by_repo))
-            # GitHub matches head_sha only in full: a short commit finds no run and would wait out the limit.
-            if not GIT_SHA.match(wait_sha):
-                raise ToolError("--wait needs a full 40-hex commit, got " + (wait_sha or "none"))
-            wait_for_commit(run, wait_repo, workflows_by_repo[wait_repo], wait_sha, sleep, clock)
-        titan =args.titan or json.loads(gh_api(run, "repos/" + TITAN + "/commits/main"))["sha"]
+        if args.wait is not None:
+            wait(args, workflows_by_repo, run, sleep, clock)
+            print("WAIT_RESULT=OK")
+            return 0
+        titan = args.titan or json.loads(gh_api(run, "repos/" + TITAN + "/commits/main"))["sha"]
         if not GIT_SHA.match(titan):
             raise ToolError("the titan commit must be a full 40-hex commit, got " + titan)
         if args.titan:
@@ -248,9 +265,9 @@ def main(argv, images, run, root, sleep=time.sleep, clock=time.monotonic):
                 changes.append(image["app"] + ": " + tags[0][1] + " -> " + wanted)
             if new_text != path.read_text():
                 writes[path] = new_text
-    except (ToolError, ValueError, KeyError, OSError) as failure:
+    except (ToolError, ValueError, KeyError, OSError, subprocess.TimeoutExpired) as failure:
         print("ERROR: " + str(failure), file=sys.stderr)
-        print("PULL_RESULT=ERROR")
+        print(result + "=ERROR")
         return 2
     if len(writes) == 0:
         print("PULL_RESULT=NO_CHANGE")

@@ -40,6 +40,7 @@ ArgoCD: http://argocd.localhost:8080 · portal: http://portal.localhost:8080.
 ## Move dev to main
 
 ```sh
+git switch main && git pull --ff-only   # the pull reads and writes this checkout's main
 python3 scripts/pull-images.py      # writes newTag, the titan-ops commit and the image entry names; needs `gh` logged in
 git commit -am "Pull published images into dev" && git push   # ArgoCD on dev follows main: the push is the deploy
 kubectl --kubeconfig ~/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml annotate applications.argoproj.io --all -n argocd argocd.argoproj.io/refresh=hard --overwrite
@@ -52,10 +53,13 @@ only as the images their CI publishes from main.
 
 `--titan <commit>` pins an older commit on titan-ops's main instead of its head; a commit off main is an ERROR. One bad row writes nothing.
 
-`--wait <repo>@<commit>`, right after merging a pull request of a repository in `IMAGES` (its name as the table spells
-it, the merge commit in full 40 hex), first waits for every workflow of that repository to finish its push run on main
-for that commit, one stdout line per finished workflow, then pulls. A run not created yet is waited for. A conclusion
-other than success, or a run unfinished after 20 minutes, is an ERROR that writes nothing.
+`--wait <repo>@<commit>`, right after merging a pull request of a repository in `IMAGES` (the `repo` value as the
+table spells it, the merge commit in full 40 hex), only waits and writes nothing: until every workflow `IMAGES` lists
+for that repository finished its push run on main for that commit, one stdout line per finished workflow. A run not
+created yet is waited for. The last line is `WAIT_RESULT=OK`, or `WAIT_RESULT=ERROR` for a conclusion other than
+success, a failed GitHub call (each call times out after 60 s), a run unfinished after 20 minutes, or bad arguments.
+After OK, move dev to main as above: the pull reads main as it is then, since other sessions push here while a wait
+runs.
 
 ## Tests
 
