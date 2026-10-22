@@ -1,7 +1,7 @@
 name: CI
 
-# Render checks of dev's overlays (they build on titan's staging overlays over the network), the pull script, the
-# guest-log sweeper compared with titan's template, and the provisioning tests of the Incus VM.
+# Render checks of dev's overlays (they build on titan-ops's staging overlays over the network), the pull script, the
+# guest-log sweeper compared with titan-ops's template, and the provisioning tests of the Incus VM.
 on:
   push:
     branches: [main]
@@ -15,8 +15,16 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    # The render and the sweeper read titan-ops. TITAN_OPS_READ (read-only on titan-ops) is needed once titan-ops is
+    # private; until then this repository's own token reads it.
+    env:
+      GH_TOKEN: ${{ secrets.TITAN_OPS_READ || github.token }}
     steps:
       - uses: actions/checkout@v4
+
+      # git (kustomize's remote bases) signs in with the same token as gh api.
+      - name: Git signs in through gh
+        run: gh auth setup-git
 
       - name: Render dev's overlays
         run: python3 tests/render_test.py
@@ -24,7 +32,7 @@ jobs:
       - name: Pull script
         run: python3 tests/test_pull_images.py
 
-      - name: Sweeper matches titan's template
+      - name: Sweeper matches titan-ops's template
         run: bash tests/sweeper_test.sh
 
       - name: Guest-log sweeper

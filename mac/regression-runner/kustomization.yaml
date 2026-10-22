@@ -1,4 +1,4 @@
-# The staging regression runner, pointed at the local cluster (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#secrets):
+# The staging regression runner, pointed at the local cluster (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets):
 # the pod reads the generated test-account passwords through secretKeyRef, the agent never sees them.
 #   kubectl --kubeconfig ~/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml apply -k mac/regression-runner
 # The browser in the pod must reach *.localhost:8080 like the Mac does, because Keycloak's issuer carries that
@@ -7,7 +7,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - https://github.com/OpenViCloud/titan//gitops/regression-runner?ref=cdc28e7b84f34ba32f2e9fcee9ac6e6e494b60a1
+  - https://github.com/OpenViCloud/titan-ops//gitops/regression-runner?ref=cdc28e7b84f34ba32f2e9fcee9ac6e6e494b60a1
 
 patches:
   - target:

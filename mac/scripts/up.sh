@@ -1,12 +1,12 @@
 #!/bin/bash
-# Starts the local cluster (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#layout): both Lima VMs, created on first use,
+# Starts the local cluster (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#layout): both Lima VMs, created on first use,
 # then the secrets and ArgoCD's root application. Safe to run again.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(cd "$here/.." && pwd)
 kubeconfig="$HOME/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml"
 
-# Docker Desktop's VM plus both of these does not fit in 16 GB (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget).
+# Docker Desktop's VM plus both of these does not fit in 16 GB (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget).
 if docker info >/dev/null 2>&1; then
   echo "ERROR: Docker Desktop is running; quit it first." >&2
   exit 1

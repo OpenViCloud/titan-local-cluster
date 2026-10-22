@@ -4,9 +4,9 @@ kind: Kustomization
 namespace: titan-staging
 
 # The local cluster on the Mac runs staging's manifests with its own image (below); the hostnames, the zone list
-# and the token issuer change (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# and the token issuer change (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
 resources:
-  - https://github.com/OpenViCloud/titan//gitops/control-plane/overlays/staging?ref=cdc28e7b84f34ba32f2e9fcee9ac6e6e494b60a1
+  - https://github.com/OpenViCloud/titan-ops//gitops/control-plane/overlays/staging?ref=cdc28e7b84f34ba32f2e9fcee9ac6e6e494b60a1
   - ingress.yaml
 
 configMapGenerator:
@@ -20,10 +20,9 @@ patches:
   - path: patch-env.yaml
   - path: patch-no-incus-tunnel.yaml
 
-# Dev's own image: a commit OpenViCloud/control-plane published from main. Staging's name and tag move only by promotion in
-# titan (https://github.com/OpenViCloud/titan/blob/main/docs/architecture/platform-infra.md#gitops-flow).
+# Dev's own image: a commit OpenViCloud/titan-control-plane published from main. Staging's name and tag move only by promotion in
+# titan-ops (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#gitops-flow).
 images:
   # Matched by the name staging's overlay gives the image, not by the base name.
   - name: ghcr.io/openvicloud/titan-control-plane
-    newName: ghcr.io/openvicloud/control-plane
     newTag: "1f74971"

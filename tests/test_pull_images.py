@@ -29,7 +29,7 @@ def overlay(app, name, new_name, tag, titan=OLD_TITAN):
     images = "images:\n  - name: " + name + "\n"
     if new_name is not None:
         images += "    newName: " + new_name + "\n"
-    return ("resources:\n  - https://github.com/OpenViCloud/titan//gitops/" + app + "/overlays/staging?ref=" + titan
+    return ("resources:\n  - https://github.com/OpenViCloud/titan-ops//gitops/" + app + "/overlays/staging?ref=" + titan
             + "\n" + images + '    newTag: "' + tag + '"\n')
 
 
@@ -37,12 +37,12 @@ def staging(app, new_name):
     return "images:\n  - name: " + app + "\n    newName: " + new_name + '\n    newTag: "0eed82d"\n'
 
 
-APP_WITH_VALUES = ("  sources:\n    - repoURL: https://github.com/OpenViCloud/titan\n      targetRevision: " + OLD_TITAN
+APP_WITH_VALUES = ("  sources:\n    - repoURL: https://github.com/OpenViCloud/titan-ops\n      targetRevision: " + OLD_TITAN
                    + "\n      ref: values\n")
 
 
 class FakeGitHub:
-    """Answers workflow runs (head shas newest first, per workflow file), titan's main, and titan files at a commit."""
+    """Answers workflow runs (head shas newest first, per workflow file), titan-ops's main, and titan-ops files at a commit."""
 
     def __init__(self, head_shas, titan_main=NEW_TITAN, staging_names=None, fail=None, on_main=True):
         self.head_shas = head_shas
@@ -58,11 +58,11 @@ class FakeGitHub:
         joined = " ".join(cmd)
         if self.fail is not None and self.fail in joined:
             return subprocess.CompletedProcess(cmd, 1, "", "boom: " + self.fail)
-        if "repos/OpenViCloud/titan/compare/" in joined:
+        if "repos/OpenViCloud/titan-ops/compare/" in joined:
             return subprocess.CompletedProcess(cmd, 0, json.dumps({"status": "ahead" if self.on_main else "diverged"}), "")
-        if "repos/OpenViCloud/titan/commits/main" in joined:
+        if "repos/OpenViCloud/titan-ops/commits/main" in joined:
             return subprocess.CompletedProcess(cmd, 0, json.dumps({"sha": self.titan_main}), "")
-        if "repos/OpenViCloud/titan/contents/gitops/" in joined:
+        if "repos/OpenViCloud/titan-ops/contents/gitops/" in joined:
             app = joined.split("contents/gitops/")[1].split("/")[0]
             assert ("ref=" + NEW_TITAN) in joined, joined
             name = self.staging_names.get(app, "ghcr.io/openvicloud/titan-" + app)
@@ -129,7 +129,7 @@ class PullTests(unittest.TestCase):
         self.assertFalse(any("commits/main" in " ".join(c) for c in runner.calls))
 
     def test_a_given_titan_commit_off_main_is_an_error_and_writes_nothing(self):
-        # Dev runs only what titan merged: a commit of a branch would test manifests staging never gets.
+        # Dev runs only what titan-ops merged: a commit of a branch would test manifests staging never gets.
         text = self.read("site")
         code, out, err = run([SITE], FakeGitHub({"ci-site.yml": SHA}, on_main=False), self.root, ["--titan", NEW_TITAN])
         self.assertEqual(code, 2)
@@ -268,8 +268,8 @@ class LocalTagTests(unittest.TestCase):
         (self.root / "gitops/apps/keycloak.yaml").write_text(APP_WITH_VALUES)
         self.write("site", overlay("site", SITE["image"], None, self.LOCAL))
         self.write("portal", overlay("portal", PORTAL["image"], None, self.LOCAL))
-        self.worker = dict(SITE, repo="OpenViCloud/incus-worker", workflow="ci.yml",
-                           image="ghcr.io/openvicloud/incus-worker", app="incus-worker")
+        self.worker = dict(SITE, repo="OpenViCloud/titan-incus-worker", workflow="ci.yml",
+                           image="ghcr.io/openvicloud/titan-incus-worker", app="incus-worker")
         self.write("incus-worker", overlay("incus-worker", self.worker["image"], None, "f5bcd6c"))
         self.runner = FakeGitHub({"ci-site.yml": SHA, "ci-portal.yml": SHA, "ci.yml": SHA},
                                  staging_names={"site": SITE["image"], "portal": PORTAL["image"],

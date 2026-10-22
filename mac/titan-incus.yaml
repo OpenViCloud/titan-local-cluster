@@ -1,7 +1,7 @@
-# titan-incus: the Incus node of the local cluster (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/topology.md#layout).
+# titan-incus: the Incus node of the local cluster (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#layout).
 # Guest VMs run as KVM inside this VM, so it needs nested virtualization (Apple M3 or later).
 #   limactl create --name titan-incus mac/titan-incus.yaml
-# Debian 13, the OS of the staging machine singapore01 (https://github.com/OpenViCloud/titan/blob/main/docs/infra/incus/user-stories.md#us-incus-singapore01-01).
+# Debian 13, the OS of the staging machine singapore01 (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/incus/user-stories.md#us-incus-singapore01-01).
 base: template://debian-13
 vmType: vz
 nestedVirtualization: true
@@ -13,7 +13,7 @@ mounts: []
 containerd:
   system: false
   user: false
-# user-v2 lets titan-k3s reach the Incus API (https://github.com/OpenViCloud/titan/blob/main/docs/infra/environments/local-cluster/network.md#vm-to-vm).
+# user-v2 lets titan-k3s reach the Incus API (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#vm-to-vm).
 networks:
 - lima: user-v2
 # Nothing reaches the Mac: the Incus API is root on every guest VM.
