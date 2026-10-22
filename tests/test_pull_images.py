@@ -44,8 +44,11 @@ APP_WITH_VALUES = ("  sources:\n    - repoURL: https://github.com/OpenViCloud/ti
 class FakeGitHub:
     """Answers workflow runs (head shas newest first, per workflow file), titan-ops's main, and titan-ops files at a commit."""
 
-    def __init__(self, head_shas, titan_main=NEW_TITAN, staging_names=None, fail=None, on_main=True):
+    def __init__(self, head_shas, titan_main=NEW_TITAN, staging_names=None, fail=None, on_main=True, commit_runs=None):
         self.head_shas = head_shas
+        # Runs of one commit per workflow file, one state per query (the last one repeats): None is no run yet,
+        # else (status, conclusion).
+        self.commit_runs = commit_runs or {}
         self.titan_main = titan_main
         # Name staging's overlay gives each app's image at NEW_TITAN.
         self.staging_names = staging_names or {}
@@ -67,6 +70,13 @@ class FakeGitHub:
             assert ("ref=" + NEW_TITAN) in joined, joined
             name = self.staging_names.get(app, "ghcr.io/openvicloud/titan-" + app)
             return subprocess.CompletedProcess(cmd, 0, staging(app, name), "")
+        if "head_sha=" in joined:
+            workflow = joined.split("/actions/workflows/")[1].split("/")[0]
+            states = self.commit_runs[workflow]
+            state = states.pop(0) if len(states) > 1 else states[0]
+            runs = [] if state is None else [{"status": state[0], "conclusion": state[1],
+                                              "html_url": "https://github.com/runs/" + workflow}]
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"workflow_runs": runs}), "")
         for workflow, head_sha in self.head_shas.items():
             if "/actions/workflows/" + workflow + "/runs" in joined:
                 shas = [] if head_sha is None else head_sha if isinstance(head_sha, list) else [head_sha]
@@ -75,10 +85,26 @@ class FakeGitHub:
         raise AssertionError("unexpected command: " + joined)
 
 
-def run(images, runner, root, argv=()):
+class FakeClock:
+    """Sleeping moves the clock; nothing really waits."""
+
+    def __init__(self):
+        self.now = 0
+        self.sleeps = 0
+
+    def sleep(self, seconds):
+        self.now += seconds
+        self.sleeps += 1
+
+    def clock(self):
+        return self.now
+
+
+def run(images, runner, root, argv=(), clock=None):
+    clock = clock or FakeClock()
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = pull.main(list(argv), images, runner, root)
+        code = pull.main(list(argv), images, runner, root, clock.sleep, clock.clock)
     return code, out.getvalue(), err.getvalue()
 
 
@@ -296,6 +322,95 @@ class LocalTagTests(unittest.TestCase):
             self.assertEqual(code, 2, argv)
             self.assertEqual(last_line(out), "PULL_RESULT=ERROR", argv)
             self.assertEqual((self.read("site"), self.read("portal"), self.read("incus-worker")), before, argv)
+
+
+class WaitTests(unittest.TestCase):
+    """--wait <repo>@<commit>: right after a merge, wait for that repository's push runs on main of the merge commit,
+    then pull."""
+
+    write = PullTests.write
+    read = PullTests.read
+
+    def setUp(self):
+        PullTests.setUp(self)
+        self.write("portal", overlay("portal", PORTAL["image"], None, "1111111"))
+        self.worker = dict(SITE, repo="OpenViCloud/example-worker", workflow="ci.yml",
+                           image="ghcr.io/openvicloud/example-worker", app="incus-worker")
+        self.write("incus-worker", overlay("incus-worker", self.worker["image"], None, "1111111"))
+        self.names = {"site": SITE["image"], "portal": PORTAL["image"], "incus-worker": self.worker["image"]}
+        self.clock = FakeClock()
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def files(self):
+        return (self.read("site"), self.read("portal"), self.read("incus-worker"),
+                (self.apps / "keycloak.yaml").read_text())
+
+    def pull(self, commit_runs, wait="OpenViCloud/example-web@" + SHA):
+        runner = FakeGitHub({"ci-site.yml": SHA, "ci-portal.yml": SHA, "ci.yml": SHA}, staging_names=self.names,
+                            commit_runs=commit_runs)
+        code, out, err = run([SITE, PORTAL, self.worker], runner, self.root, ["--wait", wait], self.clock)
+        return code, out, err, runner
+
+    def test_a_run_not_created_yet_then_running_is_waited_for_and_then_dev_pulls(self):
+        code, out, err, runner = self.pull({
+            "ci-site.yml": [None, ("in_progress", None), ("completed", "success")],
+            "ci-portal.yml": [("queued", None), ("completed", "success")]})
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.clock.sleeps, 2)
+        self.assertIn('newTag: "4410205"', self.read("site"))
+        self.assertIn("  OpenViCloud/example-web ci-site.yml: success https://github.com/runs/ci-site.yml", out)
+        self.assertIn("  OpenViCloud/example-web ci-portal.yml: success", out)
+        self.assertEqual(last_line(out), "PULL_RESULT=WRITTEN")
+        queries = [" ".join(c) for c in runner.calls if "head_sha=" in " ".join(c)]
+        # Only the named repository is waited for; a finished workflow is not asked again.
+        self.assertEqual(len(queries), 5)
+        for query in queries:
+            self.assertIn("repos/OpenViCloud/example-web/actions/workflows/", query)
+            for condition in ("branch=main", "event=push", "head_sha=" + SHA):
+                self.assertIn(condition, query)
+            self.assertNotIn("status=", query)
+
+    def test_a_failed_workflow_is_an_error_and_writes_nothing(self):
+        before = self.files()
+        code, out, err, _ = self.pull({"ci-site.yml": [("completed", "success")],
+                                       "ci-portal.yml": [("in_progress", None), ("completed", "failure")]})
+        self.assertEqual(code, 2)
+        self.assertEqual(self.files(), before)
+        self.assertIn("  OpenViCloud/example-web ci-portal.yml: failure", out)
+        self.assertIn("ci-portal.yml concluded failure", err)
+        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
+
+    def test_a_cancelled_run_is_an_error_too(self):
+        code, out, err, _ = self.pull({"ci-site.yml": [("completed", "cancelled")],
+                                       "ci-portal.yml": [("completed", "success")]})
+        self.assertEqual(code, 2)
+        self.assertIn("concluded cancelled", err)
+        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
+
+    def test_a_run_unfinished_at_the_limit_is_an_error_and_writes_nothing(self):
+        before = self.files()
+        code, out, err, _ = self.pull({"ci-site.yml": [("completed", "success")],
+                                       "ci-portal.yml": [None]})
+        self.assertEqual(code, 2)
+        self.assertEqual(self.files(), before)
+        self.assertGreaterEqual(self.clock.now, pull.WAIT_LIMIT_SECONDS)
+        self.assertIn("ci-portal.yml: no finished push run on main for " + SHA, err)
+        self.assertNotIn("ci-site.yml,", err)
+        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
+
+    def test_a_short_commit_or_a_repository_outside_images_is_a_usage_error_before_any_wait(self):
+        before = self.files()
+        for wait, message in (("OpenViCloud/example-web@4410205", "full 40-hex"),
+                              ("OpenViCloud/example-web", "full 40-hex"),
+                              ("OpenViCloud/other@" + SHA, "IMAGES has OpenViCloud/example-web")):
+            code, out, err, runner = self.pull({}, wait=wait)
+            self.assertEqual(code, 2, wait)
+            self.assertIn(message, err, wait)
+            self.assertEqual(runner.calls, [], wait)
+            self.assertEqual(self.files(), before, wait)
+            self.assertEqual(last_line(out), "PULL_RESULT=ERROR", wait)
 
 
 class RepoTests(unittest.TestCase):

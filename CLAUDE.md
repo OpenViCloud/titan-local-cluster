@@ -16,8 +16,9 @@ https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-in
 - Names, comments, README: English. A link to titan-ops's docs is a full `https://github.com/OpenViCloud/titan-ops/blob/main/…` URL.
 - Commits and PRs name the human author only: no AI attribution lines.
 - No `git worktree`: one checkout, isolate with branches.
-- Image tags, the titan-ops commit and image entry names move with `python3 scripts/pull-images.py` (images main published),
-  not by hand. Dev runs no image built from a branch. A tag set by hand on the cluster does not stay: ArgoCD syncs it
-  back to git. After a push or a merge to main: hard-refresh ArgoCD's Applications (README, "Move dev to main").
+- Image tags, the titan-ops commit and image entry names move with `python3 scripts/pull-images.py` (images main published;
+  `--wait <repo>@<merge commit>` right after a merge waits for that repository's push runs first), not by hand.
+  Dev runs no image built from a branch. A tag set by hand on the cluster does not stay: ArgoCD syncs it back to git.
+  After a push or a merge to main: hard-refresh ArgoCD's Applications (README, "Move dev to main").
 - Before a push: `python3 tests/render_test.py`, `python3 tests/test_pull_images.py`, `bash tests/sweeper_test.sh`, and
   `for t in mac/tests/*.sh; do bash "$t" || break; done`.
