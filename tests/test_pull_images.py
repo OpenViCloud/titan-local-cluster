@@ -11,6 +11,7 @@ import pathlib
 import subprocess
 import tempfile
 import unittest
+import unittest.mock
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 _spec = importlib.util.spec_from_file_location("pull_images", ROOT / "scripts" / "pull-images.py")
@@ -44,11 +45,14 @@ APP_WITH_VALUES = ("  sources:\n    - repoURL: https://github.com/OpenViCloud/ti
 class FakeGitHub:
     """Answers workflow runs (head shas newest first, per workflow file), titan-ops's main, and titan-ops files at a commit."""
 
-    def __init__(self, head_shas, titan_main=NEW_TITAN, staging_names=None, fail=None, on_main=True, commit_runs=None):
+    def __init__(self, head_shas, titan_main=NEW_TITAN, staging_names=None, fail=None, on_main=True, commit_runs=None,
+                 hang=None):
         self.head_shas = head_shas
         # Runs of one commit per workflow file, one state per query (the last one repeats): None is no run yet,
         # else (status, conclusion).
         self.commit_runs = commit_runs or {}
+        # A call matching `hang` times out, as run_command's timeout makes a stuck gh call do.
+        self.hang = hang
         self.titan_main = titan_main
         # Name staging's overlay gives each app's image at NEW_TITAN.
         self.staging_names = staging_names or {}
@@ -59,6 +63,8 @@ class FakeGitHub:
     def __call__(self, cmd):
         self.calls.append(cmd)
         joined = " ".join(cmd)
+        if self.hang is not None and self.hang in joined:
+            raise subprocess.TimeoutExpired(cmd, pull.GH_TIMEOUT_SECONDS)
         if self.fail is not None and self.fail in joined:
             return subprocess.CompletedProcess(cmd, 1, "", "boom: " + self.fail)
         if "repos/OpenViCloud/titan-ops/compare/" in joined:
@@ -269,6 +275,13 @@ class PullTests(unittest.TestCase):
         self.assertIn('newTag: "4410205"', self.read("site"))
         self.assertIn("configMapGenerator:\n  - name: cfg\n", self.read("site"))
 
+    def test_a_github_call_that_times_out_writes_nothing(self):
+        text = self.read("site")
+        code, out, _ = run([SITE], FakeGitHub({"ci-site.yml": SHA}, hang="contents/gitops"), self.root)
+        self.assertEqual(code, 2)
+        self.assertEqual(self.read("site"), text)
+        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
+
     def test_a_failing_api_call_writes_nothing(self):
         text = self.read("site")
         code, out, err = run([SITE], FakeGitHub({"ci-site.yml": SHA}, fail="contents/gitops"), self.root)
@@ -325,8 +338,8 @@ class LocalTagTests(unittest.TestCase):
 
 
 class WaitTests(unittest.TestCase):
-    """--wait <repo>@<commit>: right after a merge, wait for that repository's push runs on main of the merge commit,
-    then pull."""
+    """--wait <repo>@<commit>: right after a merge, wait for that repository's push runs on main of the merge commit.
+    It only waits: the pull runs separately once it says OK, since other sessions push main during the wait."""
 
     write = PullTests.write
     read = PullTests.read
@@ -347,24 +360,26 @@ class WaitTests(unittest.TestCase):
         return (self.read("site"), self.read("portal"), self.read("incus-worker"),
                 (self.apps / "keycloak.yaml").read_text())
 
-    def pull(self, commit_runs, wait="OpenViCloud/example-web@" + SHA):
+    def pull(self, commit_runs, wait="OpenViCloud/example-web@" + SHA, argv=(), hang=None, fail=None):
         runner = FakeGitHub({"ci-site.yml": SHA, "ci-portal.yml": SHA, "ci.yml": SHA}, staging_names=self.names,
-                            commit_runs=commit_runs)
-        code, out, err = run([SITE, PORTAL, self.worker], runner, self.root, ["--wait", wait], self.clock)
+                            commit_runs=commit_runs, hang=hang, fail=fail)
+        code, out, err = run([SITE, PORTAL, self.worker], runner, self.root, ["--wait", wait] + list(argv), self.clock)
         return code, out, err, runner
 
-    def test_a_run_not_created_yet_then_running_is_waited_for_and_then_dev_pulls(self):
+    def test_a_run_not_created_yet_then_running_is_waited_for_and_nothing_is_written(self):
+        before = self.files()
         code, out, err, runner = self.pull({
             "ci-site.yml": [None, ("in_progress", None), ("completed", "success")],
             "ci-portal.yml": [("queued", None), ("completed", "success")]})
         self.assertEqual(code, 0, err)
         self.assertEqual(self.clock.sleeps, 2)
-        self.assertIn('newTag: "4410205"', self.read("site"))
+        self.assertEqual(self.files(), before)
         self.assertIn("  OpenViCloud/example-web ci-site.yml: success https://github.com/runs/ci-site.yml", out)
         self.assertIn("  OpenViCloud/example-web ci-portal.yml: success", out)
-        self.assertEqual(last_line(out), "PULL_RESULT=WRITTEN")
-        queries = [" ".join(c) for c in runner.calls if "head_sha=" in " ".join(c)]
-        # Only the named repository is waited for; a finished workflow is not asked again.
+        self.assertEqual(last_line(out), "WAIT_RESULT=OK")
+        queries = [" ".join(c) for c in runner.calls]
+        # Only the named repository's runs of the commit are read: no titan, no other runs, no staging overlay.
+        # A finished workflow is not asked again.
         self.assertEqual(len(queries), 5)
         for query in queries:
             self.assertIn("repos/OpenViCloud/example-web/actions/workflows/", query)
@@ -380,14 +395,14 @@ class WaitTests(unittest.TestCase):
         self.assertEqual(self.files(), before)
         self.assertIn("  OpenViCloud/example-web ci-portal.yml: failure", out)
         self.assertIn("ci-portal.yml concluded failure", err)
-        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
+        self.assertEqual(last_line(out), "WAIT_RESULT=ERROR")
 
     def test_a_cancelled_run_is_an_error_too(self):
         code, out, err, _ = self.pull({"ci-site.yml": [("completed", "cancelled")],
                                        "ci-portal.yml": [("completed", "success")]})
         self.assertEqual(code, 2)
         self.assertIn("concluded cancelled", err)
-        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
+        self.assertEqual(last_line(out), "WAIT_RESULT=ERROR")
 
     def test_a_run_unfinished_at_the_limit_is_an_error_and_writes_nothing(self):
         before = self.files()
@@ -398,7 +413,7 @@ class WaitTests(unittest.TestCase):
         self.assertGreaterEqual(self.clock.now, pull.WAIT_LIMIT_SECONDS)
         self.assertIn("ci-portal.yml: no finished push run on main for " + SHA, err)
         self.assertNotIn("ci-site.yml,", err)
-        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
+        self.assertEqual(last_line(out), "WAIT_RESULT=ERROR")
 
     def test_a_short_commit_or_a_repository_outside_images_is_a_usage_error_before_any_wait(self):
         before = self.files()
@@ -410,7 +425,69 @@ class WaitTests(unittest.TestCase):
             self.assertIn(message, err, wait)
             self.assertEqual(runner.calls, [], wait)
             self.assertEqual(self.files(), before, wait)
-            self.assertEqual(last_line(out), "PULL_RESULT=ERROR", wait)
+            self.assertEqual(last_line(out), "WAIT_RESULT=ERROR", wait)
+
+    def test_bad_arguments_of_a_wait_end_with_its_result_line(self):
+        for argv in (["--wait"], ["--wait=OpenViCloud/example-web@" + SHA, "--all"], ["--wait", ""], ["--wait="]):
+            code, out, _ = run([SITE, PORTAL], FakeGitHub({}), self.root, argv, self.clock)
+            self.assertEqual(code, 2, argv)
+            self.assertEqual(last_line(out), "WAIT_RESULT=ERROR", argv)
+
+    def test_an_abbreviated_wait_is_not_a_wait(self):
+        before = self.files()
+        code, out, _ = run([SITE, PORTAL], FakeGitHub({}), self.root, ["--wai", "OpenViCloud/example-web@" + SHA],
+                           self.clock)
+        self.assertEqual(code, 2)
+        self.assertEqual(self.files(), before)
+        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
+
+    def test_a_failing_or_missing_gh_is_an_error_with_its_result_line(self):
+        code, out, err, _ = self.pull({"ci-site.yml": [None], "ci-portal.yml": [None]}, fail="head_sha=")
+        self.assertEqual(code, 2)
+        self.assertIn("boom", err)
+        self.assertEqual(last_line(out), "WAIT_RESULT=ERROR")
+
+        def no_gh(cmd):
+            raise FileNotFoundError(2, "No such file or directory", "gh")
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = pull.main(["--wait", "OpenViCloud/example-web@" + SHA], [SITE, PORTAL], no_gh, self.root,
+                             self.clock.sleep, self.clock.clock)
+        self.assertEqual(code, 2)
+        self.assertEqual(last_line(out.getvalue()), "WAIT_RESULT=ERROR")
+
+    def test_wait_with_titan_is_a_usage_error(self):
+        for titan in (NEW_TITAN, ""):
+            code, out, err, runner = self.pull({}, argv=["--titan", titan])
+            self.assertEqual(code, 2, titan)
+            self.assertIn("--wait takes no other flag", err, titan)
+            self.assertEqual(runner.calls, [], titan)
+            self.assertEqual(last_line(out), "WAIT_RESULT=ERROR", titan)
+
+    def test_a_github_call_that_times_out_is_an_error(self):
+        # A stuck gh call would otherwise outlast the limit and the Monitor running --wait, with no result line.
+        code, out, err, _ = self.pull({"ci-site.yml": [None], "ci-portal.yml": [None]}, hang="head_sha=")
+        self.assertEqual(code, 2)
+        self.assertIn("timed out", err)
+        self.assertEqual(last_line(out), "WAIT_RESULT=ERROR")
+
+
+class RunCommandTests(unittest.TestCase):
+    def test_every_gh_call_has_a_timeout(self):
+        # The fakes above raise TimeoutExpired themselves; this pins that the real runner asks subprocess for it.
+        with unittest.mock.patch.object(pull.subprocess, "run") as run_mock:
+            pull.run_command(["gh", "api", "x"])
+        self.assertEqual(run_mock.call_args.kwargs["timeout"], pull.GH_TIMEOUT_SECONDS)
+        self.assertEqual(pull.GH_TIMEOUT_SECONDS, 60)
+
+    def test_the_wait_fits_the_monitor_running_it(self):
+        # titan's iteration:deploy gives the Monitor 25 minutes and names these numbers.
+        self.assertEqual(pull.WAIT_LIMIT_SECONDS, 20 * 60)
+        self.assertEqual(pull.WAIT_POLL_SECONDS, 30)
+        workflows = max(len({i["workflow"] for i in pull.IMAGES if i["repo"] == repo}) for repo in
+                        {i["repo"] for i in pull.IMAGES})
+        worst = pull.WAIT_LIMIT_SECONDS + pull.WAIT_POLL_SECONDS + workflows * pull.GH_TIMEOUT_SECONDS
+        self.assertLess(worst, 25 * 60)
 
 
 class RepoTests(unittest.TestCase):
