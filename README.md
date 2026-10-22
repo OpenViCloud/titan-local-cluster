@@ -46,8 +46,9 @@ kubectl --kubeconfig ~/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml annotat
 ```
 
 The refresh is so ArgoCD need not wait for its next poll: a push took 162 s to about 6 minutes to show up (measured
-2026-10-21); with the refresh, not measured yet. Do the same after merging a pull request here. Code of other
-repositories reaches dev only as the images their CI publishes from main.
+2026-10-21, before refreshing was the rule); with the refresh, at most 12 s for all 8 apps that follow this repository
+(measured once, 2026-10-22). Do the same after merging a pull request here. Code of other repositories reaches dev
+only as the images their CI publishes from main.
 
 `--titan <commit>` pins an older commit on titan's main instead of its head; a commit off main is an ERROR. One bad row writes nothing.
 
