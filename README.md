@@ -52,6 +52,11 @@ only as the images their CI publishes from main.
 
 `--titan <commit>` pins an older commit on titan-ops's main instead of its head; a commit off main is an ERROR. One bad row writes nothing.
 
+`--wait <repo>@<commit>`, right after merging a pull request of a repository in `IMAGES` (its name as the table spells
+it, the merge commit in full 40 hex), first waits for every workflow of that repository to finish its push run on main
+for that commit, one stdout line per finished workflow, then pulls. A run not created yet is waited for. A conclusion
+other than success, or a run unfinished after 20 minutes, is an ERROR that writes nothing.
+
 ## Tests
 
 ```sh
