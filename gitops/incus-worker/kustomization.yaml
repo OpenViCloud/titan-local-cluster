@@ -3,7 +3,7 @@ kind: Kustomization
 
 # Staging's worker manifests with dev's own image (below).
 resources:
-  - https://github.com/OpenViCloud/titan//gitops/incus-worker/overlays/staging?ref=b52566c6a675faa384ff545b4b2b09083b33f498
+  - https://github.com/OpenViCloud/titan//gitops/incus-worker/overlays/staging?ref=cdc28e7b84f34ba32f2e9fcee9ac6e6e494b60a1
 
 patches:
   - path: patch-no-incus-tunnel.yaml
@@ -14,4 +14,4 @@ images:
   # Matched by the name staging's overlay gives the image, not by the base name.
   - name: ghcr.io/openvicloud/titan-incus-worker
     newName: ghcr.io/openvicloud/incus-worker
-    newTag: "6b04b88b8a8dcfc6661ae6f42e7b3e5d8b7bc8e2"
+    newTag: "41f96d063ca33c85552ebf8a2bae28b0ef56d104"
