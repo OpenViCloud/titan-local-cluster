@@ -22,7 +22,7 @@ spec:
         valueFiles:
           - '$values/gitops/nats/staging-values.yaml'
     - repoURL: https://github.com/OpenViCloud/titan-ops
-      targetRevision: 500be47011fcb5d2763423c07e79c1c04a75d317
+      targetRevision: 5886fad8f7352aa668e2fce6ca8ce7004d63b854
       ref: values
   destination:
     server: https://kubernetes.default.svc

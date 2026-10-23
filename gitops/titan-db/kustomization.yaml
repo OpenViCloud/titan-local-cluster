@@ -5,7 +5,7 @@ kind: Kustomization
 # 512 MiB request only blocks scheduling (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget). The limit stays.
 # The Application ignores /spec/resources, so a running cluster takes this on a manual sync; a new one at creation.
 resources:
-  - https://github.com/OpenViCloud/titan-ops//gitops/titan-db/overlays/staging?ref=500be47011fcb5d2763423c07e79c1c04a75d317
+  - https://github.com/OpenViCloud/titan-ops//gitops/titan-db/overlays/staging?ref=5886fad8f7352aa668e2fce6ca8ce7004d63b854
 
 patches:
   - target:
