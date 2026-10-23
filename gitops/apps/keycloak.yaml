@@ -19,13 +19,13 @@ spec:
           - $values/gitops/keycloak/staging-values.yaml
           - $local/gitops/keycloak/values.yaml
     - repoURL: https://github.com/OpenViCloud/titan-ops
-      targetRevision: 5886fad8f7352aa668e2fce6ca8ce7004d63b854
+      targetRevision: cbfdde84d794ff15395fc90f5f6c82f11018b9b1
       ref: values
     - repoURL: https://github.com/OpenViCloud/titan-local-cluster
       targetRevision: main
       ref: local
     - repoURL: https://github.com/OpenViCloud/titan-ops
-      targetRevision: 5886fad8f7352aa668e2fce6ca8ce7004d63b854
+      targetRevision: cbfdde84d794ff15395fc90f5f6c82f11018b9b1
       path: gitops/keycloak/realm-import
     - repoURL: https://github.com/OpenViCloud/titan-local-cluster
       targetRevision: main
