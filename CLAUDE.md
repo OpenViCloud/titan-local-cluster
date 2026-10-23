@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 OpenViCloud's dev environment: Lima VMs on a Mac and the GitOps that ArgoCD on them follows. Rules and design live in
-titan-ops (`../titan`): https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md and
+titan-ops (`../titan-ops`): https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md and
 https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#gitops-flow. Change a rule there, not here.
 
 - Overlays here build on titan-ops's staging overlays by remote base; patch only what the Mac needs. A change that staging
