@@ -5,8 +5,8 @@ What must hold on dev: the control plane and the worker run only their own conta
 is removed), the control plane lists zone local-mac only, and no Application or app directory is a fake service
 (Titan's rule: doubles only in unit tests).
 
-Run:  python3 tests/render_test.py     (needs kubectl for `kubectl kustomize`, ruby, and network: the overlays build on
-      staging's overlays in OpenViCloud/titan-ops)
+Run:  python3 tests/render_test.py     (needs kubectl for `kubectl kustomize`, ruby, and git signed in to GitHub: the
+      overlays build on staging's overlays in OpenViCloud/titan-ops, which is private)
 """
 import json
 import pathlib
