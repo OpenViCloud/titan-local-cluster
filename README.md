@@ -64,14 +64,16 @@ runs.
 ## Tests
 
 ```sh
-python3 tests/render_test.py          # kubectl, ruby, network (remote bases on GitHub)
+python3 tests/render_test.py          # kubectl, ruby, git signed in to GitHub (remote bases in private titan-ops)
 python3 tests/test_pull_images.py
 bash tests/sweeper_test.sh            # network and gh signed in (titan-ops's template on GitHub)
 bash mac/tests/incus-log-sweeper_test.sh
 bash mac/tests/incus-uplink_test.sh
 ```
 
-CI runs all five on every push to `main` and every pull request into it.
+CI runs `test_pull_images.py` and the two `mac/tests` on every push to `main` and every pull request into it.
+`render_test.py` and `sweeper_test.sh` read [OpenViCloud/titan-ops](https://github.com/OpenViCloud/titan-ops), which is
+private, so they run only on a machine that can read it (git and `gh` signed in as an org member), before every push.
 
 ## License
 

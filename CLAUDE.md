@@ -21,4 +21,5 @@ https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-in
   Dev runs no image built from a branch. A tag set by hand on the cluster does not stay: ArgoCD syncs it back to git.
   After a push or a merge to main: hard-refresh ArgoCD's Applications (README, "Move dev to main").
 - Before a push: `python3 tests/render_test.py`, `python3 tests/test_pull_images.py`, `bash tests/sweeper_test.sh`, and
-  `for t in mac/tests/*.sh; do bash "$t" || break; done`.
+  `for t in mac/tests/*.sh; do bash "$t" || break; done`. CI does not run the render or the sweeper test: both read
+  titan-ops, which is private, so this machine is the only place they run.
