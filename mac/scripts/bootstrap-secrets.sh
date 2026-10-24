@@ -3,7 +3,9 @@
 # - the two GitHub tokens from Infisical env "local" (re-applied every run, so a rotated token lands);
 # - the fixed test password of the integration-test role titan_it (re-applied every run);
 # - the internal ones (DB password, internal token, cluster key, Keycloak passwords), generated once: a second
-#   run keeps them, because the database already holds the first password.
+#   run keeps them, because the database already holds the first password;
+# - the password of the second regression test tenant (beta-user-2), generated once too (a rerun keeps it, or Keycloak
+#   and the Secret disagree), but ahead of the early exit below so a cluster bootstrapped before it existed gets it.
 # Values go through pipes only: no file, no command-line argument, nothing printed.
 # Needs: `infisical login` done on this Mac, titan-k3s running.
 set -euo pipefail
@@ -67,6 +69,15 @@ printf 'username=titan_it\npassword=titan-it-local-only\n' |
   k create secret generic titan-it-credentials -n titan-db-staging --type=kubernetes.io/basic-auth \
     --from-env-file=/dev/stdin --dry-run=client -o yaml | k apply -f - >/dev/null
 echo "secret titan-db-staging/titan-it-credentials applied"
+
+# ── beta-user-2 (second regression test tenant): generated once, a rerun keeps it ─────────────────────────────
+# Ahead of the early exit below: a cluster bootstrapped before this tenant existed gets its Secret on the next run.
+# Only a NotFound counts as absent: a timeout must not regenerate a password Keycloak already holds.
+# The error goes into a variable first: under pipefail, `kubectl … | grep -q` is false when grep exits early.
+beta_user_2_lookup=$(k get secret beta-user-2-credentials -n titan-auth-staging 2>&1 >/dev/null || true)
+if grep -q NotFound <<< "$beta_user_2_lookup"; then
+  printf 'password=%s\n' "$(openssl rand -hex 16)" | apply_secret titan-auth-staging beta-user-2-credentials
+fi
 
 # ── Generated once ────────────────────────────────────────────────────────────
 if k get secret control-plane-secrets -n titan-staging >/dev/null 2>&1; then
