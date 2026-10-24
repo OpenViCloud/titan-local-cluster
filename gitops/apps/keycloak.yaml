@@ -19,19 +19,19 @@ spec:
           - $values/gitops/keycloak/staging-values.yaml
           - $local/gitops/keycloak/values.yaml
     - repoURL: https://github.com/OpenViCloud/titan-ops
-      targetRevision: dc3d9697471d0e23ae8b61e3cadd273031b665c2
+      targetRevision: 10ecc0f25dcce160c7c21728f76b1a3b4ef8e14a
       ref: values
     - repoURL: https://github.com/OpenViCloud/titan-local-cluster
       targetRevision: main
       ref: local
     - repoURL: https://github.com/OpenViCloud/titan-ops
-      targetRevision: dc3d9697471d0e23ae8b61e3cadd273031b665c2
+      targetRevision: 10ecc0f25dcce160c7c21728f76b1a3b4ef8e14a
       path: gitops/keycloak/realm-import
     # Not in staging's app until release:infra has made its Secret: the hook of this directory reads Secret
     # beta-user-2-credentials, which mac/scripts/bootstrap-secrets.sh makes here. Run that script (up.sh does) before the
     # push that adds this source reaches a cluster that has no such Secret, or the hook pod never starts.
     - repoURL: https://github.com/OpenViCloud/titan-ops
-      targetRevision: dc3d9697471d0e23ae8b61e3cadd273031b665c2
+      targetRevision: 10ecc0f25dcce160c7c21728f76b1a3b4ef8e14a
       path: gitops/keycloak/realm-import-beta-user-2
     - repoURL: https://github.com/OpenViCloud/titan-local-cluster
       targetRevision: main
