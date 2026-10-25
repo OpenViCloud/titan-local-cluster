@@ -28,7 +28,7 @@ Design, rules and runbook live in titan-ops:
 ## Run
 
 Needs: an Apple M3 or later (titan-incus runs KVM guests, so it needs nested virtualization) with 16 GB, [Lima](https://lima-vm.io/), `kubectl`, and `infisical login` done (the bootstrap
-reads two read-only tokens from Infisical environment `local`, and from its folder `/infra` the dev backup key pair when it is there). Docker Desktop must be quit.
+reads two read-only tokens from Infisical environment `local`, and from its folder `/infra` the dev backup key pair, without which titan-db cannot archive its WAL). Docker Desktop must be quit.
 
 ```sh
 bash mac/scripts/up.sh      # creates the VMs on first run, then starts them, applies secrets and root-local-mac

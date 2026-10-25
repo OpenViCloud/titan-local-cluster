@@ -76,6 +76,44 @@ class DevRender(unittest.TestCase):
         self.assertEqual(zones(render("control-plane")), {"Zones__0__Id": "local-mac", "Zones__0__Name": "Local Mac"})
 
 
+def first(objects, kind, name):
+    for obj in objects:
+        if obj["kind"] == kind and obj["metadata"]["name"] == name:
+            return obj
+    raise AssertionError("no %s %s" % (kind, name))
+
+
+def control_plane_env():
+    return {e["name"]: e.get("value") for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
+
+
+class DevBackup(unittest.TestCase):
+    """Dev backs titan-db up through git, with titan-ops's backup component (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket).
+    CNPG writes the bucket the control plane reads: declared in two Applications, so held equal here."""
+
+    def test_cnpg_writes_the_bucket_and_endpoint_the_control_plane_reads(self):
+        configuration = first(render("titan-db"), "ObjectStore", "titan-db-backup")["spec"]["configuration"]
+        bucket = re.fullmatch(r"s3://([^/]+)/postgres/", configuration["destinationPath"])
+        self.assertIsNotNone(bucket, configuration["destinationPath"])
+        env = control_plane_env()
+        self.assertEqual(bucket.group(1), env["BackupTarget__Bucket"])
+        self.assertEqual(configuration["endpointURL"], env["BackupTarget__Endpoint"])
+
+    def test_the_cluster_archives_through_the_plugin_and_has_a_daily_base_backup(self):
+        objects = render("titan-db")
+        plugins = first(objects, "Cluster", "titan-db")["spec"]["plugins"]
+        self.assertEqual([(p["name"], p["isWALArchiver"], p["parameters"]["barmanObjectName"]) for p in plugins],
+                         [("barman-cloud.cloudnative-pg.io", True, "titan-db-backup")])
+        scheduled = first(objects, "ScheduledBackup", "titan-db-daily")["spec"]
+        self.assertEqual((scheduled["cluster"]["name"], scheduled["method"]), ("titan-db", "plugin"))
+
+    def test_cert_manager_and_the_plugin_are_applications(self):
+        found = {name: (file, path) for file, name, path in applications()}
+        self.assertIn("cert-manager", found)
+        self.assertIn("targetRevision: v1.18.2", (GITOPS / "apps" / found["cert-manager"][0]).read_text())
+        self.assertEqual(found.get("plugin-barman-cloud", ("", ""))[1], "gitops/barman-cloud-plugin")
+
+
 def overlay_image(app):
     """The image an overlay sets: its single `images` entry's newName (else the entry name) and newTag."""
     text = (GITOPS / app / "kustomization.yaml").read_text().split("\nimages:\n", 1)[1]
