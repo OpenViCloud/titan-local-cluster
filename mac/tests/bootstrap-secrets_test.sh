@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# bootstrap-secrets_test.sh — the dev backup key pair that mac/scripts/bootstrap-secrets.sh puts into the cluster.
+# bootstrap-secrets_test.sh — the dev backup key pair and the fixed admin-test password that mac/scripts/bootstrap-secrets.sh
+# puts into the cluster.
 #
 # WHY this file exists: the script is the only way the dev Secret titan-db-backup-credentials gets its two keys, and a wrong
 # key name or a missing key only shows when CNPG cannot archive WAL. The script runs here against a fake `infisical`,
@@ -91,6 +92,13 @@ fi
 grep -q '^BACKUP_DEV_ACCESS_KEY_ID /infra$' "$WORK/both.infisical" && grep -q '^BACKUP_DEV_SECRET_ACCESS_KEY /infra$' "$WORK/both.infisical" \
   && ok "both keys are read from folder /infra" || bad "wrong Infisical folder: $(cat "$WORK/both.infisical")"
 grep -q '^ARGOCD_GITHUB_PAT /secret$' "$WORK/both.infisical" && ok "the GitHub tokens still come from /secret" || bad "token folder changed"
+printf 'password=admin-test-local-only\n' | cmp -s - "$WORK/both.stdin.admin-test-credentials" \
+  && ok "admin-test gets its fixed test password on a cluster that already has its internal secrets" \
+  || bad "stdin of admin-test-credentials was: $(cat "$WORK/both.stdin.admin-test-credentials" 2>&1)"
+grep -q 'create secret generic admin-test-credentials -n titan-auth-staging' "$WORK/both.kubectl" \
+  && ok "in titan-auth-staging, where Keycloak's realm import reads it" || bad "wrong namespace or name for admin-test-credentials"
+[ ! -e "$WORK/both.stdin.beta-user-credentials" ] \
+  && ok "beta-user keeps its generated password (not re-applied)" || bad "beta-user-credentials was re-applied"
 
 echo "backup keys absent"
 run absent "${TOKENS[@]}"

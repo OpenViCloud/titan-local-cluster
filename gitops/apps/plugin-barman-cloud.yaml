@@ -1,0 +1,31 @@
+# Local cluster on the Mac: copy of titan-ops's gitops/apps-staging/plugin-barman-cloud.yaml, at the pinned titan-ops commit (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: plugin-barman-cloud
+  namespace: argocd
+  annotations:
+    # After cert-manager (wave -2), with the operator (wave -1): titan-db (wave 0) names this plugin.
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/OpenViCloud/titan-ops
+    targetRevision: 5b2645543065c7dbe876060b3ec4d2a234a2186a
+    path: gitops/barman-cloud-plugin
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  syncPolicy:
+    automated:
+      prune: true
+    syncOptions:
+      # cnpg-operator makes this namespace in the same wave; on a rebuild from nothing this Application can run first.
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 3m

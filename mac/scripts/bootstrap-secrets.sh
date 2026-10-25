@@ -1,11 +1,11 @@
 #!/bin/bash
 # Puts the local cluster's secrets into titan-k3s (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets):
 # - the two GitHub tokens from Infisical env "local" (re-applied every run, so a rotated token lands);
-# - the fixed test password of the integration-test role titan_it (re-applied every run);
+# - the fixed test passwords of the integration-test role titan_it and of the realm user admin-test (re-applied every run);
 # - the S3 key pair of the dev backup bucket (R2 token scoped to titan-backup-dev) from Infisical env "local", folder
 #   /infra, as two Secrets with the same pair (CNPG reads one, the control plane the other: a Secret cannot be shared across
 #   namespaces); re-applied every run, so a rotated key lands, and the control plane reads it again after a restart;
-# - the internal ones (DB password, internal token, cluster key, Keycloak passwords), generated once: a second
+# - the internal ones (DB password, internal token, cluster key, the Keycloak admin and beta-user passwords), generated once: a second
 #   run keeps them, because the database already holds the first password;
 # - the password of the second regression test tenant (beta-user-2), generated once too (a rerun keeps it, or Keycloak
 #   and the Secret disagree), but ahead of the early exit below so a cluster bootstrapped before it existed gets it.
@@ -93,10 +93,17 @@ printf 'username=titan_it\npassword=titan-it-local-only\n' |
     --from-env-file=/dev/stdin --dry-run=client -o yaml | k apply -f - >/dev/null
 echo "secret titan-db-staging/titan-it-credentials applied"
 
+# User admin-test (platform-admin) of the dev realm: a fixed test password, so an agent can sign in to the admin console on dev
+# without reading a Secret. Not a secret for the same reason as titan_it: dev's hosts are *.localhost. Keycloak takes a changed
+# value at the next run of keycloak-config-cli, a PostSync hook: sync keycloak-local-mac once after this
+# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets).
+printf 'password=admin-test-local-only\n' | apply_secret titan-auth-staging admin-test-credentials
+
 # ── Backup key of the dev bucket, re-applied every run ────────────────────────
 # titan-db-backup-credentials: key names the Barman Cloud Plugin reads from the Secret of the ObjectStore (gitops/titan-db of titan-ops).
 # control-plane-backup-credentials: the setting names of the control plane's BackupTarget section (gitops/control-plane of titan-ops).
-# Optional until the backup component runs on dev: absent keys skip both Secrets with a warning and do not stop the bootstrap.
+# Absent keys skip both Secrets with a warning and do not stop the bootstrap; but gitops/titan-db runs the backup component,
+# so until they are there CNPG cannot archive WAL (it piles up on the PVC) and the Backups page has no key pair.
 backup_key_id=$(read_infisical BACKUP_DEV_ACCESS_KEY_ID /infra)
 backup_secret_key=$(read_infisical BACKUP_DEV_SECRET_ACCESS_KEY /infra)
 if [ -n "$backup_key_id" ] && [ -n "$backup_secret_key" ]; then
@@ -136,7 +143,6 @@ printf 'ConnectionStrings__Titan=Host=titan-db-rw.titan-db-staging.svc.cluster.l
 printf 'Internal__Token=%s\nEncryption__ClusterKey=%s\n' "$internal_token" "$cluster_key" | apply_secret titan-staging control-plane-secrets
 printf 'CP_INTERNAL_TOKEN=%s\n' "$internal_token" | apply_secret titan-staging worker-secrets
 printf 'admin-password=%s\n' "$(openssl rand -hex 16)" | apply_secret titan-auth-staging keycloak-admin-secret
-printf 'password=%s\n' "$(openssl rand -hex 16)" | apply_secret titan-auth-staging admin-test-credentials
 printf 'password=%s\n' "$(openssl rand -hex 16)" | apply_secret titan-auth-staging beta-user-credentials
 # GitHub login has no OAuth app for localhost: the realm import needs the keys, the provider just never works.
 printf 'github-client-id=local-disabled\ngithub-client-secret=local-disabled\n' | apply_secret titan-auth-staging social-login-credentials

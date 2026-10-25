@@ -7,7 +7,20 @@ kind: Kustomization
 resources:
   - https://github.com/OpenViCloud/titan-ops//gitops/titan-db/overlays/staging?ref=5b2645543065c7dbe876060b3ec4d2a234a2186a
 
+# Continuous backup to dev's own bucket, through titan-ops's component (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket):
+# the key pair is the Secret titan-db-backup-credentials that mac/scripts/bootstrap-secrets.sh writes. tests/render_test.py holds
+# the bucket and endpoint equal to the control plane's BackupTarget env.
+components:
+  - https://github.com/OpenViCloud/titan-ops//gitops/titan-db/components/backup?ref=5b2645543065c7dbe876060b3ec4d2a234a2186a
+
 patches:
+  - target:
+      kind: ObjectStore
+      name: titan-db-backup
+    patch: |-
+      - op: replace
+        path: /spec/configuration/destinationPath
+        value: s3://titan-backup-dev/postgres/
   - target:
       kind: Cluster
       name: titan-db
