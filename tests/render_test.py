@@ -62,6 +62,10 @@ class DevRender(unittest.TestCase):
         names = [c["name"] for c in containers(render("incus-worker"), "incus-worker")]
         self.assertEqual(names, ["incus-worker"])
 
+    def test_backup_target_is_the_dev_bucket_not_stagings(self):
+        env = {e["name"]: e.get("value") for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
+        self.assertEqual(env["BackupTarget__Bucket"], "titan-backup-dev")
+
     def test_zone_list_is_local_mac_only(self):
         self.assertEqual(zones(render("control-plane")), {"Zones__0__Id": "local-mac", "Zones__0__Name": "Local Mac"})
 
