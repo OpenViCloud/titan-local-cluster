@@ -30,6 +30,11 @@ for arg in "$@"; do
   case "$arg" in --path=*) path=${arg#--path=} ;; esac
 done
 printf '%s %s\n' "$name" "$path" >> "$FAKE_LOG.infisical"
+# FAKE_INFISICAL_FAIL=1: not logged in. The real CLI then exits 1 with a login prompt on STDOUT.
+if [ -n "${FAKE_INFISICAL_FAIL-}" ]; then
+  printf 'Select your hosting option: junk-that-must-never-be-applied'
+  exit 1
+fi
 var="FAKE_$name"
 printf '%s' "${!var-}"
 FAKE
@@ -88,8 +93,8 @@ run absent "${TOKENS[@]}"
 printf '%s' "$OUT" | grep -q 'WARNING: BACKUP_DEV_ACCESS_KEY_ID or BACKUP_DEV_SECRET_ACCESS_KEY is missing' \
   && ok "a warning names the missing keys" || bad "no warning: $OUT"
 [ ! -e "$WORK/absent.stdin.titan-db-backup-credentials" ] && ok "no backup Secret is applied, not even an empty one" || bad "a backup Secret was applied"
-[ -e "$WORK/absent.stdin.ghcr-credentials" ] || grep -q 'ghcr-credentials' "$WORK/absent.kubectl" \
-  && ok "the other secrets were still applied" || bad "the rest of the script did not run"
+printf '%s' "$OUT" | grep -q 'internal secrets already exist; kept' \
+  && ok "the script ran on past the warning to its end" || bad "the script stopped at the warning: $OUT"
 
 echo "one backup key absent"
 run half "${TOKENS[@]}" FAKE_BACKUP_DEV_ACCESS_KEY_ID=kid-123
@@ -100,6 +105,16 @@ echo "a GitHub token absent"
 run notoken FAKE_GHCR_PAT=ghcr-token-value
 [ "$RC" -ne 0 ] && printf '%s' "$OUT" | grep -q 'ARGOCD_GITHUB_PAT is missing' \
   && ok "the script still stops, naming the token" || bad "rc=$RC $OUT"
+
+echo "Infisical itself failing (not logged in)"
+run loggedout FAKE_INFISICAL_FAIL=1
+[ "$RC" -ne 0 ] && printf '%s' "$OUT" | grep -q "run 'infisical login'" \
+  && ok "the script stops and says to log in" || bad "rc=$RC $OUT"
+if ls "$WORK"/loggedout.stdin.* > /dev/null 2>&1; then
+  bad "a Secret was applied from a failed Infisical call"
+else
+  ok "no Secret was applied, so the login prompt text is never a token or a key"
+fi
 
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

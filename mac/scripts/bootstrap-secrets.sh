@@ -21,12 +21,19 @@ k() {
   kubectl --kubeconfig "$KUBECONFIG_FILE" --request-timeout=30s "$@"
 }
 
-# The value, or nothing when the key is absent (Infisical answers an error or "*not found*").
+# The value, or nothing when the key is absent: measured, an absent key is exit 0 with empty output. Any other exit means
+# Infisical itself failed (not logged in, no network) and its stdout is a login prompt, never a value: stop, so that text is
+# not applied as a token or a key.
 read_infisical() {
   local name=$1
   local folder=${2:-$INFISICAL_FOLDER}
   local value
-  value=$(infisical secrets get "$name" --projectId="$INFISICAL_PROJECT_ID" --env=local --path="$folder" --plain --silent 2>/dev/null || true)
+  local status=0
+  value=$(infisical secrets get "$name" --projectId="$INFISICAL_PROJECT_ID" --env=local --path="$folder" --plain --silent 2>/dev/null) || status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "ERROR: infisical failed (exit $status) reading $name from folder $folder; run 'infisical login'." >&2
+    exit 1
+  fi
   if [ "$value" = "*not found*" ]; then
     value=""
   fi
