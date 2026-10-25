@@ -35,6 +35,8 @@ bash mac/scripts/up.sh      # creates the VMs on first run, then starts them, ap
 bash mac/scripts/down.sh    # stops both VMs; disks and data stay
 ```
 
+`memory` in `mac/titan-k3s.yaml` applies when the VM is created. To resize a running one: `limactl stop titan-k3s && limactl edit --memory 4 titan-k3s && limactl start titan-k3s` (about 15 seconds of downtime; the pods come back by themselves).
+
 ArgoCD: http://argocd.localhost:8080 · portal: http://portal.localhost:8080.
 
 ## Move dev to main
