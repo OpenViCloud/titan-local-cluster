@@ -23,8 +23,6 @@ spec:
         - /spec/postgresql/parameters/max_connections
         - /spec/resources
   syncPolicy:
-    automated:
-      prune: true
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
