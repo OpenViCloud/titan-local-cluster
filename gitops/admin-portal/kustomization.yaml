@@ -16,4 +16,4 @@ patches:
 images:
   # Matched by the name staging's overlay gives the image, not by the base name.
   - name: ghcr.io/openvicloud/titan-admin-console
-    newTag: "c2a9fdc"
+    newTag: "c1168c0"
