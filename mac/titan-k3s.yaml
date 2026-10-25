@@ -4,7 +4,7 @@
 base: template://ubuntu-24.04
 vmType: vz
 cpus: 2
-memory: 3GiB
+memory: 4GiB
 disk: 30GiB
 mounts: []
 containerd:
