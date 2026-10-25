@@ -114,6 +114,21 @@ class DevBackup(unittest.TestCase):
         self.assertEqual(found.get("plugin-barman-cloud", ("", ""))[1], "gitops/barman-cloud-plugin")
 
 
+class DevRestore(unittest.TestCase):
+    """Dev's titan-db came back from the bucket (restore drill, https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/runbook.md#disaster-recovery):
+    a Cluster created from this overlay recovers from the archive of the cluster before it and archives under another name, or barman
+    refuses the non-empty archive."""
+
+    def test_the_cluster_recovers_from_the_old_archive_and_archives_under_a_new_name(self):
+        spec = first(render("titan-db"), "Cluster", "titan-db")["spec"]
+        self.assertNotIn("initdb", spec["bootstrap"])
+        self.assertEqual(spec["bootstrap"]["recovery"]["source"], "titan-db-source")
+        read = {c["name"]: c["plugin"]["parameters"]["serverName"] for c in spec["externalClusters"]}
+        written = spec["plugins"][0]["parameters"]["serverName"]
+        self.assertEqual(read, {"titan-db-source": "titan-db"})
+        self.assertEqual(written, "titan-db-restored")
+
+
 def overlay_image(app):
     """The image an overlay sets: its single `images` entry's newName (else the entry name) and newTag."""
     text = (GITOPS / app / "kustomization.yaml").read_text().split("\nimages:\n", 1)[1]

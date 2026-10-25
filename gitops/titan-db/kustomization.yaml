@@ -12,6 +12,11 @@ resources:
 # the bucket and endpoint equal to the control plane's BackupTarget env.
 components:
   - https://github.com/OpenViCloud/titan-ops//gitops/titan-db/components/backup?ref=5b4872dddb4eb647e869eff35fd3d550a8cd7ddb
+  # Dev's cluster is created from the bucket (titan-db's archive) and archives under titan-db-restored. It stays: without it the
+  # cluster would archive under titan-db again, and barman refuses that non-empty archive. A cluster created again later must move
+  # both names, read titan-db-restored and write a new one, or it restores from the stale archive without an error
+  # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/runbook.md#disaster-recovery).
+  - https://github.com/OpenViCloud/titan-ops//gitops/titan-db/components/restore?ref=5b4872dddb4eb647e869eff35fd3d550a8cd7ddb
 
 patches:
   - target:
