@@ -11,7 +11,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/OpenViCloud/titan-ops
-    targetRevision: 5b4872dddb4eb647e869eff35fd3d550a8cd7ddb
+    targetRevision: 388341d0f454d0953cd3371ca79906f553eb0fcd
     path: gitops/barman-cloud-plugin
   destination:
     server: https://kubernetes.default.svc
