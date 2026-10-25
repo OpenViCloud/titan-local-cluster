@@ -2,6 +2,8 @@
 # Puts the local cluster's secrets into titan-k3s (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets):
 # - the two GitHub tokens from Infisical env "local" (re-applied every run, so a rotated token lands);
 # - the fixed test password of the integration-test role titan_it (re-applied every run);
+# - the S3 key pair of the dev backup bucket (R2 token scoped to titan-backup-dev) from Infisical env "local", folder
+#   /infra (re-applied every run, so a rotated key lands);
 # - the internal ones (DB password, internal token, cluster key, Keycloak passwords), generated once: a second
 #   run keeps them, because the database already holds the first password;
 # - the password of the second regression test tenant (beta-user-2), generated once too (a rerun keeps it, or Keycloak
@@ -19,12 +21,32 @@ k() {
   kubectl --kubeconfig "$KUBECONFIG_FILE" --request-timeout=30s "$@"
 }
 
+# The value, or nothing when the key is absent: measured, an absent key is exit 0 with empty output. Any other exit means
+# Infisical itself failed (not logged in, no network) and its stdout is a login prompt, never a value: stop, so that text is
+# not applied as a token or a key.
+read_infisical() {
+  local name=$1
+  local folder=${2:-$INFISICAL_FOLDER}
+  local value
+  local status=0
+  value=$(infisical secrets get "$name" --projectId="$INFISICAL_PROJECT_ID" --env=local --path="$folder" --plain --silent 2>/dev/null) || status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "ERROR: infisical failed (exit $status) reading $name from folder $folder; run 'infisical login'." >&2
+    exit 1
+  fi
+  if [ "$value" = "*not found*" ]; then
+    value=""
+  fi
+  printf '%s' "$value"
+}
+
 from_infisical() {
   local name=$1
+  local folder=${2:-$INFISICAL_FOLDER}
   local value
-  value=$(infisical secrets get "$name" --projectId="$INFISICAL_PROJECT_ID" --env=local --path="$INFISICAL_FOLDER" --plain --silent)
-  if [ -z "$value" ] || [ "$value" = "*not found*" ]; then
-    echo "ERROR: $name is missing in Infisical env local, folder $INFISICAL_FOLDER." >&2
+  value=$(read_infisical "$name" "$folder")
+  if [ -z "$value" ]; then
+    echo "ERROR: $name is missing in Infisical env local, folder $folder." >&2
     exit 1
   fi
   printf '%s' "$value"
@@ -69,6 +91,20 @@ printf 'username=titan_it\npassword=titan-it-local-only\n' |
   k create secret generic titan-it-credentials -n titan-db-staging --type=kubernetes.io/basic-auth \
     --from-env-file=/dev/stdin --dry-run=client -o yaml | k apply -f - >/dev/null
 echo "secret titan-db-staging/titan-it-credentials applied"
+
+# ── Backup key of the dev bucket, re-applied every run ────────────────────────
+# Key names the Barman Cloud Plugin reads from the Secret of the ObjectStore (gitops/titan-db of titan-ops).
+# Optional until the backup component runs on dev: absent keys skip this Secret with a warning and do not stop the bootstrap.
+backup_key_id=$(read_infisical BACKUP_DEV_ACCESS_KEY_ID /infra)
+backup_secret_key=$(read_infisical BACKUP_DEV_SECRET_ACCESS_KEY /infra)
+if [ -n "$backup_key_id" ] && [ -n "$backup_secret_key" ]; then
+  printf 'ACCESS_KEY_ID=%s\nACCESS_SECRET_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
+    apply_secret titan-db-staging titan-db-backup-credentials
+else
+  echo "WARNING: BACKUP_DEV_ACCESS_KEY_ID or BACKUP_DEV_SECRET_ACCESS_KEY is missing in Infisical env local, folder /infra:" \
+    "secret titan-db-staging/titan-db-backup-credentials not applied." >&2
+fi
+unset backup_key_id backup_secret_key
 
 # ── beta-user-2 (second regression test tenant): generated once, a rerun keeps it ─────────────────────────────
 # Ahead of the early exit below: a cluster bootstrapped before this tenant existed gets its Secret on the next run.
