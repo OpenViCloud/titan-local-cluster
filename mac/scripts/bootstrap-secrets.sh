@@ -3,7 +3,8 @@
 # - the two GitHub tokens from Infisical env "local" (re-applied every run, so a rotated token lands);
 # - the fixed test password of the integration-test role titan_it (re-applied every run);
 # - the S3 key pair of the dev backup bucket (R2 token scoped to titan-backup-dev) from Infisical env "local", folder
-#   /infra (re-applied every run, so a rotated key lands);
+#   /infra, as two Secrets with the same pair (CNPG reads one, the control plane the other: a Secret cannot be shared across
+#   namespaces); re-applied every run, so a rotated key lands, and the control plane reads it again after a restart;
 # - the internal ones (DB password, internal token, cluster key, Keycloak passwords), generated once: a second
 #   run keeps them, because the database already holds the first password;
 # - the password of the second regression test tenant (beta-user-2), generated once too (a rerun keeps it, or Keycloak
@@ -93,16 +94,19 @@ printf 'username=titan_it\npassword=titan-it-local-only\n' |
 echo "secret titan-db-staging/titan-it-credentials applied"
 
 # ── Backup key of the dev bucket, re-applied every run ────────────────────────
-# Key names the Barman Cloud Plugin reads from the Secret of the ObjectStore (gitops/titan-db of titan-ops).
-# Optional until the backup component runs on dev: absent keys skip this Secret with a warning and do not stop the bootstrap.
+# titan-db-backup-credentials: key names the Barman Cloud Plugin reads from the Secret of the ObjectStore (gitops/titan-db of titan-ops).
+# control-plane-backup-credentials: the setting names of the control plane's BackupTarget section (gitops/control-plane of titan-ops).
+# Optional until the backup component runs on dev: absent keys skip both Secrets with a warning and do not stop the bootstrap.
 backup_key_id=$(read_infisical BACKUP_DEV_ACCESS_KEY_ID /infra)
 backup_secret_key=$(read_infisical BACKUP_DEV_SECRET_ACCESS_KEY /infra)
 if [ -n "$backup_key_id" ] && [ -n "$backup_secret_key" ]; then
   printf 'ACCESS_KEY_ID=%s\nACCESS_SECRET_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
     apply_secret titan-db-staging titan-db-backup-credentials
+  printf 'BackupTarget__AccessKeyId=%s\nBackupTarget__SecretAccessKey=%s\n' "$backup_key_id" "$backup_secret_key" |
+    apply_secret titan-staging control-plane-backup-credentials
 else
   echo "WARNING: BACKUP_DEV_ACCESS_KEY_ID or BACKUP_DEV_SECRET_ACCESS_KEY is missing in Infisical env local, folder /infra:" \
-    "secret titan-db-staging/titan-db-backup-credentials not applied." >&2
+    "secrets titan-db-staging/titan-db-backup-credentials and titan-staging/control-plane-backup-credentials not applied." >&2
 fi
 unset backup_key_id backup_secret_key
 

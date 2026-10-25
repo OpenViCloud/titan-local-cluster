@@ -8,6 +8,10 @@ spec:
       containers:
         - name: control-plane
           env:
+            # Dev's own bucket: staging's overlay names titan-backup-staging. Endpoint and region stay staging's (the same R2 account);
+            # the key pair is the Secret control-plane-backup-credentials that mac/scripts/bootstrap-secrets.sh writes.
+            - name: BackupTarget__Bucket
+              value: titan-backup-dev
             - name: Keycloak__Authority
               value: http://auth.localhost:8080/auth/realms/titan
             # The browser's issuer, auth.localhost, does not resolve inside the cluster: the bearer handler reads

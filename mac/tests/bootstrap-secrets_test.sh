@@ -76,6 +76,11 @@ run both "${TOKENS[@]}" FAKE_BACKUP_DEV_ACCESS_KEY_ID=kid-123 FAKE_BACKUP_DEV_SE
 printf 'ACCESS_KEY_ID=kid-123\nACCESS_SECRET_KEY=sec-456\n' | cmp -s - "$WORK/both.stdin.titan-db-backup-credentials" \
   && ok "kubectl got ACCESS_KEY_ID and ACCESS_SECRET_KEY on stdin, the names the ObjectStore reads" \
   || bad "stdin of the backup Secret was: $(cat "$WORK/both.stdin.titan-db-backup-credentials" 2>&1 | sed 's/=.*/=<value>/')"
+printf 'BackupTarget__AccessKeyId=kid-123\nBackupTarget__SecretAccessKey=sec-456\n' | cmp -s - "$WORK/both.stdin.control-plane-backup-credentials" \
+  && ok "the control plane's Secret carries the same pair under the names its config reads" \
+  || bad "stdin of the control plane's backup Secret was: $(cat "$WORK/both.stdin.control-plane-backup-credentials" 2>&1 | sed 's/=.*/=<value>/')"
+grep -q 'create secret generic control-plane-backup-credentials -n titan-staging' "$WORK/both.kubectl" \
+  && ok "that Secret is made in titan-staging, where the control plane runs" || bad "wrong namespace or name for the control plane's Secret"
 grep -q 'titan-db-staging' "$WORK/both.kubectl" && grep -q 'create secret generic titan-db-backup-credentials -n titan-db-staging' "$WORK/both.kubectl" \
   && ok "the Secret is made in titan-db-staging" || bad "wrong namespace or name"
 if grep -q -e 'kid-123' -e 'sec-456' "$WORK/both.kubectl" || printf '%s' "$OUT" | grep -q -e 'kid-123' -e 'sec-456'; then
@@ -92,13 +97,14 @@ run absent "${TOKENS[@]}"
 [ "$RC" -eq 0 ] && ok "exit 0: the bootstrap goes on" || bad "exit $RC: $OUT"
 printf '%s' "$OUT" | grep -q 'WARNING: BACKUP_DEV_ACCESS_KEY_ID or BACKUP_DEV_SECRET_ACCESS_KEY is missing' \
   && ok "a warning names the missing keys" || bad "no warning: $OUT"
-[ ! -e "$WORK/absent.stdin.titan-db-backup-credentials" ] && ok "no backup Secret is applied, not even an empty one" || bad "a backup Secret was applied"
+[ ! -e "$WORK/absent.stdin.titan-db-backup-credentials" ] && [ ! -e "$WORK/absent.stdin.control-plane-backup-credentials" ] \
+  && ok "no backup Secret is applied, not even an empty one" || bad "a backup Secret was applied"
 printf '%s' "$OUT" | grep -q 'internal secrets already exist; kept' \
   && ok "the script ran on past the warning to its end" || bad "the script stopped at the warning: $OUT"
 
 echo "one backup key absent"
 run half "${TOKENS[@]}" FAKE_BACKUP_DEV_ACCESS_KEY_ID=kid-123
-[ "$RC" -eq 0 ] && [ ! -e "$WORK/half.stdin.titan-db-backup-credentials" ] \
+[ "$RC" -eq 0 ] && [ ! -e "$WORK/half.stdin.titan-db-backup-credentials" ] && [ ! -e "$WORK/half.stdin.control-plane-backup-credentials" ] \
   && ok "half a pair is not applied" || bad "half a pair was applied or the script stopped: rc=$RC"
 
 echo "a GitHub token absent"
