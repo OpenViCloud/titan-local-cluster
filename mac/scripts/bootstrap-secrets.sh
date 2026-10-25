@@ -21,12 +21,24 @@ k() {
   kubectl --kubeconfig "$KUBECONFIG_FILE" --request-timeout=30s "$@"
 }
 
+# The value, or nothing when the key is absent (Infisical answers an error or "*not found*").
+read_infisical() {
+  local name=$1
+  local folder=${2:-$INFISICAL_FOLDER}
+  local value
+  value=$(infisical secrets get "$name" --projectId="$INFISICAL_PROJECT_ID" --env=local --path="$folder" --plain --silent 2>/dev/null || true)
+  if [ "$value" = "*not found*" ]; then
+    value=""
+  fi
+  printf '%s' "$value"
+}
+
 from_infisical() {
   local name=$1
   local folder=${2:-$INFISICAL_FOLDER}
   local value
-  value=$(infisical secrets get "$name" --projectId="$INFISICAL_PROJECT_ID" --env=local --path="$folder" --plain --silent)
-  if [ -z "$value" ] || [ "$value" = "*not found*" ]; then
+  value=$(read_infisical "$name" "$folder")
+  if [ -z "$value" ]; then
     echo "ERROR: $name is missing in Infisical env local, folder $folder." >&2
     exit 1
   fi
@@ -75,10 +87,16 @@ echo "secret titan-db-staging/titan-it-credentials applied"
 
 # ── Backup key of the dev bucket, re-applied every run ────────────────────────
 # Key names the Barman Cloud Plugin reads from the Secret of the ObjectStore (gitops/titan-db of titan-ops).
-backup_key_id=$(from_infisical BACKUP_DEV_ACCESS_KEY_ID /infra)
-backup_secret_key=$(from_infisical BACKUP_DEV_SECRET_ACCESS_KEY /infra)
-printf 'ACCESS_KEY_ID=%s\nACCESS_SECRET_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
-  apply_secret titan-db-staging titan-db-backup-credentials
+# Optional until the backup component runs on dev: absent keys skip this Secret with a warning and do not stop the bootstrap.
+backup_key_id=$(read_infisical BACKUP_DEV_ACCESS_KEY_ID /infra)
+backup_secret_key=$(read_infisical BACKUP_DEV_SECRET_ACCESS_KEY /infra)
+if [ -n "$backup_key_id" ] && [ -n "$backup_secret_key" ]; then
+  printf 'ACCESS_KEY_ID=%s\nACCESS_SECRET_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
+    apply_secret titan-db-staging titan-db-backup-credentials
+else
+  echo "WARNING: BACKUP_DEV_ACCESS_KEY_ID or BACKUP_DEV_SECRET_ACCESS_KEY is missing in Infisical env local, folder /infra:" \
+    "secret titan-db-staging/titan-db-backup-credentials not applied." >&2
+fi
 unset backup_key_id backup_secret_key
 
 # ── beta-user-2 (second regression test tenant): generated once, a rerun keeps it ─────────────────────────────
