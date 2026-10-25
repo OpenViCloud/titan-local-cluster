@@ -65,6 +65,12 @@ class DevRender(unittest.TestCase):
     def test_backup_target_is_the_dev_bucket_not_stagings(self):
         env = {e["name"]: e.get("value") for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
         self.assertEqual(env["BackupTarget__Bucket"], "titan-backup-dev")
+        self.assertEqual(env["BackupTarget__Region"], "auto")
+        self.assertTrue(env["BackupTarget__Endpoint"].startswith("https://"))
+
+    def test_the_backup_key_pair_comes_from_an_optional_secret(self):
+        refs = [r["secretRef"] for c in containers(render("control-plane"), "control-plane") for r in c["envFrom"] if "secretRef" in r]
+        self.assertIn({"name": "control-plane-backup-credentials", "optional": True}, refs)
 
     def test_zone_list_is_local_mac_only(self):
         self.assertEqual(zones(render("control-plane")), {"Zones__0__Id": "local-mac", "Zones__0__Name": "Local Mac"})
