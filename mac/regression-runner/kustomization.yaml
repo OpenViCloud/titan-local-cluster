@@ -24,7 +24,7 @@ patches:
       - op: replace
         path: /spec/jobTemplate/spec/template/spec/containers/0/env/3/value
         value: http://api.localhost:8080
-      # titan-k3s has 3 GiB; the staging request of 1 GiB leaves the cluster no headroom.
+      # titan-k3s had 3 GiB when this was measured (4 now); the staging request of 1 GiB leaves the cluster no headroom.
       - op: replace
         path: /spec/jobTemplate/spec/template/spec/containers/0/resources
         value:
