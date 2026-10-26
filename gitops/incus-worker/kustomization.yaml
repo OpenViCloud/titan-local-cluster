@@ -7,6 +7,7 @@ resources:
 
 patches:
   - path: patch-no-incus-tunnel.yaml
+  - path: patch-backup-bucket.yaml
 
 # Dev's own image: a commit OpenViCloud/titan-incus-worker published from main. Staging's name and tag move only by promotion in
 # titan-ops (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#gitops-flow).

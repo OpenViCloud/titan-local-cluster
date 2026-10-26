@@ -72,6 +72,22 @@ class DevRender(unittest.TestCase):
         refs = [r["secretRef"] for c in containers(render("control-plane"), "control-plane") for r in c["envFrom"] if "secretRef" in r]
         self.assertIn({"name": "control-plane-backup-credentials", "optional": True}, refs)
 
+    def test_the_worker_hands_incus_the_bucket_and_endpoint_the_control_plane_reads(self):
+        worker = {e["name"]: e.get("value") for c in containers(render("incus-worker"), "incus-worker") for e in c["env"]}
+        plane = {e["name"]: e.get("value") for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
+        self.assertEqual(worker["BACKUP_S3_BUCKET"], "titan-backup-dev")
+        self.assertEqual(worker["BACKUP_S3_BUCKET"], plane["BackupTarget__Bucket"])
+        self.assertEqual(worker["BACKUP_S3_URL"], plane["BackupTarget__Endpoint"])
+
+    # A patch of envFrom replaces the whole list: the worker must still read its internal token.
+    def test_the_worker_still_reads_its_internal_token(self):
+        refs = [r["secretRef"] for c in containers(render("incus-worker"), "incus-worker") for r in c.get("envFrom", []) if "secretRef" in r]
+        self.assertIn({"name": "worker-secrets"}, refs)
+
+    def test_the_workers_backup_key_pair_comes_from_an_optional_secret(self):
+        refs = [r["secretRef"] for c in containers(render("incus-worker"), "incus-worker") for r in c.get("envFrom", []) if "secretRef" in r]
+        self.assertIn({"name": "incus-worker-backup-credentials", "optional": True}, refs)
+
     def test_zone_list_is_local_mac_only(self):
         self.assertEqual(zones(render("control-plane")), {"Zones__0__Id": "local-mac", "Zones__0__Name": "Local Mac"})
 
