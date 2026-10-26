@@ -25,8 +25,8 @@ Design, rules and runbook live in titan-ops:
 
 ## Run
 
-Needs: an Apple M3 or later (titan-incus runs KVM guests, so it needs nested virtualization) with 16 GB, [Lima](https://lima-vm.io/), `kubectl`, and `infisical login` done (the bootstrap
-reads two read-only tokens from Infisical environment `local`, and from its folder `/infra` the dev backup key pair, without which titan-db cannot archive its WAL, the Backups page cannot read the bucket and VM and volume backups fail). Docker Desktop must be quit.
+Needs: an Apple M3 or later (titan-incus runs KVM guests, so it needs nested virtualization) with 16 GB, [Lima](https://lima-vm.io/), `kubectl` and `openssl`. No account and no token: the repositories and the images are public.
+The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/secrets.env` (mode 600), so a rebuilt cluster gets them again; keep that file. Without `BACKUP_S3_ACCESS_KEY_ID` and `BACKUP_S3_SECRET_ACCESS_KEY` in it, titan-db cannot archive its WAL, the Backups page cannot read the bucket, and VM and volume backups fail. Docker Desktop must be quit.
 
 ```sh
 bash mac/scripts/up.sh      # creates the VMs on first run, then starts them, applies secrets and root-local-mac
@@ -70,11 +70,13 @@ python3 tests/test_keycloak_theme.py && python3 scripts/keycloak-theme.py --chec
 bash tests/sweeper_test.sh            # network and gh signed in (titan-ops's template on GitHub)
 bash mac/tests/incus-log-sweeper_test.sh
 bash mac/tests/incus-uplink_test.sh
+bash mac/tests/bootstrap-secrets_test.sh   # macOS only (stat -f, sed -i '')
 ```
 
-CI runs all of these but `sweeper_test.sh` on every push to `main` and every pull request into it.
+CI runs all of these but `sweeper_test.sh` and `bootstrap-secrets_test.sh` on every push to `main` and every pull request into it.
 `sweeper_test.sh` reads [OpenViCloud/titan-ops](https://github.com/OpenViCloud/titan-ops), which is private, so it runs
 only on the Mac before every push, with `gh` signed in as an org member.
+`bootstrap-secrets_test.sh` uses macOS's `stat` and `sed`, so it runs on the Mac too, before every push that changes `mac/`.
 
 ## License
 
