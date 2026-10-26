@@ -1,0 +1,30 @@
+# The bucket the control plane, CNPG and the worker write (BackupTarget__Bucket of gitops/control-plane), made after every sync
+# when it is missing: SeaweedFS keeps it on the Mac's folder, and creating an existing bucket exits 1 (measured on 4.51).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seaweedfs-bucket
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: bucket
+          image: chrislusf/seaweedfs:4.51
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              shell() { echo "$1" | weed shell -master=seaweedfs:9333 -filer=seaweedfs:8888; }
+              if ! shell "s3.bucket.list" | grep -qw titan-backup-dev; then
+                shell "s3.bucket.create -name titan-backup-dev"
+              fi
+              shell "s3.bucket.list" | grep -w titan-backup-dev
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi

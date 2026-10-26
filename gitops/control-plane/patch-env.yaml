@@ -10,12 +10,13 @@ spec:
           env:
             - name: ASPNETCORE_ENVIRONMENT
               value: Staging
+            # Dev's S3, SeaweedFS of gitops/seaweedfs, over TLS with the CA of mac/scripts/bootstrap-secrets.sh (patch-s3-ca.yaml);
+            # the key pair is the Secret control-plane-backup-credentials that the same script writes. SeaweedFS ignores
+            # the region, the S3 client needs one.
             - name: BackupTarget__Endpoint
-              value: https://f74ed847b6f7b77c81ba88208a275338.r2.cloudflarestorage.com
+              value: https://lima-titan-k3s.internal:30833
             - name: BackupTarget__Region
-              value: auto
-            # Dev's own bucket in the R2 account staging uses (staging names titan-backup-staging);
-            # the key pair is the Secret control-plane-backup-credentials that mac/scripts/bootstrap-secrets.sh writes.
+              value: us-east-1
             - name: BackupTarget__Bucket
               value: titan-backup-dev
             - name: Keycloak__Authority

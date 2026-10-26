@@ -1,0 +1,20 @@
+# The CA of dev's S3 as one more file in the system store, so the image's own CAs stay. .NET is expected to read every file
+# in /etc/ssl/certs (not yet measured on a rebuilt cluster). Secret s3-ca comes from mac/scripts/bootstrap-secrets.sh.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-plane
+spec:
+  template:
+    spec:
+      containers:
+        - name: control-plane
+          volumeMounts:
+            - name: s3-ca
+              mountPath: /etc/ssl/certs/titan-local-s3.crt
+              subPath: ca.crt
+              readOnly: true
+      volumes:
+        - name: s3-ca
+          secret:
+            secretName: s3-ca

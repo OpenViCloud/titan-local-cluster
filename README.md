@@ -6,7 +6,7 @@ and a one-node Incus 7.0 LTS that is zone `local-mac`), and the GitOps that Argo
 `base/` holds the manifests every environment shares: the apps, the database with its backup and restore components, the
 Keycloak realm import and values, and the values of NATS, CloudNativePG and the Barman Cloud plugin's manifest. Every overlay here
 (`gitops/<app>/`) builds on `../../base/<app>` and adds only what the Mac needs: hostnames, the zone list, the token issuer,
-the backup bucket and endpoint, the restore, smaller requests, dev's own image tags. Staging's overlays live in titan-ops and build on `base/` here at a pinned commit;
+the backup bucket and endpoint, smaller requests, dev's own image tags. Staging's overlays live in titan-ops and build on `base/` here at a pinned commit;
 this repository never reaches staging. Nothing ArgoCD renders here reads titan-ops (`tests/render_test.py` checks it).
 
 Design, rules and runbook live in titan-ops:
@@ -26,7 +26,7 @@ Design, rules and runbook live in titan-ops:
 ## Run
 
 Needs: an Apple M3 or later (titan-incus runs KVM guests, so it needs nested virtualization) with 16 GB, [Lima](https://lima-vm.io/), `kubectl` and `openssl`. No account and no token: the repositories and the images are public.
-The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/secrets.env` (mode 600), so a rebuilt cluster gets them again; keep that file. Without `BACKUP_S3_ACCESS_KEY_ID` and `BACKUP_S3_SECRET_ACCESS_KEY` in it, titan-db cannot archive its WAL, the Backups page cannot read the bucket, and VM and volume backups fail. Docker Desktop must be quit.
+The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/` (`secrets.env`, the S3 CA and SeaweedFS's certificate; keys mode 600), so a rebuilt cluster gets them again; keep that folder. Backups go to SeaweedFS in titan-k3s (`gitops/seaweedfs`), over TLS at `https://lima-titan-k3s.internal:30833`, with its data in `~/.local/share/titan-local-cluster/s3` on the Mac, which outlives the VM. Docker Desktop must be quit.
 
 ```sh
 bash mac/scripts/up.sh      # creates the VMs on first run, then starts them, applies secrets and root-local-mac
@@ -71,6 +71,7 @@ bash tests/sweeper_test.sh            # network and gh signed in (titan-ops's te
 bash mac/tests/incus-log-sweeper_test.sh
 bash mac/tests/incus-uplink_test.sh
 bash mac/tests/bootstrap-secrets_test.sh   # macOS only (stat -f, sed -i '')
+bash mac/tests/trust-s3-ca_test.sh
 ```
 
 CI runs all of these but `sweeper_test.sh` and `bootstrap-secrets_test.sh` on every push to `main` and every pull request into it.

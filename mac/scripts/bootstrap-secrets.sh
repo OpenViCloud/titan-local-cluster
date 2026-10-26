@@ -4,12 +4,16 @@
 # - ~/.config/titan-local-cluster/secrets.env (mode 600) keeps every value generated once: the DB password, the internal
 #   token, the cluster key, the Keycloak admin and the two beta-user passwords. The first run writes them; later runs read
 #   them and only add a key a newer script needs. The file outlives the VM, so a cluster rebuilt with `limactl delete`
-#   gets the same values, which the database restored from a backup already holds.
+#   gets the same values, which the database restored from a backup already holds. It also keeps the key pair of dev's S3
+#   (SeaweedFS, gitops/seaweedfs), generated the same way.
+# - The S3 CA and SeaweedFS's server certificate (name lima-titan-k3s.internal), made once with openssl next to secrets.env:
+#   the CA's key never enters the cluster, and a rebuilt cluster trusts the same CA. Incus trusts it through titan-incus's
+#   system store (mac/scripts/trust-s3-ca.sh); barman, the control plane and the worker through Secret s3-ca.
 # - Those Secrets are applied only when the cluster has none yet: a running cluster keeps its own values, and the script
 #   never reads a Secret back.
-# - The backup bucket's key pair, when secrets.env has it (BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY), as three
-#   Secrets with the same pair (CNPG reads one, the control plane one, the worker one for Incus's uploads: CNPG is in another
-#   namespace, and each reader has its own key names); re-applied every run.
+# - The S3 key pair as SeaweedFS's identity and as three Secrets with the same pair (CNPG reads one, the control plane one,
+#   the worker one for Incus's uploads: CNPG is in another namespace, and each reader has its own key names); re-applied
+#   every run.
 # - ghcr-credentials with no auth: the shared base names it as the pull Secret, and GHCR serves the images anonymously.
 # - The fixed test passwords of the integration-test role titan_it and of the realm user admin-test, re-applied every run.
 # Values go through pipes and the file only: no command-line argument, nothing printed.
@@ -19,6 +23,13 @@ set -euo pipefail
 KUBECONFIG_FILE="$HOME/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml"
 SECRETS_DIR="$HOME/.config/titan-local-cluster"
 SECRETS_FILE="$SECRETS_DIR/secrets.env"
+CA_CERT="$SECRETS_DIR/s3-ca.crt"
+CA_KEY="$SECRETS_DIR/s3-ca.key"
+S3_CERT="$SECRETS_DIR/s3.crt"
+S3_KEY="$SECRETS_DIR/s3.key"
+# The name every S3 client uses: it resolves to titan-k3s on Lima's user-v2 network, from titan-incus and from pods alike,
+# whatever address DHCP gives the VM.
+S3_HOST="lima-titan-k3s.internal"
 
 k() {
   kubectl --kubeconfig "$KUBECONFIG_FILE" --request-timeout=30s "$@"
@@ -76,9 +87,43 @@ ensure_value CLUSTER_ENCRYPTION_KEY openssl rand -base64 32
 ensure_value KEYCLOAK_ADMIN_PASSWORD openssl rand -hex 16
 ensure_value BETA_USER_PASSWORD openssl rand -hex 16
 ensure_value BETA_USER_2_PASSWORD openssl rand -hex 16
+ensure_value BACKUP_S3_ACCESS_KEY_ID openssl rand -hex 10
+ensure_value BACKUP_S3_SECRET_ACCESS_KEY openssl rand -hex 20
 echo "secrets.env at $SECRETS_FILE"
 
-for namespace in argocd titan-staging titan-db-staging titan-auth-staging; do
+# ── S3 CA and certificate ─────────────────────────────────────────────────────
+# Extensions come from a file, not -addext: macOS's own openssl (LibreSSL) and Homebrew's OpenSSL both read it.
+extensions=$(mktemp)
+trap 'rm -f "$extensions" "$S3_CERT.csr"' EXIT
+cat > "$extensions" <<EXT
+[ca]
+basicConstraints = critical, CA:TRUE
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+[server]
+basicConstraints = critical, CA:FALSE
+keyUsage = critical, digitalSignature
+extendedKeyUsage = serverAuth
+subjectAltName = DNS:$S3_HOST
+EXT
+if [ ! -s "$CA_CERT" ] || [ ! -s "$CA_KEY" ]; then
+  openssl ecparam -name prime256v1 -genkey -noout -out "$CA_KEY"
+  openssl req -new -key "$CA_KEY" -subj "/CN=titan-local-cluster S3 CA" -out "$S3_CERT.csr"
+  openssl x509 -req -in "$S3_CERT.csr" -signkey "$CA_KEY" -days 3650 -sha256 \
+    -extfile "$extensions" -extensions ca -out "$CA_CERT"
+  rm -f "$S3_CERT"
+  echo "S3 CA made at $CA_CERT"
+fi
+if [ ! -s "$S3_CERT" ] || [ ! -s "$S3_KEY" ]; then
+  openssl ecparam -name prime256v1 -genkey -noout -out "$S3_KEY"
+  openssl req -new -key "$S3_KEY" -subj "/CN=$S3_HOST" -out "$S3_CERT.csr"
+  openssl x509 -req -in "$S3_CERT.csr" -CA "$CA_CERT" -CAkey "$CA_KEY" -set_serial "0x$(openssl rand -hex 8)" \
+    -days 3650 -sha256 -extfile "$extensions" -extensions server -out "$S3_CERT"
+  echo "S3 certificate made at $S3_CERT"
+fi
+chmod 600 "$CA_KEY" "$S3_KEY"
+
+for namespace in argocd titan-staging titan-db-staging titan-auth-staging seaweedfs; do
   k create namespace "$namespace" --dry-run=client -o yaml | k apply -f - >/dev/null
 done
 
@@ -104,28 +149,31 @@ echo "secret titan-db-staging/titan-it-credentials applied"
 # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets).
 printf 'password=admin-test-local-only\n' | apply_secret titan-auth-staging admin-test-credentials
 
-# ── Backup key of the dev bucket, re-applied every run ────────────────────────
+# ── S3 of dev (SeaweedFS), re-applied every run ───────────────────────────────
+k create secret tls seaweedfs-tls -n seaweedfs --cert="$S3_CERT" --key="$S3_KEY" --dry-run=client -o yaml | k apply -f - >/dev/null
+echo "secret seaweedfs/seaweedfs-tls applied"
+for namespace in titan-db-staging titan-staging; do
+  k create secret generic s3-ca -n "$namespace" --from-file=ca.crt="$CA_CERT" --dry-run=client -o yaml | k apply -f - >/dev/null
+  echo "secret $namespace/s3-ca applied"
+done
+backup_key_id=$(from_file BACKUP_S3_ACCESS_KEY_ID)
+backup_secret_key=$(from_file BACKUP_S3_SECRET_ACCESS_KEY)
+# SeaweedFS's one identity (weed server -s3.config). No Admin: the bucket Job of gitops/seaweedfs goes through master and filer.
+printf '{"identities": [{"name": "titan", "credentials": [{"accessKey": "%s", "secretKey": "%s"}], "actions": ["Read", "Write", "List", "Tagging"]}]}\n' \
+  "$backup_key_id" "$backup_secret_key" |
+  k create secret generic seaweedfs-s3-config -n seaweedfs --from-file=s3.json=/dev/stdin --dry-run=client -o yaml |
+  k apply -f - >/dev/null
+echo "secret seaweedfs/seaweedfs-s3-config applied"
 # titan-db-backup-credentials: key names the Barman Cloud Plugin reads from the Secret of the ObjectStore (base/titan-db/components/backup).
 # control-plane-backup-credentials: the setting names of the control plane's BackupTarget section (gitops/control-plane/patch-env.yaml).
 # incus-worker-backup-credentials: the worker's BACKUP_S3_* names; the worker hands the pair to Incus, which uploads VM and
 # volume backups itself (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/backup/design.md#incus-backup).
-# Absent keys skip all three Secrets with a warning and do not stop the bootstrap; but gitops/titan-db runs the backup component,
-# so until they are there CNPG cannot archive WAL (it piles up on the PVC), the Backups page has no key pair, and every VM and
-# volume backup fails.
-backup_key_id=$(from_file BACKUP_S3_ACCESS_KEY_ID)
-backup_secret_key=$(from_file BACKUP_S3_SECRET_ACCESS_KEY)
-if [ -n "$backup_key_id" ] && [ -n "$backup_secret_key" ]; then
-  printf 'ACCESS_KEY_ID=%s\nACCESS_SECRET_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
-    apply_secret titan-db-staging titan-db-backup-credentials
-  printf 'BackupTarget__AccessKeyId=%s\nBackupTarget__SecretAccessKey=%s\n' "$backup_key_id" "$backup_secret_key" |
-    apply_secret titan-staging control-plane-backup-credentials
-  printf 'BACKUP_S3_ACCESS_KEY_ID=%s\nBACKUP_S3_SECRET_ACCESS_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
-    apply_secret titan-staging incus-worker-backup-credentials
-else
-  echo "WARNING: BACKUP_S3_ACCESS_KEY_ID or BACKUP_S3_SECRET_ACCESS_KEY is missing in $SECRETS_FILE:" \
-    "secrets titan-db-staging/titan-db-backup-credentials, titan-staging/control-plane-backup-credentials and" \
-    "titan-staging/incus-worker-backup-credentials not applied." >&2
-fi
+printf 'ACCESS_KEY_ID=%s\nACCESS_SECRET_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
+  apply_secret titan-db-staging titan-db-backup-credentials
+printf 'BackupTarget__AccessKeyId=%s\nBackupTarget__SecretAccessKey=%s\n' "$backup_key_id" "$backup_secret_key" |
+  apply_secret titan-staging control-plane-backup-credentials
+printf 'BACKUP_S3_ACCESS_KEY_ID=%s\nBACKUP_S3_SECRET_ACCESS_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
+  apply_secret titan-staging incus-worker-backup-credentials
 unset backup_key_id backup_secret_key
 
 # ── beta-user-2 (second regression test tenant) ───────────────────────────────

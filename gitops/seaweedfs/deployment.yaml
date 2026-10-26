@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seaweedfs
+  labels:
+    app: seaweedfs
+spec:
+  replicas: 1
+  # One writer on the folder: the old pod stops before the new one starts.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: seaweedfs
+  template:
+    metadata:
+      labels:
+        app: seaweedfs
+    spec:
+      containers:
+        - name: seaweedfs
+          image: chrislusf/seaweedfs:4.51
+          # Master, volume server, filer and S3 in one process. S3 on 8333 speaks TLS only (the control plane refuses a
+          # plain http endpoint); master and filer stay inside the cluster for the bucket Job.
+          args:
+            - server
+            - -dir=/data
+            - -ip.bind=0.0.0.0
+            - -master.volumeSizeLimitMB=1024
+            - -s3
+            - -s3.port=8333
+            - -s3.cert.file=/etc/seaweedfs/tls/tls.crt
+            - -s3.key.file=/etc/seaweedfs/tls/tls.key
+            - -s3.config=/etc/seaweedfs/s3/s3.json
+          ports:
+            - name: s3
+              containerPort: 8333
+            - name: master
+              containerPort: 9333
+            - name: master-grpc
+              containerPort: 19333
+            - name: filer
+              containerPort: 8888
+            - name: filer-grpc
+              containerPort: 18888
+          readinessProbe:
+            tcpSocket:
+              port: s3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tls
+              mountPath: /etc/seaweedfs/tls
+              readOnly: true
+            - name: s3-config
+              mountPath: /etc/seaweedfs/s3
+              readOnly: true
+      volumes:
+        # The folder mac/titan-k3s.yaml mounts from the Mac, so the data outlives `limactl delete titan-k3s`. Directory, not
+        # DirectoryOrCreate: without the mount the pod fails instead of writing into the VM's disk.
+        - name: data
+          hostPath:
+            path: /mnt/titan-s3
+            type: Directory
+        - name: tls
+          secret:
+            secretName: seaweedfs-tls
+        - name: s3-config
+          secret:
+            secretName: seaweedfs-s3-config

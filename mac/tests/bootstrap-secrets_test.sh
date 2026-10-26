@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# bootstrap-secrets_test.sh — what mac/scripts/bootstrap-secrets.sh keeps in ~/.config/titan-local-cluster/secrets.env and
-# puts into the cluster.
+# bootstrap-secrets_test.sh — what mac/scripts/bootstrap-secrets.sh keeps in ~/.config/titan-local-cluster/ (secrets.env,
+# the S3 CA and SeaweedFS's certificate) and puts into the cluster.
 #
 # WHY this file exists: the script is the only place the dev cluster's secrets come from, and it must work for someone with
 # no vault and no GitHub token. The values it generates once must survive a rebuild (the database restored from a backup
@@ -50,12 +50,25 @@ FAKE
 cat > "$WORK/bin/openssl" <<'FAKE'
 #!/bin/bash
 [ -n "${FAKE_OPENSSL_FAIL-}" ] && exit 1
-# A different value on each call, so the test can tell which generated value went where.
+# `rand`: a different value on each call, so the test can tell which generated value went where. Anything else (keys,
+# certificates): writes a placeholder to each -out and -keyout file; the real openssl case below checks the real files.
 count=$(( $(cat "$FAKE_LOG.openssl" 2>/dev/null || echo 0) + 1 ))
 echo "$count" > "$FAKE_LOG.openssl"
-printf 'random%s' "$count"
+# Files carry a count over every run of the test, so a file made again never equals the one before it.
+files=$(( $(cat "$FAKE_FILES" 2>/dev/null || echo 0) + 1 ))
+echo "$files" > "$FAKE_FILES"
+if [ "$1" = rand ]; then
+  printf 'random%s' "$count"
+  exit 0
+fi
+previous=""
+for arg in "$@"; do
+  case "$previous" in -out|-keyout) printf 'pem%s\n' "$files" > "$arg" ;; esac
+  previous=$arg
+done
 FAKE
 chmod +x "$WORK/bin/"*
+export FAKE_FILES="$WORK/openssl-files"
 
 # run CASE HOME_DIR VAR=value ...: runs the script with that HOME and environment; sets RC, OUT (stderr+stdout), FAKE_LOG.
 # No GitHub token and no Infisical login exist in its environment.
@@ -73,7 +86,8 @@ run() {
 # value FILE KEY: the value of KEY in an env file.
 value() { sed -n "s/^$2=//p" "$1"; }
 
-KEYS="TITAN_DB_PASSWORD INTERNAL_TOKEN CLUSTER_ENCRYPTION_KEY KEYCLOAK_ADMIN_PASSWORD BETA_USER_PASSWORD BETA_USER_2_PASSWORD"
+KEYS="TITAN_DB_PASSWORD INTERNAL_TOKEN CLUSTER_ENCRYPTION_KEY KEYCLOAK_ADMIN_PASSWORD BETA_USER_PASSWORD BETA_USER_2_PASSWORD
+  BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY"
 
 echo "first run on a new cluster: no vault, no GitHub token, no secrets.env"
 mkdir -p "$WORK/fresh"
@@ -180,46 +194,94 @@ printf 'password=admin-test-local-only\n' | cmp -s - "$WORK/running.stdin.admin-
 grep -q 'create secret generic admin-test-credentials -n titan-auth-staging' "$WORK/running.kubectl" \
   && ok "in titan-auth-staging, where Keycloak's realm import reads it" || bad "wrong namespace or name for admin-test-credentials"
 
-echo "backup keys in secrets.env"
-mkdir -p "$WORK/backup"
-run backup0 "$WORK/backup"
-BFILE="$WORK/backup/.config/titan-local-cluster/secrets.env"
-printf 'BACKUP_S3_ACCESS_KEY_ID=kid-123\nBACKUP_S3_SECRET_ACCESS_KEY=sec-456\n' >> "$BFILE"
-run both "$WORK/backup"
-[ "$RC" -eq 0 ] && ok "exit 0" || bad "exit $RC: $OUT"
-printf '%s' "$OUT" | grep -q WARNING && bad "a warning with both keys present: $OUT" || ok "no warning with both keys present"
-printf 'ACCESS_KEY_ID=kid-123\nACCESS_SECRET_KEY=sec-456\n' | cmp -s - "$WORK/both.stdin.titan-db-backup-credentials" \
+echo "the S3 key pair, generated once"
+kid=$(value "$FILE" BACKUP_S3_ACCESS_KEY_ID)
+sec=$(value "$FILE" BACKUP_S3_SECRET_ACCESS_KEY)
+printf 'ACCESS_KEY_ID=%s\nACCESS_SECRET_KEY=%s\n' "$kid" "$sec" | cmp -s - "$WORK/fresh.stdin.titan-db-backup-credentials" \
   && ok "CNPG's Secret has ACCESS_KEY_ID and ACCESS_SECRET_KEY, the names the ObjectStore reads" \
-  || bad "stdin of titan-db-backup-credentials was: $(sed 's/=.*/=<value>/' "$WORK/both.stdin.titan-db-backup-credentials" 2>&1)"
-grep -q 'create secret generic titan-db-backup-credentials -n titan-db-staging' "$WORK/both.kubectl" \
+  || bad "stdin of titan-db-backup-credentials was: $(sed 's/=.*/=<value>/' "$WORK/fresh.stdin.titan-db-backup-credentials" 2>&1)"
+grep -q 'create secret generic titan-db-backup-credentials -n titan-db-staging' "$WORK/fresh.kubectl" \
   && ok "in titan-db-staging" || bad "wrong namespace or name for titan-db-backup-credentials"
-printf 'BackupTarget__AccessKeyId=kid-123\nBackupTarget__SecretAccessKey=sec-456\n' | cmp -s - "$WORK/both.stdin.control-plane-backup-credentials" \
+printf 'BackupTarget__AccessKeyId=%s\nBackupTarget__SecretAccessKey=%s\n' "$kid" "$sec" | cmp -s - "$WORK/fresh.stdin.control-plane-backup-credentials" \
   && ok "the control plane's Secret has the same pair under its setting names" \
-  || bad "stdin of control-plane-backup-credentials was: $(sed 's/=.*/=<value>/' "$WORK/both.stdin.control-plane-backup-credentials" 2>&1)"
-printf 'BACKUP_S3_ACCESS_KEY_ID=kid-123\nBACKUP_S3_SECRET_ACCESS_KEY=sec-456\n' | cmp -s - "$WORK/both.stdin.incus-worker-backup-credentials" \
+  || bad "stdin of control-plane-backup-credentials was: $(sed 's/=.*/=<value>/' "$WORK/fresh.stdin.control-plane-backup-credentials" 2>&1)"
+printf 'BACKUP_S3_ACCESS_KEY_ID=%s\nBACKUP_S3_SECRET_ACCESS_KEY=%s\n' "$kid" "$sec" | cmp -s - "$WORK/fresh.stdin.incus-worker-backup-credentials" \
   && ok "the worker's Secret has the same pair under the names the worker reads" \
-  || bad "stdin of incus-worker-backup-credentials was: $(sed 's/=.*/=<value>/' "$WORK/both.stdin.incus-worker-backup-credentials" 2>&1)"
-grep -q 'create secret generic control-plane-backup-credentials -n titan-staging' "$WORK/both.kubectl" \
-  && grep -q 'create secret generic incus-worker-backup-credentials -n titan-staging' "$WORK/both.kubectl" \
+  || bad "stdin of incus-worker-backup-credentials was: $(sed 's/=.*/=<value>/' "$WORK/fresh.stdin.incus-worker-backup-credentials" 2>&1)"
+grep -q 'create secret generic control-plane-backup-credentials -n titan-staging' "$WORK/fresh.kubectl" \
+  && grep -q 'create secret generic incus-worker-backup-credentials -n titan-staging' "$WORK/fresh.kubectl" \
   && ok "both in titan-staging" || bad "wrong namespace or name for the control plane's or the worker's backup Secret"
-if grep -q -e 'kid-123' -e 'sec-456' "$WORK/both.kubectl" || printf '%s' "$OUT" | grep -q -e 'kid-123' -e 'sec-456'; then
+python3 - "$WORK/fresh.stdin.seaweedfs-s3-config" "$kid" "$sec" <<'PY' && ok "SeaweedFS's S3 identity has the same pair" || bad "seaweedfs-s3-config does not carry the pair"
+import json, sys
+config = json.load(open(sys.argv[1]))
+credentials = [c for identity in config["identities"] for c in identity["credentials"]]
+assert credentials == [{"accessKey": sys.argv[2], "secretKey": sys.argv[3]}], credentials
+assert config["identities"][0]["actions"] == ["Read", "Write", "List", "Tagging"], config
+PY
+grep -q 'create secret generic seaweedfs-s3-config -n seaweedfs' "$WORK/fresh.kubectl" \
+  && ok "in namespace seaweedfs" || bad "wrong namespace or name for seaweedfs-s3-config"
+if grep -q -e "$kid" -e "$sec" "$WORK/fresh.kubectl" || printf '%s' "$OUT" | grep -q -e "$kid" -e "$sec"; then
   bad "a key value appears in a kubectl argument or in the output"
 else
   ok "no key value in any kubectl argument or in the output"
 fi
+printf '%s' "$OUT" | grep -q WARNING && bad "a warning on a normal run: $OUT" || ok "no warning"
 
-echo "backup keys absent"
-[ ! -e "$WORK/backup0.stdin.titan-db-backup-credentials" ] && [ ! -e "$WORK/backup0.stdin.control-plane-backup-credentials" ] \
-  && [ ! -e "$WORK/backup0.stdin.incus-worker-backup-credentials" ] \
-  && ok "no backup Secret is applied, not even an empty one" || bad "a backup Secret was applied"
-sed -i '' '/^BACKUP_S3_SECRET_ACCESS_KEY=/d' "$BFILE"
-run half "$WORK/backup"
-[ "$RC" -eq 0 ] && ok "exit 0: the bootstrap goes on" || bad "exit $RC: $OUT"
-printf '%s' "$OUT" | grep -q 'WARNING: BACKUP_S3_ACCESS_KEY_ID or BACKUP_S3_SECRET_ACCESS_KEY is missing' \
-  && ok "a warning names the missing keys" || bad "no warning: $OUT"
-[ ! -e "$WORK/half.stdin.titan-db-backup-credentials" ] && [ ! -e "$WORK/half.stdin.control-plane-backup-credentials" ] \
-  && [ ! -e "$WORK/half.stdin.incus-worker-backup-credentials" ] \
-  && ok "half a pair is not applied" || bad "half a pair was applied"
+echo "the S3 CA and SeaweedFS's certificate, made once on the Mac"
+DIR="$WORK/fresh/.config/titan-local-cluster"
+for name in s3-ca.crt s3-ca.key s3.crt s3.key; do
+  [ -s "$DIR/$name" ] || bad "no $name"
+done
+[ "$(stat -f '%Lp' "$DIR/s3-ca.key")" = "600" ] && [ "$(stat -f '%Lp' "$DIR/s3.key")" = "600" ] \
+  && ok "both private keys are mode 600" || bad "key modes $(stat -f '%Lp' "$DIR/s3-ca.key" "$DIR/s3.key" 2>&1)"
+grep -q "create secret tls seaweedfs-tls -n seaweedfs --cert=$DIR/s3.crt --key=$DIR/s3.key" "$WORK/fresh.kubectl" \
+  && ok "SeaweedFS gets its certificate and key as seaweedfs/seaweedfs-tls" || bad "no seaweedfs-tls from the two files"
+grep -q "create secret generic s3-ca -n titan-db-staging --from-file=ca.crt=$DIR/s3-ca.crt" "$WORK/fresh.kubectl" \
+  && grep -q "create secret generic s3-ca -n titan-staging --from-file=ca.crt=$DIR/s3-ca.crt" "$WORK/fresh.kubectl" \
+  && ok "the CA certificate goes to titan-db-staging (barman) and titan-staging (control plane, worker)" \
+  || bad "s3-ca missing in titan-db-staging or titan-staging"
+grep -q "s3-ca.key" "$WORK/fresh.kubectl" && bad "the CA's private key reached kubectl" || ok "the CA's private key never reaches the cluster"
+for name in s3-ca.crt s3-ca.key s3.crt s3.key; do cp "$DIR/$name" "$WORK/first-$name"; done
+run certs-again "$WORK/fresh"
+same=yes
+for name in s3-ca.crt s3-ca.key s3.crt s3.key; do cmp -s "$DIR/$name" "$WORK/first-$name" || same=no; done
+[ "$same" = yes ] && ok "a second run keeps the CA and the certificate" || bad "a second run changed the CA or the certificate"
+rm "$DIR/s3.crt"
+run cert-missing "$WORK/fresh"
+cmp -s "$DIR/s3-ca.crt" "$WORK/first-s3-ca.crt" && [ -s "$DIR/s3.crt" ] \
+  && ok "a missing certificate is made again from the same CA" || bad "the CA changed, or no new certificate"
+cp "$DIR/s3.crt" "$WORK/second-s3.crt"
+rm "$DIR/s3-ca.key"
+run ca-missing "$WORK/fresh"
+! cmp -s "$DIR/s3-ca.crt" "$WORK/first-s3-ca.crt" && ! cmp -s "$DIR/s3.crt" "$WORK/second-s3.crt" \
+  && ok "a new CA signs a new certificate: the old one would not verify against it" || bad "the certificate outlived its CA"
+chmod 644 "$DIR/s3-ca.key" "$DIR/s3.key"
+run key-modes "$WORK/fresh"
+[ "$(stat -f '%Lp' "$DIR/s3-ca.key")" = "600" ] && [ "$(stat -f '%Lp' "$DIR/s3.key")" = "600" ] \
+  && ok "keys left readable by others are set back to mode 600" || bad "key modes $(stat -f '%Lp' "$DIR/s3-ca.key" "$DIR/s3.key")"
+
+for real in /opt/homebrew/bin/openssl /usr/bin/openssl; do
+  [ -x "$real" ] || continue
+  echo "real $("$real" version)"
+  case_name=real-$(basename "$(dirname "$(dirname "$real")")")
+  mkdir -p "$WORK/$case_name/bin" "$WORK/$case_name/home"
+  ln -s "$WORK/bin/kubectl" "$WORK/$case_name/bin/kubectl"
+  ln -s "$real" "$WORK/$case_name/bin/openssl"
+  FAKE_LOG="$WORK/$case_name/log"
+  OUT=$(env HOME="$WORK/$case_name/home" PATH="$WORK/$case_name/bin:/usr/bin:/bin" FAKE_LOG="$FAKE_LOG" FAKE_EMPTY_CLUSTER=1 \
+    bash "$SCRIPT" 2>&1 </dev/null)
+  RC=$?
+  RDIR="$WORK/$case_name/home/.config/titan-local-cluster"
+  [ "$RC" -eq 0 ] && ok "exit 0" || bad "exit $RC: $OUT"
+  "$real" verify -CAfile "$RDIR/s3-ca.crt" "$RDIR/s3.crt" > /dev/null 2>&1 \
+    && ok "the certificate verifies against the CA" || bad "$("$real" verify -CAfile "$RDIR/s3-ca.crt" "$RDIR/s3.crt" 2>&1)"
+  text=$("$real" x509 -in "$RDIR/s3.crt" -noout -text 2>&1)
+  ca_text=$("$real" x509 -in "$RDIR/s3-ca.crt" -noout -text 2>&1)
+  printf '%s' "$text" | grep -q 'DNS:lima-titan-k3s.internal' && ok "its name is lima-titan-k3s.internal" || bad "SAN: $text"
+  printf '%s' "$text" | grep -q 'TLS Web Server Authentication' && ok "it is a server certificate" || bad "no serverAuth"
+  printf '%s' "$ca_text" | grep -q 'CA:TRUE' && ok "the CA says CA:TRUE" || bad "CA basic constraints: $ca_text"
+  printf '%s' "$text" | grep -q 'CA:TRUE' && bad "the server certificate is a CA" || ok "the server certificate is not a CA"
+done
 
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
