@@ -188,6 +188,21 @@ class DevS3(unittest.TestCase):
                    if "secret" in v}
         self.assertEqual(secrets, {"seaweedfs-tls", "seaweedfs-s3-config"})
 
+    def test_seaweedfs_memory_is_bounded(self):
+        # A VM backup (670 MB, multipart from Incus) got SeaweedFS OOM-killed at 512 MiB with no bound on the Go heap
+        # or on uploads in flight; measured 2026-10-26 on dev.
+        container = containers(render("seaweedfs"), "seaweedfs")[0]
+        args = container.get("args", [])
+        for flag in ("-s3.concurrentUploadLimitMB=64", "-filer.concurrentUploadLimitMB=64", "-volume.concurrentUploadLimitMB=64"):
+            self.assertIn(flag, args)
+        env = {e["name"]: e.get("value") for e in container.get("env", [])}
+        self.assertEqual(env.get("GOMEMLIMIT"), "350MiB")
+        self.assertEqual(container["resources"]["limits"]["memory"], "640Mi")
+
+    def test_readiness_does_not_open_tls_connections_it_never_finishes(self):
+        probe = containers(render("seaweedfs"), "seaweedfs")[0]["readinessProbe"]
+        self.assertEqual(probe.get("httpGet", {}).get("port"), "master")
+
     def test_seaweedfs_data_is_the_folder_titan_k3s_mounts_from_the_mac(self):
         mounts = yaml_file(MAC / "titan-k3s.yaml")["mounts"]
         self.assertEqual(len(mounts), 1, mounts)
