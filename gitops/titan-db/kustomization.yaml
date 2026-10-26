@@ -11,11 +11,14 @@ resources:
 
 # Continuous backup to dev's S3 (SeaweedFS, gitops/seaweedfs), through base's component (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket):
 # the key pair is the Secret titan-db-backup-credentials and the CA the Secret s3-ca, both from mac/scripts/bootstrap-secrets.sh.
-# tests/render_test.py holds the bucket and endpoint equal to the control plane's BackupTarget env. The cluster starts empty
-# and archives under its own name; a rebuild of titan-k3s restores it through base's restore component
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook).
+# tests/render_test.py holds the bucket and endpoint equal to the control plane's BackupTarget env.
 components:
   - ../../base/titan-db/components/backup
+  # titan-k3s was rebuilt on a bucket that holds titan-db's archive (the data outlives the VM on the Mac), so the cluster is
+  # created from it and archives under titan-db-restored, the component's names. It stays: without it the cluster would
+  # archive under titan-db again, and barman refuses that non-empty archive. The next rebuild moves both names
+  # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook).
+  - ../../base/titan-db/components/restore
 
 patches:
   - target:
