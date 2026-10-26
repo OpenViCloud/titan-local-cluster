@@ -1,0 +1,25 @@
+# Dev's S3 (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#s3). No staging copy:
+# staging writes to R2.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: seaweedfs
+  namespace: argocd
+  annotations:
+    # Before titan-db (wave 0): its WAL archive and its first base backup write here.
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/OpenViCloud/titan-local-cluster
+    targetRevision: main
+    path: gitops/seaweedfs
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: seaweedfs
+  syncPolicy:
+    automated:
+      prune: true
+    syncOptions:
+      # mac/scripts/bootstrap-secrets.sh makes it first, with the two Secrets.
+      - CreateNamespace=true

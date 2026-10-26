@@ -1,0 +1,37 @@
+# S3 for pods and for titan-incus alike, at https://lima-titan-k3s.internal:30833: that name resolves to titan-k3s on Lima's
+# user-v2 network from both VMs and from pods, whatever address DHCP gives the VM.
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs-s3
+spec:
+  type: NodePort
+  selector:
+    app: seaweedfs
+  ports:
+    - name: s3
+      port: 8333
+      targetPort: s3
+      nodePort: 30833
+---
+# Master and filer, for the bucket Job only.
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs
+spec:
+  selector:
+    app: seaweedfs
+  ports:
+    - name: master
+      port: 9333
+      targetPort: master
+    - name: master-grpc
+      port: 19333
+      targetPort: master-grpc
+    - name: filer
+      port: 8888
+      targetPort: filer
+    - name: filer-grpc
+      port: 18888
+      targetPort: filer-grpc

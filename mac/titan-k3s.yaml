@@ -6,7 +6,12 @@ vmType: vz
 cpus: 2
 memory: 4GiB
 disk: 30GiB
-mounts: []
+# SeaweedFS's data (gitops/seaweedfs) lives on the Mac, so it outlives `limactl delete titan-k3s`; up.sh makes the folder.
+# A fixed mountPoint, because the manifest's hostPath cannot name a Mac user's home.
+mounts:
+- location: "~/.local/share/titan-local-cluster/s3"
+  mountPoint: /mnt/titan-s3
+  writable: true
 containerd:
   system: false
   user: false

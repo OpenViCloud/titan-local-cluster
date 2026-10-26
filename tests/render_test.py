@@ -15,6 +15,10 @@ import subprocess
 import unittest
 
 GITOPS = pathlib.Path(__file__).resolve().parent.parent / "gitops"
+MAC = GITOPS.parent / "mac"
+# Dev's S3 (SeaweedFS): one name for pods and titan-incus alike, on Lima's user-v2 network, and the NodePort of gitops/seaweedfs.
+S3_ENDPOINT = "https://lima-titan-k3s.internal:30833"
+CA_FILE = "/etc/ssl/certs/titan-local-s3.crt"
 FAKE = re.compile(r"stub|mock|fake", re.IGNORECASE)
 
 
@@ -65,8 +69,8 @@ class DevRender(unittest.TestCase):
     def test_backup_target_is_the_dev_bucket_not_stagings(self):
         env = {e["name"]: e.get("value") for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
         self.assertEqual(env["BackupTarget__Bucket"], "titan-backup-dev")
-        self.assertEqual(env["BackupTarget__Region"], "auto")
-        self.assertTrue(env["BackupTarget__Endpoint"].startswith("https://"))
+        self.assertEqual(env["BackupTarget__Region"], "us-east-1")
+        self.assertEqual(env["BackupTarget__Endpoint"], S3_ENDPOINT)
 
     def test_the_backup_key_pair_comes_from_an_optional_secret(self):
         refs = [r["secretRef"] for c in containers(render("control-plane"), "control-plane") for r in c["envFrom"] if "secretRef" in r]
@@ -130,19 +134,85 @@ class DevBackup(unittest.TestCase):
         self.assertEqual(found.get("plugin-barman-cloud", ("", ""))[1], "base/barman-cloud-plugin")
 
 
-class DevRestore(unittest.TestCase):
-    """Dev's titan-db came back from the bucket (restore drill, https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/runbook.md#disaster-recovery):
-    a Cluster created from this overlay recovers from the archive of the cluster before it and archives under another name, or barman
-    refuses the non-empty archive."""
+class DevFreshDatabase(unittest.TestCase):
+    """Dev's titan-db starts empty on dev's own S3 and archives under its own name: nothing restores from the old R2 archive."""
 
-    def test_the_cluster_recovers_from_the_old_archive_and_archives_under_a_new_name(self):
+    def test_the_cluster_is_created_empty(self):
         spec = first(render("titan-db"), "Cluster", "titan-db")["spec"]
-        self.assertNotIn("initdb", spec["bootstrap"])
-        self.assertEqual(spec["bootstrap"]["recovery"]["source"], "titan-db-source")
-        read = {c["name"]: c["plugin"]["parameters"]["serverName"] for c in spec["externalClusters"]}
-        written = spec["plugins"][0]["parameters"]["serverName"]
-        self.assertEqual(read, {"titan-db-source": "titan-db"})
-        self.assertEqual(written, "titan-db-restored")
+        self.assertIn("initdb", spec["bootstrap"])
+        self.assertNotIn("recovery", spec["bootstrap"])
+        self.assertNotIn("externalClusters", spec)
+        self.assertNotIn("serverName", spec["plugins"][0]["parameters"])
+
+
+def yaml_file(path):
+    as_json = subprocess.run(["ruby", "-ryaml", "-rjson", "-e", "puts JSON.generate(YAML.load(STDIN.read))"],
+                             input=path.read_text(), capture_output=True, text=True, check=True).stdout
+    return json.loads(as_json)
+
+
+def mounts_of(objects, deployment, container):
+    spec = first(objects, "Deployment", deployment)["spec"]["template"]["spec"]
+    volumes = {v["name"]: v for v in spec.get("volumes", [])}
+    found = [c for c in spec["containers"] if c["name"] == container][0]
+    return [(m["mountPath"], m.get("subPath"), volumes[m["name"]]) for m in found.get("volumeMounts", [])]
+
+
+class DevS3(unittest.TestCase):
+    """SeaweedFS in titan-k3s over TLS, with its data on a folder of the Mac (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#s3)."""
+
+    def test_cnpg_reaches_s3_at_the_shared_endpoint_and_trusts_the_ca(self):
+        configuration = first(render("titan-db"), "ObjectStore", "titan-db-backup")["spec"]["configuration"]
+        self.assertEqual(configuration["endpointURL"], S3_ENDPOINT)
+        self.assertEqual(configuration["endpointCA"], {"name": "s3-ca", "key": "ca.crt"})
+
+    def test_the_control_plane_and_the_worker_trust_the_ca_from_the_system_store(self):
+        # One more file in /etc/ssl/certs, so the image's own CAs stay; .NET and Go are expected to read every file there.
+        for app in ("control-plane", "incus-worker"):
+            mounts = mounts_of(render(app), app, app)
+            self.assertIn((CA_FILE, "ca.crt", {"name": "s3-ca", "secret": {"secretName": "s3-ca"}}), mounts, app)
+
+    def test_no_dev_manifest_names_r2(self):
+        for app in sorted(p.name for p in GITOPS.iterdir() if (p / "kustomization.yaml").exists()):
+            text = subprocess.run(["kubectl", "kustomize", str(GITOPS / app)], capture_output=True, text=True, check=True).stdout
+            self.assertNotIn("r2.cloudflarestorage", text, app)
+
+    def test_seaweedfs_serves_s3_over_tls_with_the_bootstrap_secrets(self):
+        objects = render("seaweedfs")
+        container = containers(objects, "seaweedfs")[0]
+        args = " ".join(container.get("command", []) + container.get("args", []))
+        for flag in ("-s3", "-s3.cert.file=/etc/seaweedfs/tls/tls.crt", "-s3.key.file=/etc/seaweedfs/tls/tls.key",
+                     "-s3.config=/etc/seaweedfs/s3/s3.json", "-dir=/data"):
+            self.assertIn(flag, args.split())
+        secrets = {v["secret"]["secretName"] for v in first(objects, "Deployment", "seaweedfs")["spec"]["template"]["spec"]["volumes"]
+                   if "secret" in v}
+        self.assertEqual(secrets, {"seaweedfs-tls", "seaweedfs-s3-config"})
+
+    def test_seaweedfs_data_is_the_folder_titan_k3s_mounts_from_the_mac(self):
+        mounts = yaml_file(MAC / "titan-k3s.yaml")["mounts"]
+        self.assertEqual(len(mounts), 1, mounts)
+        self.assertEqual(mounts[0]["location"], "~/.local/share/titan-local-cluster/s3")
+        self.assertTrue(mounts[0]["writable"])
+        data = [v for _, _, v in mounts_of(render("seaweedfs"), "seaweedfs", "seaweedfs") if "hostPath" in v]
+        # Directory, not DirectoryOrCreate: without the mount the pod must fail, not write into the VM's disk.
+        self.assertEqual(data, [{"name": "data", "hostPath": {"path": mounts[0]["mountPoint"], "type": "Directory"}}])
+
+    def test_the_nodeport_is_the_endpoints_port(self):
+        service = first(render("seaweedfs"), "Service", "seaweedfs-s3")["spec"]
+        self.assertEqual(service["type"], "NodePort")
+        self.assertEqual([p["nodePort"] for p in service["ports"]], [int(S3_ENDPOINT.rsplit(":", 1)[1])])
+
+    def test_the_bucket_job_makes_the_bucket_the_control_plane_reads(self):
+        job = first(render("seaweedfs"), "Job", "seaweedfs-bucket")
+        script = " ".join(job["spec"]["template"]["spec"]["containers"][0]["args"])
+        self.assertIn("s3.bucket.create -name " + control_plane_env()["BackupTarget__Bucket"], script)
+        self.assertEqual(job["metadata"]["annotations"]["argocd.argoproj.io/hook"], "PostSync")
+
+    def test_seaweedfs_is_an_application_synced_before_the_database(self):
+        found = {name: (file, path) for file, name, path in applications()}
+        self.assertEqual(found.get("seaweedfs", ("", ""))[1], "gitops/seaweedfs")
+        wave = lambda name: int(re.search(r'sync-wave:\s*"(-?\d+)"', (GITOPS / "apps" / found[name][0]).read_text()).group(1))
+        self.assertLess(wave("seaweedfs"), wave("titan-db-local-mac"))
 
 
 def overlay_image(app):

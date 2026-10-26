@@ -34,3 +34,6 @@ jobs:
 
       - name: OVN uplink
         run: bash mac/tests/incus-uplink_test.sh
+
+      - name: S3 CA on titan-incus
+        run: bash mac/tests/trust-s3-ca_test.sh

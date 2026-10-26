@@ -17,6 +17,7 @@ configMapGenerator:
 
 patches:
   - path: patch-env.yaml
+  - path: patch-s3-ca.yaml
 
 # Dev's own image: a commit OpenViCloud/titan-control-plane published from main. Staging's name and tag move only by promotion in
 # titan-ops (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#gitops-flow).

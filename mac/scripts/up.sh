@@ -12,6 +12,9 @@ if docker info >/dev/null 2>&1; then
   exit 1
 fi
 
+# The folder titan-k3s mounts for SeaweedFS's data (mac/titan-k3s.yaml): Lima does not make a missing one.
+mkdir -p "$HOME/.local/share/titan-local-cluster/s3"
+
 for vm in titan-incus titan-k3s; do
   status=$(limactl list --format '{{.Status}}' "$vm" 2>/dev/null || true)
   if [ -z "$status" ]; then
@@ -33,6 +36,7 @@ for vm in titan-incus titan-k3s; do
 done
 
 bash "$here/scripts/bootstrap-secrets.sh"
+bash "$here/scripts/trust-s3-ca.sh"
 
 # k3s's helm controller installs ArgoCD after provisioning ends: on a fresh VM the Application kind does not
 # exist yet, and applying root fails with NotFound.
