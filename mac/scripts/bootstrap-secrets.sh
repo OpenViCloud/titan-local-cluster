@@ -1,57 +1,53 @@
 #!/bin/bash
-# Puts the local cluster's secrets into titan-k3s (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets):
-# - the two GitHub tokens from Infisical env "local" (re-applied every run, so a rotated token lands);
-# - the fixed test passwords of the integration-test role titan_it and of the realm user admin-test (re-applied every run);
-# - the S3 key pair of the dev backup bucket (R2 token scoped to titan-backup-dev) from Infisical env "local", folder
-#   /infra, as three Secrets with the same pair (CNPG reads one, the control plane one, the worker one for Incus's uploads:
-#   CNPG is in another namespace, and each reader has its own key names); re-applied every run, so a rotated key
-#   lands, and the control plane and the worker read it again after a restart;
-# - the internal ones (DB password, internal token, cluster key, the Keycloak admin and beta-user passwords), generated once: a second
-#   run keeps them, because the database already holds the first password;
-# - the password of the second regression test tenant (beta-user-2), generated once too (a rerun keeps it, or Keycloak
-#   and the Secret disagree), but ahead of the early exit below so a cluster bootstrapped before it existed gets it.
-# Values go through pipes only: no file, no command-line argument, nothing printed.
-# Needs: `infisical login` done on this Mac, titan-k3s running.
+# Puts the local cluster's secrets into titan-k3s (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets).
+# Needs no vault and no token: the repositories and the images are public.
+# - ~/.config/titan-local-cluster/secrets.env (mode 600) keeps every value generated once: the DB password, the internal
+#   token, the cluster key, the Keycloak admin and the two beta-user passwords. The first run writes them; later runs read
+#   them and only add a key a newer script needs. The file outlives the VM, so a cluster rebuilt with `limactl delete`
+#   gets the same values, which the database restored from a backup already holds.
+# - Those Secrets are applied only when the cluster has none yet: a running cluster keeps its own values, and the script
+#   never reads a Secret back.
+# - The backup bucket's key pair, when secrets.env has it (BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY), as three
+#   Secrets with the same pair (CNPG reads one, the control plane one, the worker one for Incus's uploads: CNPG is in another
+#   namespace, and each reader has its own key names); re-applied every run.
+# - ghcr-credentials with no auth: the shared base names it as the pull Secret, and GHCR serves the images anonymously.
+# - The fixed test passwords of the integration-test role titan_it and of the realm user admin-test, re-applied every run.
+# Values go through pipes and the file only: no command-line argument, nothing printed.
+# Needs: titan-k3s running.
 set -euo pipefail
 
 KUBECONFIG_FILE="$HOME/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml"
-INFISICAL_PROJECT_ID="85de0720-f4a4-43e8-88b3-4da60d0c5925"
-INFISICAL_FOLDER="/secret"
-GHCR_USERNAME="openvicloud"
+SECRETS_DIR="$HOME/.config/titan-local-cluster"
+SECRETS_FILE="$SECRETS_DIR/secrets.env"
 
 k() {
   kubectl --kubeconfig "$KUBECONFIG_FILE" --request-timeout=30s "$@"
 }
 
-# The value, or nothing when the key is absent: measured, an absent key is exit 0 with empty output. Any other exit means
-# Infisical itself failed (not logged in, no network) and its stdout is a login prompt, never a value: stop, so that text is
-# not applied as a token or a key.
-read_infisical() {
+# The value of NAME in secrets.env, or nothing. Read line by line, never sourced: a value is data, not shell.
+from_file() {
   local name=$1
-  local folder=${2:-$INFISICAL_FOLDER}
-  local value
-  local status=0
-  value=$(infisical secrets get "$name" --projectId="$INFISICAL_PROJECT_ID" --env=local --path="$folder" --plain --silent 2>/dev/null) || status=$?
-  if [ "$status" -ne 0 ]; then
-    echo "ERROR: infisical failed (exit $status) reading $name from folder $folder; run 'infisical login'." >&2
-    exit 1
-  fi
-  if [ "$value" = "*not found*" ]; then
-    value=""
-  fi
-  printf '%s' "$value"
+  local line
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      "$name="*) printf '%s' "${line#*=}"; return 0 ;;
+    esac
+  done < "$SECRETS_FILE"
 }
 
-from_infisical() {
+# ensure_value NAME COMMAND...: adds NAME with COMMAND's output when the file lacks it; a value already there is kept.
+ensure_value() {
   local name=$1
-  local folder=${2:-$INFISICAL_FOLDER}
+  shift
   local value
-  value=$(read_infisical "$name" "$folder")
-  if [ -z "$value" ]; then
-    echo "ERROR: $name is missing in Infisical env local, folder $folder." >&2
-    exit 1
+  if [ -z "$(from_file "$name")" ]; then
+    value=$("$@") || value=""
+    if [ -z "$value" ]; then
+      echo "ERROR: could not generate $name; $SECRETS_FILE is unchanged." >&2
+      exit 1
+    fi
+    printf '%s=%s\n' "$name" "$value" >> "$SECRETS_FILE"
   fi
-  printf '%s' "$value"
 }
 
 # apply_secret NAMESPACE NAME: the secret's KEY=value lines come on stdin.
@@ -60,33 +56,41 @@ apply_secret() {
   echo "secret $1/$2 applied"
 }
 
+# Only a NotFound counts as absent: a timeout must not apply a value over one the cluster already holds.
+# The error goes into a variable first: under pipefail, `kubectl … | grep -q` is false when grep exits early.
+secret_absent() {
+  local lookup
+  lookup=$(k get secret "$2" -n "$1" 2>&1 >/dev/null || true)
+  grep -q NotFound <<< "$lookup"
+}
+
+# ── secrets.env ───────────────────────────────────────────────────────────────
+umask 077
+mkdir -p "$SECRETS_DIR"
+chmod 700 "$SECRETS_DIR"
+touch "$SECRETS_FILE"
+chmod 600 "$SECRETS_FILE"
+ensure_value TITAN_DB_PASSWORD openssl rand -hex 24
+ensure_value INTERNAL_TOKEN openssl rand -hex 32
+ensure_value CLUSTER_ENCRYPTION_KEY openssl rand -base64 32
+ensure_value KEYCLOAK_ADMIN_PASSWORD openssl rand -hex 16
+ensure_value BETA_USER_PASSWORD openssl rand -hex 16
+ensure_value BETA_USER_2_PASSWORD openssl rand -hex 16
+echo "secrets.env at $SECRETS_FILE"
+
 for namespace in argocd titan-staging titan-db-staging titan-auth-staging; do
   k create namespace "$namespace" --dry-run=client -o yaml | k apply -f - >/dev/null
 done
 
-# ── From Infisical ────────────────────────────────────────────────────────────
-argocd_token=$(from_infisical ARGOCD_GITHUB_PAT)
-printf 'type=git\nurl=https://github.com/OpenViCloud\nusername=x-access-token\npassword=%s\n' "$argocd_token" |
-  k create secret generic github-creds -n argocd --from-env-file=/dev/stdin --dry-run=client -o yaml |
-  k label --local -f - argocd.argoproj.io/secret-type=repo-creds -o yaml |
-  k apply -f - >/dev/null
-echo "secret argocd/github-creds applied"
-unset argocd_token
-
-ghcr_token=$(from_infisical GHCR_PAT)
-GHCR_TOKEN="$ghcr_token" GHCR_USERNAME="$GHCR_USERNAME" python3 -I -c '
-import base64, json, os
-user, token = os.environ["GHCR_USERNAME"], os.environ["GHCR_TOKEN"]
-auth = base64.b64encode(f"{user}:{token}".encode()).decode()
-print(json.dumps({"auths": {"ghcr.io": {"username": user, "password": token, "auth": auth}}}))' |
+# ── Pull Secret ───────────────────────────────────────────────────────────────
+printf '{"auths": {}}\n' |
   k create secret generic ghcr-credentials -n titan-staging --type=kubernetes.io/dockerconfigjson \
     --from-file=.dockerconfigjson=/dev/stdin --dry-run=client -o yaml |
   k apply -f - >/dev/null
 echo "secret titan-staging/ghcr-credentials applied"
-unset ghcr_token
 
 # ── Test values, re-applied every run ─────────────────────────────────────────
-# Role titan_it of the dev database (gitops/titan-db): integration tests create and drop
+# Role titan_it of the dev database (base/titan-db): integration tests create and drop
 # their own databases with it. A fixed test value, not a secret: the cluster only listens on 127.0.0.1, and
 # test-all.sh of OpenViCloud/titan-control-plane needs the same value.
 printf 'username=titan_it\npassword=titan-it-local-only\n' |
@@ -108,8 +112,8 @@ printf 'password=admin-test-local-only\n' | apply_secret titan-auth-staging admi
 # Absent keys skip all three Secrets with a warning and do not stop the bootstrap; but gitops/titan-db runs the backup component,
 # so until they are there CNPG cannot archive WAL (it piles up on the PVC), the Backups page has no key pair, and every VM and
 # volume backup fails.
-backup_key_id=$(read_infisical BACKUP_DEV_ACCESS_KEY_ID /infra)
-backup_secret_key=$(read_infisical BACKUP_DEV_SECRET_ACCESS_KEY /infra)
+backup_key_id=$(from_file BACKUP_S3_ACCESS_KEY_ID)
+backup_secret_key=$(from_file BACKUP_S3_SECRET_ACCESS_KEY)
 if [ -n "$backup_key_id" ] && [ -n "$backup_secret_key" ]; then
   printf 'ACCESS_KEY_ID=%s\nACCESS_SECRET_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
     apply_secret titan-db-staging titan-db-backup-credentials
@@ -118,39 +122,36 @@ if [ -n "$backup_key_id" ] && [ -n "$backup_secret_key" ]; then
   printf 'BACKUP_S3_ACCESS_KEY_ID=%s\nBACKUP_S3_SECRET_ACCESS_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
     apply_secret titan-staging incus-worker-backup-credentials
 else
-  echo "WARNING: BACKUP_DEV_ACCESS_KEY_ID or BACKUP_DEV_SECRET_ACCESS_KEY is missing in Infisical env local, folder /infra:" \
+  echo "WARNING: BACKUP_S3_ACCESS_KEY_ID or BACKUP_S3_SECRET_ACCESS_KEY is missing in $SECRETS_FILE:" \
     "secrets titan-db-staging/titan-db-backup-credentials, titan-staging/control-plane-backup-credentials and" \
     "titan-staging/incus-worker-backup-credentials not applied." >&2
 fi
 unset backup_key_id backup_secret_key
 
-# ── beta-user-2 (second regression test tenant): generated once, a rerun keeps it ─────────────────────────────
+# ── beta-user-2 (second regression test tenant) ───────────────────────────────
 # Ahead of the early exit below: a cluster bootstrapped before this tenant existed gets its Secret on the next run.
-# Only a NotFound counts as absent: a timeout must not regenerate a password Keycloak already holds.
-# The error goes into a variable first: under pipefail, `kubectl … | grep -q` is false when grep exits early.
-beta_user_2_lookup=$(k get secret beta-user-2-credentials -n titan-auth-staging 2>&1 >/dev/null || true)
-if grep -q NotFound <<< "$beta_user_2_lookup"; then
-  printf 'password=%s\n' "$(openssl rand -hex 16)" | apply_secret titan-auth-staging beta-user-2-credentials
+if secret_absent titan-auth-staging beta-user-2-credentials; then
+  printf 'password=%s\n' "$(from_file BETA_USER_2_PASSWORD)" | apply_secret titan-auth-staging beta-user-2-credentials
 fi
 
-# ── Generated once ────────────────────────────────────────────────────────────
-if k get secret control-plane-secrets -n titan-staging >/dev/null 2>&1; then
+# ── Generated once, applied when the cluster has none ─────────────────────────
+if ! secret_absent titan-staging control-plane-secrets; then
   echo "internal secrets already exist; kept"
   exit 0
 fi
 
-db_password=$(openssl rand -hex 24)
-internal_token=$(openssl rand -hex 32)
-cluster_key=$(openssl rand -base64 32)
+db_password=$(from_file TITAN_DB_PASSWORD)
+internal_token=$(from_file INTERNAL_TOKEN)
 
 printf 'username=titan\npassword=%s\n' "$db_password" | apply_secret titan-db-staging titan-db-credentials
 printf 'username=titan\npassword=%s\n' "$db_password" | apply_secret titan-auth-staging titan-db-credentials
 printf 'ConnectionStrings__Titan=Host=titan-db-rw.titan-db-staging.svc.cluster.local;Port=5432;Database=titan;Username=titan;Password=%s\n' "$db_password" |
   apply_secret titan-staging control-plane-db
-printf 'Internal__Token=%s\nEncryption__ClusterKey=%s\n' "$internal_token" "$cluster_key" | apply_secret titan-staging control-plane-secrets
+printf 'Internal__Token=%s\nEncryption__ClusterKey=%s\n' "$internal_token" "$(from_file CLUSTER_ENCRYPTION_KEY)" |
+  apply_secret titan-staging control-plane-secrets
 printf 'CP_INTERNAL_TOKEN=%s\n' "$internal_token" | apply_secret titan-staging worker-secrets
-printf 'admin-password=%s\n' "$(openssl rand -hex 16)" | apply_secret titan-auth-staging keycloak-admin-secret
-printf 'password=%s\n' "$(openssl rand -hex 16)" | apply_secret titan-auth-staging beta-user-credentials
+printf 'admin-password=%s\n' "$(from_file KEYCLOAK_ADMIN_PASSWORD)" | apply_secret titan-auth-staging keycloak-admin-secret
+printf 'password=%s\n' "$(from_file BETA_USER_PASSWORD)" | apply_secret titan-auth-staging beta-user-credentials
 # GitHub login has no OAuth app for localhost: the realm import needs the keys, the provider just never works.
 printf 'github-client-id=local-disabled\ngithub-client-secret=local-disabled\n' | apply_secret titan-auth-staging social-login-credentials
-unset db_password internal_token cluster_key
+unset db_password internal_token

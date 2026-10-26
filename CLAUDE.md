@@ -21,5 +21,5 @@ https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-in
   After a push or a merge to main: hard-refresh ArgoCD's Applications (README, "Move dev to main").
 - Before a push: `python3 tests/render_test.py`, `python3 tests/test_pull_images.py`, `python3 tests/test_keycloak_theme.py`,
   `python3 scripts/keycloak-theme.py --check`, `bash tests/sweeper_test.sh`, and
-  `for t in mac/tests/*.sh; do bash "$t" || break; done`. CI runs all of them but `mac/tests/bootstrap-secrets_test.sh` and the
-  sweeper test, which reads titan-ops (private), so this machine is the only place those two run.
+  `for t in mac/tests/*.sh; do bash "$t" || break; done`. CI runs all of them but `mac/tests/bootstrap-secrets_test.sh` (macOS's `stat -f`
+  and `sed -i ''`) and the sweeper test (reads titan-ops, private), so this machine is the only place those two run.
