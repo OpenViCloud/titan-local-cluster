@@ -1,0 +1,19 @@
+# CloudNativePG Operator — Helm values
+# Chart: cloudnative-pg/cloudnative-pg
+# Repo: https://cloudnative-pg.github.io/charts
+# Docs: https://cloudnative-pg.io/documentation/
+#
+# Replaces Percona Everest — reason: Everest does not publish linux/arm64 images,
+# incompatible with Oracle Cloud Ampere A1 (aarch64).
+#
+# CNPG publishes multi-arch images (linux/amd64 + linux/arm64).
+# Operator is cluster-scoped — one install manages all Cluster CRs
+# across namespaces (titan-db-staging, titan-db-prod).
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

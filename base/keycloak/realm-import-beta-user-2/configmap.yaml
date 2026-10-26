@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm-import-beta-user-2
+data:
+  titan-beta-user-2.json: |
+    {
+      "realm": "titan",
+      "users": [
+        {
+          "username": "beta-user-2",
+          "email": "beta-user-2@openvicloud.com",
+          "emailVerified": true,
+          "enabled": true,
+          "realmRoles": ["default-roles-titan"],
+          "credentials": [
+            {
+              "type": "password",
+              "value": "$(env:BETA_USER_2_PASSWORD)",
+              "temporary": false
+            }
+          ]
+        }
+      ]
+    }

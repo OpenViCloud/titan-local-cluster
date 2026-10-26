@@ -1,0 +1,99 @@
+# The regression runner (staging's Application; dev applies it through mac/regression-runner). The login step of a UI/API regression runs HERE, not
+# on an agent's machine: the pod reads the test-account passwords from the secrets
+# of this namespace (secretKeyRef) and Playwright types them. The agent only
+# supplies the specs, starts a run and reads the redacted output + screenshots —
+# the credential never passes through it
+# (https://github.com/OpenViCloud/titan-ops/blob/main/.claude/commands/release/regression.md, "Runner").
+#
+# One run is `bash run-module.sh` of OpenViCloud/titan-regression: it loads the specs into a ConfigMap of the job's own,
+# creates the job from this CronJob (env REGRESSION_CRONJOB names it; lane b has cronjob-lane-b.yaml), waits for
+# /work/results/.done, copies the results and deletes the job and its ConfigMap. The same steps by hand:
+#   kubectl -n titan-auth-staging create configmap titan-regression-specs-<job> \
+#     --from-file=<dir with *.spec.ts> --dry-run=client -o yaml | kubectl apply -f -
+#   kubectl -n titan-auth-staging create job <job> --from=cronjob/titan-regression --dry-run=client -o json \
+#     | python3 patch-job.py titan-regression-specs-<job> | kubectl create -f -    # patch-job.py is in titan-regression
+#   kubectl -n titan-auth-staging exec <pod> -- test -f /work/results/.done   # repeat until true or the pod has ended
+#   kubectl -n titan-auth-staging logs <pod>                           # not -f: the pod sleeps after RESULTS_READY
+#   kubectl -n titan-auth-staging cp <pod>:/work/results <work dir>      # while the pod holds; not committed
+#
+# suspend: true — it never runs on a schedule; the schedule field is required only.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: titan-regression
+spec:
+  suspend: true
+  schedule: "0 0 1 1 *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 5400
+      ttlSecondsAfterFinished: 7200
+      template:
+        metadata:
+          labels:
+            app: titan-regression
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001   # pwuser in the Playwright image
+          volumes:
+            - name: runner
+              configMap:
+                name: titan-regression-runner
+            - name: specs
+              configMap:
+                name: titan-regression-specs   # placeholder: patch-job.py points it at the job's own ConfigMap
+                optional: true   # created per job by the agent; absent ⇒ the runner exits 2
+            - name: work
+              emptyDir: {}
+          containers:
+            - name: playwright
+              # Keep in lockstep with @playwright/test in run.sh (browsers match the npm version) and with cronjob-lane-b.yaml.
+              image: mcr.microsoft.com/playwright:v1.62.1-noble
+              command: ["bash", "/runner/run.sh"]
+              env:
+                - name: HOME
+                  value: /work
+                - name: PORTAL_BASE_URL
+                  value: https://portal-titan-staging.openvicloud.com
+                - name: ADMIN_BASE_URL
+                  value: https://admin-titan-staging.openvicloud.com
+                - name: API_BASE_URL
+                  value: https://api-titan-staging.openvicloud.com
+                - name: RESULTS_DIR
+                  value: /work/results
+                - name: HOLD_SECONDS
+                  value: "1800"   # time to kubectl cp the results before the pod ends
+                - name: BETA_USER_USERNAME
+                  value: beta-user
+                - name: BETA_USER_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: beta-user-credentials
+                      key: password
+                - name: ADMIN_TEST_USERNAME
+                  value: admin-test
+                - name: ADMIN_TEST_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: admin-test-credentials
+                      key: password
+              volumeMounts:
+                - name: runner
+                  mountPath: /runner
+                  readOnly: true
+                - name: specs
+                  mountPath: /specs
+                  readOnly: true
+                - name: work
+                  mountPath: /work
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 1Gi
+                limits:
+                  cpu: "2"
+                  memory: 2Gi

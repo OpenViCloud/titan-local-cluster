@@ -1,22 +1,24 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Staging's database with a smaller memory request: on titan-k3s (measured at 3 GiB, now 4) PostgreSQL uses about 100 MiB, and a
+# The shared database of base/ with a smaller memory request: on titan-k3s (measured at 3 GiB, now 4) PostgreSQL uses about 100 MiB, and a
 # 512 MiB request only blocks scheduling (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget). The limit stays.
 # The Application ignores /spec/resources, so a running cluster takes this on a manual sync; a new one at creation.
-resources:
-  - https://github.com/OpenViCloud/titan-ops//gitops/titan-db/overlays/staging?ref=4bb06db89be212d0ba729f02286dfdfe4aa8b1b8
+namespace: titan-db-staging
 
-# Continuous backup to dev's own bucket, through titan-ops's component (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket):
+resources:
+  - ../../base/titan-db
+
+# Continuous backup to dev's own bucket, through base's component (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket):
 # the key pair is the Secret titan-db-backup-credentials that mac/scripts/bootstrap-secrets.sh writes. tests/render_test.py holds
 # the bucket and endpoint equal to the control plane's BackupTarget env.
 components:
-  - https://github.com/OpenViCloud/titan-ops//gitops/titan-db/components/backup?ref=4bb06db89be212d0ba729f02286dfdfe4aa8b1b8
+  - ../../base/titan-db/components/backup
   # Dev's cluster is created from the bucket (titan-db's archive) and archives under titan-db-restored. It stays: without it the
   # cluster would archive under titan-db again, and barman refuses that non-empty archive. A cluster created again later must move
   # both names, read titan-db-restored and write a new one, or it restores from the stale archive without an error
   # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/runbook.md#disaster-recovery).
-  - https://github.com/OpenViCloud/titan-ops//gitops/titan-db/components/restore?ref=4bb06db89be212d0ba729f02286dfdfe4aa8b1b8
+  - ../../base/titan-db/components/restore
 
 patches:
   - target:

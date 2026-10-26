@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-portal
+  template:
+    metadata:
+      labels:
+        app: admin-portal
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      volumes:
+        - name: admin-portal-config
+          configMap:
+            name: admin-portal-config
+      containers:
+        - name: admin-portal
+          image: admin-portal:latest
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: admin-portal-config
+              mountPath: /usr/share/nginx/html/config.json
+              subPath: config.json
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10

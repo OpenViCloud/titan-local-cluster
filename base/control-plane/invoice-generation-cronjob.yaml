@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: control-plane-invoice-generation
+spec:
+  # 02:00 UTC on the 1st of every month — the prior calendar month is fully closed by then, and
+  # UsageRecord buckets are UTC, so "previous month" is unambiguous. Generation is idempotent
+  # (unique index on tenant+period), so a re-fire never double-bills.
+  schedule: "0 2 1 * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.0
+              env:
+                - name: INTERNAL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: control-plane-secrets
+                      key: Internal__Token
+              # Empty body → the endpoint defaults to the previous UTC month. --fail-with-body so a
+              # non-2xx response fails the Job (and the CronJob surfaces it) instead of exiting 0.
+              command:
+                - sh
+                - -c
+                - >
+                  curl --fail-with-body -sS -X POST
+                  http://control-plane/internal/billing/invoices/run
+                  -H "X-Internal-Token: $INTERNAL_TOKEN"
+                  -H "Content-Type: application/json"
+                  -d '{}'
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi

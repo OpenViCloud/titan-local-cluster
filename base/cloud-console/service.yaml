@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloud-console
+spec:
+  selector:
+    app: cloud-console
+  ports:
+    - port: 80
+      targetPort: 80

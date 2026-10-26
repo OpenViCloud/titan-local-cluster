@@ -8,7 +8,13 @@ spec:
       containers:
         - name: control-plane
           env:
-            # Dev's own bucket: staging's overlay names titan-backup-staging. Endpoint and region stay staging's (the same R2 account);
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Staging
+            - name: BackupTarget__Endpoint
+              value: https://f74ed847b6f7b77c81ba88208a275338.r2.cloudflarestorage.com
+            - name: BackupTarget__Region
+              value: auto
+            # Dev's own bucket in the R2 account staging uses (staging names titan-backup-staging);
             # the key pair is the Secret control-plane-backup-credentials that mac/scripts/bootstrap-secrets.sh writes.
             - name: BackupTarget__Bucket
               value: titan-backup-dev

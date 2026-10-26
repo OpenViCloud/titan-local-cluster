@@ -1,0 +1,85 @@
+# Lane b of the regression runner: the CronJob of cronjob.yaml for the second test tenant (beta-user-2, Secret
+# beta-user-2-credentials). Only the name, BETA_USER_USERNAME and the secretKeyRef differ;
+# titan-ops scripts/test_regression_runner_manifests.py keeps it so (copy cronjob.yaml's manifest, change those three lines).
+# Suspended like lane a. Jobs come from run-lanes.py (OpenViCloud/titan-regression), which sets REGRESSION_CRONJOB to this name
+# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/testing.md#regression-lanes).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: titan-regression-b
+spec:
+  suspend: true
+  schedule: "0 0 1 1 *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 5400
+      ttlSecondsAfterFinished: 7200
+      template:
+        metadata:
+          labels:
+            app: titan-regression
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001   # pwuser in the Playwright image
+          volumes:
+            - name: runner
+              configMap:
+                name: titan-regression-runner
+            - name: specs
+              configMap:
+                name: titan-regression-specs   # placeholder: patch-job.py points it at the job's own ConfigMap
+                optional: true   # created per job by the agent; absent ⇒ the runner exits 2
+            - name: work
+              emptyDir: {}
+          containers:
+            - name: playwright
+              # Keep in lockstep with @playwright/test in run.sh (browsers match the npm version).
+              image: mcr.microsoft.com/playwright:v1.62.1-noble
+              command: ["bash", "/runner/run.sh"]
+              env:
+                - name: HOME
+                  value: /work
+                - name: PORTAL_BASE_URL
+                  value: https://portal-titan-staging.openvicloud.com
+                - name: ADMIN_BASE_URL
+                  value: https://admin-titan-staging.openvicloud.com
+                - name: API_BASE_URL
+                  value: https://api-titan-staging.openvicloud.com
+                - name: RESULTS_DIR
+                  value: /work/results
+                - name: HOLD_SECONDS
+                  value: "1800"   # time to kubectl cp the results before the pod ends
+                - name: BETA_USER_USERNAME
+                  value: beta-user-2
+                - name: BETA_USER_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: beta-user-2-credentials
+                      key: password
+                - name: ADMIN_TEST_USERNAME
+                  value: admin-test
+                - name: ADMIN_TEST_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: admin-test-credentials
+                      key: password
+              volumeMounts:
+                - name: runner
+                  mountPath: /runner
+                  readOnly: true
+                - name: specs
+                  mountPath: /specs
+                  readOnly: true
+                - name: work
+                  mountPath: /work
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 1Gi
+                limits:
+                  cpu: "2"
+                  memory: 2Gi

@@ -1,17 +1,19 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Staging's worker manifests with dev's own image (below).
+# The shared worker manifests of base/ with dev's own image (below).
+namespace: titan-staging
+
 resources:
-  - https://github.com/OpenViCloud/titan-ops//gitops/incus-worker/overlays/staging?ref=4bb06db89be212d0ba729f02286dfdfe4aa8b1b8
+  - ../../base/incus-worker
 
 patches:
-  - path: patch-no-incus-tunnel.yaml
   - path: patch-backup-bucket.yaml
 
 # Dev's own image: a commit OpenViCloud/titan-incus-worker published from main. Staging's name and tag move only by promotion in
 # titan-ops (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#gitops-flow).
 images:
-  # Matched by the name staging's overlay gives the image, not by the base name.
-  - name: ghcr.io/openvicloud/titan-incus-worker
+  # Matched by the name base/incus-worker gives the image (scripts/pull-images.py stops on any other).
+  - name: incus-worker
+    newName: ghcr.io/openvicloud/titan-incus-worker
     newTag: "5b76aca9239bf5813d20bb83a8fbecfe111e4f71"

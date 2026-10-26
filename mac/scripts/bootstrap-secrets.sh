@@ -101,8 +101,8 @@ echo "secret titan-db-staging/titan-it-credentials applied"
 printf 'password=admin-test-local-only\n' | apply_secret titan-auth-staging admin-test-credentials
 
 # ── Backup key of the dev bucket, re-applied every run ────────────────────────
-# titan-db-backup-credentials: key names the Barman Cloud Plugin reads from the Secret of the ObjectStore (gitops/titan-db of titan-ops).
-# control-plane-backup-credentials: the setting names of the control plane's BackupTarget section (gitops/control-plane of titan-ops).
+# titan-db-backup-credentials: key names the Barman Cloud Plugin reads from the Secret of the ObjectStore (base/titan-db/components/backup).
+# control-plane-backup-credentials: the setting names of the control plane's BackupTarget section (gitops/control-plane/patch-env.yaml).
 # incus-worker-backup-credentials: the worker's BACKUP_S3_* names; the worker hands the pair to Incus, which uploads VM and
 # volume backups itself (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/backup/design.md#incus-backup).
 # Absent keys skip all three Secrets with a warning and do not stop the bootstrap; but gitops/titan-db runs the backup component,

@@ -1,0 +1,88 @@
+# Creates the second regression test user (beta-user-2) in the running realm, after the hook of realm-import/
+# has created or updated the realm: keycloak-config-cli with only this user in the file and no-delete everywhere, so it
+# adds the user and touches nothing else. Sync wave 1: ArgoCD runs it after the wave-0 hook has finished.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: keycloak-config-cli-beta-user-2
+  namespace: titan-auth-staging
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: keycloak-config-cli-beta-user-2
+    spec:
+      restartPolicy: Never
+      volumes:
+        - name: realm-import
+          configMap:
+            name: keycloak-realm-import-beta-user-2
+      containers:
+        - name: keycloak-config-cli
+          # Same image as realm-import/config-cli-job.yaml; keep the two tags in lockstep.
+          image: adorsys/keycloak-config-cli:6.5.1-26.5.5
+          volumeMounts:
+            - name: realm-import
+              mountPath: /config
+              readOnly: true
+          env:
+            - name: KEYCLOAK_URL
+              value: "http://keycloak-http.titan-auth-staging.svc.cluster.local:80/auth"
+            - name: KEYCLOAK_USER
+              value: "admin"
+            - name: KEYCLOAK_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin-secret
+                  key: admin-password
+            - name: KEYCLOAK_LOGIN_REALM
+              value: "master"
+            - name: KEYCLOAK_AVAILABILITYCHECK_ENABLED
+              value: "true"
+            - name: KEYCLOAK_AVAILABILITYCHECK_TIMEOUT
+              value: "120s"
+            - name: IMPORT_FILES_LOCATIONS
+              value: "/config/titan-beta-user-2.json"
+            - name: IMPORT_VARSUBSTITUTION_ENABLED
+              value: "true"
+            - name: BETA_USER_2_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: beta-user-2-credentials
+                  key: password
+            - name: IMPORT_MANAGED_CLIENT
+              value: "no-delete"
+            - name: IMPORT_MANAGED_USER
+              value: "no-delete"
+            - name: IMPORT_MANAGED_ROLE
+              value: "no-delete"
+            - name: IMPORT_MANAGED_GROUP
+              value: "no-delete"
+            - name: IMPORT_MANAGED_CLIENT_SCOPE
+              value: "no-delete"
+            - name: IMPORT_MANAGED_IDENTITY_PROVIDER
+              value: "no-delete"
+            - name: IMPORT_MANAGED_IDENTITY_PROVIDER_MAPPER
+              value: "no-delete"
+            - name: IMPORT_MANAGED_MESSAGE_BUNDLES
+              value: "no-delete"
+            - name: IMPORT_MANAGED_AUTHENTICATION_FLOW
+              value: "no-delete"
+            - name: IMPORT_MANAGED_REQUIRED_ACTION
+              value: "no-delete"
+            - name: IMPORT_MANAGED_COMPONENT
+              value: "no-delete"
+            - name: IMPORT_MANAGED_SUBCOMPONENT
+              value: "no-delete"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi

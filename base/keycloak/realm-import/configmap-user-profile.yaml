@@ -1,0 +1,62 @@
+# The realm's user profile and its labels, applied by keycloak-config-cli only
+# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#keycloak-user-profile). Not in keycloak-realm-import:
+# Keycloak's --import-realm reads every .json file of its import folder into a RealmRepresentation,
+# which has neither userProfile nor messageBundles.
+# config-cli replaces the whole profile with this one, so username and email must stay listed.
+# The label is a realm text, so it does not depend on the login theme.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm-user-profile
+data:
+  titan-user-profile.json: |
+    {
+      "realm": "titan",
+      "attributes": {
+        "userProfileEnabled": "true"
+      },
+      "messageBundles": {
+        "en": { "profileName": "Profile name" },
+        "vi": { "profileName": "Tên hiển thị" }
+      },
+      "userProfile": {
+        "attributes": [
+          {
+            "name": "username",
+            "displayName": "${username}",
+            "permissions": { "view": ["admin", "user"], "edit": ["admin", "user"] },
+            "validations": {
+              "length": { "min": 3, "max": 255 },
+              "username-prohibited-characters": {},
+              "up-username-not-idn-homograph": {}
+            }
+          },
+          {
+            "name": "email",
+            "displayName": "${email}",
+            "required": { "roles": ["user"] },
+            "permissions": { "view": ["admin", "user"], "edit": ["admin", "user"] },
+            "validations": {
+              "email": {},
+              "length": { "max": 255 }
+            }
+          },
+          {
+            "name": "profileName",
+            "displayName": "${profileName}",
+            "permissions": { "view": ["admin", "user"], "edit": ["admin", "user"] },
+            "validations": {
+              "length": { "max": 255 },
+              "person-name-prohibited-characters": {}
+            }
+          }
+        ],
+        "groups": [
+          {
+            "name": "user-metadata",
+            "displayHeader": "User metadata",
+            "displayDescription": "Attributes, which refer to user metadata"
+          }
+        ]
+      }
+    }

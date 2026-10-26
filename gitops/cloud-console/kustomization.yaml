@@ -3,9 +3,9 @@ kind: Kustomization
 
 namespace: titan-staging
 
-# Staging's manifests with dev's own image tag (below) and local hostnames (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#host-access).
+# The shared manifests of base/ with dev's own image tag (below) and local hostnames (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#host-access).
 resources:
-  - https://github.com/OpenViCloud/titan-ops//gitops/cloud-console/overlays/staging?ref=4bb06db89be212d0ba729f02286dfdfe4aa8b1b8
+  - ../../base/cloud-console
   - ingress.yaml
 
 patches:
@@ -14,6 +14,7 @@ patches:
 # Dev's own image: a commit OpenViCloud/titan-cloud-console published from main. Staging's name and tag move only by
 # promotion in titan-ops (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#gitops-flow).
 images:
-  # Matched by the name staging's overlay gives the image, not by the base name.
-  - name: ghcr.io/openvicloud/titan-cloud-console
+  # Matched by the name base/cloud-console gives the image (scripts/pull-images.py stops on any other).
+  - name: cloud-console
+    newName: ghcr.io/openvicloud/titan-cloud-console
     newTag: "5a8cb57"

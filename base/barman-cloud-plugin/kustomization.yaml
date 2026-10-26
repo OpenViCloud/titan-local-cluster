@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The Barman Cloud Plugin for CloudNativePG 1.26 (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket). The project ships it as one
+# release manifest; sha256 of v0.15.1: 8f377ff4a7d0d3f74fc64b0f7ac4f449fc38ca9e83a40107cca2f9315a9bd920 (the same bytes
+# were applied and measured on the dev cluster). Needs cert-manager for the mTLS between the operator and the plugin.
+resources:
+  - https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v0.15.1/manifest.yaml
+
+patches:
+  - target:
+      kind: Deployment
+      name: barman-cloud
+    patch: |-
+      # The manifest runs the operator at debug level and sets no resources; arg 6 is --log-level in v0.15.1.
+      - op: replace
+        path: /spec/template/spec/containers/0/args/6
+        value: --log-level=info
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 10m
+            memory: 48Mi
+          limits:
+            memory: 128Mi

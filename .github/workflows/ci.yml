@@ -1,8 +1,8 @@
 name: CI
 
-# The pull script and the provisioning tests of the Incus VM. The render of dev's overlays and the sweeper comparison
-# read OpenViCloud/titan-ops, which is private and which CI does not read; they run before every push on a machine
-# that can read it (README, Tests).
+# The pull script, the render of dev's overlays, the Keycloak theme and the provisioning tests of the Incus VM. The
+# sweeper comparison reads OpenViCloud/titan-ops, which is private and which CI does not read; it runs before every push
+# on a machine that can read it (README, Tests).
 on:
   push:
     branches: [main]
@@ -21,6 +21,13 @@ jobs:
 
       - name: Pull script
         run: python3 tests/test_pull_images.py
+
+      # kubectl and ruby come with the runner image.
+      - name: Render of dev's overlays
+        run: python3 tests/render_test.py
+
+      - name: Keycloak theme
+        run: python3 tests/test_keycloak_theme.py && python3 scripts/keycloak-theme.py --check
 
       - name: Guest-log sweeper
         run: bash mac/tests/incus-log-sweeper_test.sh

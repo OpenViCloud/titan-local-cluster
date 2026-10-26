@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Renders dev's overlays and reads dev's ArgoCD Applications.
 
-What must hold on dev: the control plane and the worker run only their own container (staging's Incus tunnel sidecar
-is removed), the control plane lists zone local-mac only, and no Application or app directory is a fake service
+What must hold on dev: the control plane and the worker run only their own container (the Incus tunnel sidecar is
+staging's alone), the control plane lists zone local-mac only, and no Application or app directory is a fake service
 (Titan's rule: doubles only in unit tests).
 
-Run:  python3 tests/render_test.py     (needs kubectl for `kubectl kustomize`, ruby, and git signed in to GitHub: the
-      overlays build on staging's overlays in OpenViCloud/titan-ops, which is private)
+Run:  python3 tests/render_test.py     (needs kubectl for `kubectl kustomize` and ruby; the overlays build on base/ here,
+      so nothing private is read)
 """
 import json
 import pathlib
@@ -104,7 +104,7 @@ def control_plane_env():
 
 
 class DevBackup(unittest.TestCase):
-    """Dev backs titan-db up through git, with titan-ops's backup component (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket).
+    """Dev backs titan-db up through git, with base's backup component (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket).
     CNPG writes the bucket the control plane reads: declared in two Applications, so held equal here."""
 
     def test_cnpg_writes_the_bucket_and_endpoint_the_control_plane_reads(self):
@@ -127,7 +127,7 @@ class DevBackup(unittest.TestCase):
         found = {name: (file, path) for file, name, path in applications()}
         self.assertIn("cert-manager", found)
         self.assertIn("targetRevision: v1.18.2", (GITOPS / "apps" / found["cert-manager"][0]).read_text())
-        self.assertEqual(found.get("plugin-barman-cloud", ("", ""))[1], "gitops/barman-cloud-plugin")
+        self.assertEqual(found.get("plugin-barman-cloud", ("", ""))[1], "base/barman-cloud-plugin")
 
 
 class DevRestore(unittest.TestCase):
@@ -153,8 +153,8 @@ def overlay_image(app):
 
 
 class DevImages(unittest.TestCase):
-    """An `images` entry matches the name staging's overlay gives the image. When titan-ops renames it and the entry here
-    keeps the old name, the entry matches nothing and dev silently runs staging's tag."""
+    """An `images` entry matches the name base/<app> gives the image. An entry with another name matches nothing, and
+    dev silently runs the base's placeholder image."""
 
     APPS = ["control-plane", "incus-worker", "cloud-console", "admin-portal", "site"]
 
@@ -172,41 +172,32 @@ class DevImages(unittest.TestCase):
             self.assertEqual(rendered, {wanted}, app)
 
 
-class TitanIsPinned(unittest.TestCase):
-    """Dev runs one titan-ops commit: ArgoCD caches a render by the revision of this repository, so a change to a remote base
-    on a moving branch is neither rendered nor applied without a hard refresh and a manual sync (measured on ArgoCD
-    v2.11.2: the old base stayed for ten minutes and the app reported Synced)."""
+TITAN_REMOTE_BASE = re.compile(r"OpenViCloud/titan-ops(?:\.git)?//")
+TITAN_SOURCE = re.compile(r"""repoURL:\s*["']?https://github\.com/OpenViCloud/titan-ops(?:\.git)?["']?\s*$""", re.MULTILINE)
 
-    def references(self):
-        found = []
-        for path in sorted(list(GITOPS.parent.rglob("*.yaml")) + list(GITOPS.parent.rglob("*.yml"))):
-            if ".git" in path.parts or ".github" in path.parts:
-                continue
-            text = path.read_text()
-            found += [(path.name, ref) for ref in re.findall(r"OpenViCloud/titan-ops//\S+\?ref=(\S+)", text)]
-            found += [(path.name, rev) for rev in re.findall(
-                r"repoURL: https://github\.com/OpenViCloud/titan-ops\n\s+targetRevision: (\S+)", text)]
-        return found
 
-    def test_reads_both_kinds_of_reference(self):
-        files = {file for file, _ in self.references()}
-        self.assertIn("kustomization.yaml", files)
-        self.assertIn("keycloak.yaml", files)
+def titan_reads(text):
+    """How many times a manifest makes kustomize or ArgoCD read titan-ops: a remote base or an Application source."""
+    return len(TITAN_REMOTE_BASE.findall(text)) + len(TITAN_SOURCE.findall(text))
 
-    def test_every_titan_mention_is_a_reference_read_here(self):
-        mentions = 0
-        for path in sorted(list(GITOPS.parent.rglob("*.yaml")) + list(GITOPS.parent.rglob("*.yml"))):
-            if ".git" in path.parts or ".github" in path.parts:
-                continue
-            text = path.read_text()
-            mentions += len(re.findall(r"OpenViCloud/titan-ops//", text))
-            mentions += len(re.findall(r"""repoURL:\s*["']?https://github\.com/OpenViCloud/titan-ops(?:\.git)?["']?\s*$""", text, re.MULTILINE))
-        self.assertEqual(mentions, len(self.references()))
 
-    def test_every_titan_reference_is_one_full_commit(self):
-        refs = {ref for _, ref in self.references()}
-        self.assertEqual(len(refs), 1, sorted(self.references()))
-        self.assertRegex(refs.pop(), r"^[0-9a-f]{40}$")
+class NoTitanRead(unittest.TestCase):
+    """The local cluster builds without OpenViCloud/titan-ops, which is private: everything ArgoCD renders here comes
+    from base/ and gitops/ of this repository (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+    Links to titan-ops in comments stay; they are read by people, not by a render."""
+
+    def test_the_check_sees_both_kinds_of_read(self):
+        self.assertEqual(titan_reads("  - https://github.com/OpenViCloud/titan-ops//gitops/x/overlays/staging?ref=" + "1" * 40), 1)
+        self.assertEqual(titan_reads("    - repoURL: https://github.com/OpenViCloud/titan-ops\n      targetRevision: main"), 1)
+        self.assertEqual(titan_reads("    repoURL: 'https://github.com/OpenViCloud/titan-ops.git'"), 1)
+        self.assertEqual(titan_reads("# https://github.com/OpenViCloud/titan-ops/blob/main/docs/x.md"), 0)
+
+    def test_no_manifest_reads_titan_ops(self):
+        manifests = [path for path in sorted(list(GITOPS.parent.rglob("*.yaml")) + list(GITOPS.parent.rglob("*.yml")))
+                     if ".git" not in path.parts]
+        self.assertGreater(len(manifests), 20)
+        offenders = [str(path.relative_to(GITOPS.parent)) for path in manifests if titan_reads(path.read_text())]
+        self.assertEqual(offenders, [])
 
 
 class NoFakeService(unittest.TestCase):

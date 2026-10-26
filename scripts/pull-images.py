@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
-"""Move dev to what main publishes: the images other repositories last published from their main, and titan-ops's main.
+"""Move dev to what main publishes: the images other repositories last published from their main.
 
-    python3 scripts/pull-images.py [--titan <40 hex>]
+    python3 scripts/pull-images.py
                                                             (from the repo root, on the Mac; needs `gh` logged in)
 
-It writes, and only writes; committing and pushing to main is the deploy (ArgoCD on dev follows main here):
-- newTag of each dev overlay in IMAGES: the newest commit every workflow of that repository published from main
-  (images of one repository move together). Every tag moves: dev runs only images CI published;
-- every titan-ops reference ArgoCD renders (remote bases, Helm values, sources): titan-ops's main, or --titan, a commit
-  titan-ops's main contains (anything else is an error);
-- each overlay's `images` entry: the name staging's overlay gives the image at that titan-ops commit. The entry matches
-  the image by that name; when a promotion renames it in titan-ops and the entry keeps the old name, the entry matches
-  nothing and dev silently runs staging's tag.
-Everything is read and checked before anything is written: one bad row writes nothing.
+It writes, and only writes; committing and pushing to main is the deploy (ArgoCD on dev follows main here): newTag of
+each dev overlay in IMAGES, the newest commit every workflow of that repository published from main (images of one
+repository move together). Every tag moves: dev runs only images CI published. Each overlay's `images` entry must be
+the name base/<app>/deployment.yaml gives the image: any other name matches nothing, and dev would silently run the
+base's placeholder, so the pull stops there instead. Everything is read and checked before anything is written: one
+bad row writes nothing.
 
 Exit 0 written / nothing to do · 2 error, nothing written. The last stdout line is PULL_RESULT=WRITTEN|NO_CHANGE|ERROR;
 the error itself goes to stderr.
@@ -34,7 +31,6 @@ import subprocess
 import sys
 import time
 
-TITAN = "OpenViCloud/titan-ops"
 # A push run on main takes at most ~4 minutes (measured in titan's iteration:deploy); the rest is room for a queue.
 # With a last poll and GH_TIMEOUT_SECONDS per call (one workflow per repository in IMAGES: about 21.5 minutes) it stays
 # under the 25 minutes the Monitor that runs --wait is given, so the result line gets out.
@@ -45,11 +41,10 @@ GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 TAG = re.compile(r'^(\s*newTag:\s*)"([^"]+)"', re.MULTILINE)
 NEW_NAME = re.compile(r"^(\s*newName:\s*)(\S+)\n", re.MULTILINE)
 ENTRY_NAME = re.compile(r"^(\s*-\s*name:\s*)(\S+)\n", re.MULTILINE)
-REMOTE_BASE = re.compile(r"(https://github\.com/OpenViCloud/titan-ops//\S+\?ref=)(\S+)")
-SOURCE = re.compile(r"(repoURL: https://github\.com/OpenViCloud/titan-ops\n\s+targetRevision: )(\S+)")
+BASE_IMAGE = re.compile(r"^\s*image:\s*([^\s:]+)(?::\S*)?\s*$", re.MULTILINE)
 
 # One row per image another repository publishes. tag_length: how many characters of the commit that repository
-# tags its image with. app: gitops/<app>/ here, gitops/<app>/overlays/staging in titan-ops.
+# tags its image with. app: gitops/<app>/ and base/<app>/ here.
 IMAGES = [
     {"repo": "OpenViCloud/titan-control-plane", "workflow": "ci.yml", "image": "ghcr.io/openvicloud/titan-control-plane",
      "app": "control-plane", "tag_length": 7},
@@ -108,16 +103,13 @@ def image_in(text, where):
     raise ToolError(where + " needs exactly one image entry and at most one newName")
 
 
-def with_entry(text, entry, image, where):
-    """The overlay with its single images entry named `entry`, ending with `image`."""
-    block = images_block(text)
-    if len(ENTRY_NAME.findall(block)) != 1:
-        raise ToolError(where + " needs exactly one image entry")
-    renamed = NEW_NAME.sub("", block)
-    renamed = ENTRY_NAME.sub(lambda match: match.group(1) + entry + "\n", renamed)
-    if entry != image:
-        renamed = ENTRY_NAME.sub(lambda match: match.group(0) + "    newName: " + image + "\n", renamed)
-    return text.replace(block, renamed)
+def base_image_name(root, app):
+    """The name base/<app>/deployment.yaml gives the image: the name an overlay's images entry must match."""
+    where = "base/" + app + "/deployment.yaml"
+    names = BASE_IMAGE.findall((root / where).read_text())
+    if len(names) != 1:
+        raise ToolError(where + " needs exactly one image line, found " + str(len(names)))
+    return names[0]
 
 
 def published_commits(run, repo, workflow):
@@ -169,30 +161,14 @@ def wait_for_commit(run, repo, workflows, sha, sleep, clock):
         sleep(WAIT_POLL_SECONDS)
 
 
-def titan_references(root):
-    """Every file here naming titan-ops, with the commits it names; ArgoCD renders them all."""
-    found = {}
-    for path in sorted(list(root.rglob("*.yaml")) + list(root.rglob("*.yml"))):
-        if ".git" in path.parts or ".github" in path.parts:
-            continue
-        text = path.read_text()
-        commits = [ref for _, ref in REMOTE_BASE.findall(text)] + [rev for _, rev in SOURCE.findall(text)]
-        if commits:
-            found[path] = (text, commits)
-    return found
-
-
 def parse_args(argv):
     # No abbreviations: `--wai` would wait yet report its errors as a pull.
-    parser = argparse.ArgumentParser(allow_abbrev=False, description="Move dev to the images and the titan-ops commit main publishes.")
-    parser.add_argument("--titan", help="full 40-hex commit on titan-ops's main (default: titan-ops's main)")
+    parser = argparse.ArgumentParser(allow_abbrev=False, description="Move dev to the images main publishes.")
     parser.add_argument("--wait", help="<repo>@<full 40-hex commit>: only wait for that repository's push runs on main")
     return parser.parse_args(argv)
 
 
 def wait(args, workflows_by_repo, run, sleep, clock):
-    if args.titan is not None:
-        raise ToolError("--wait takes no other flag: it only waits")
     wait_repo, _, wait_sha = args.wait.partition("@")
     if wait_repo not in workflows_by_repo:
         raise ToolError("--wait names " + wait_repo + "; IMAGES has " + ", ".join(workflows_by_repo))
@@ -221,44 +197,23 @@ def main(argv, images, run, root, sleep=time.sleep, clock=time.monotonic):
             wait(args, workflows_by_repo, run, sleep, clock)
             print("WAIT_RESULT=OK")
             return 0
-        titan = args.titan or json.loads(gh_api(run, "repos/" + TITAN + "/commits/main"))["sha"]
-        if not GIT_SHA.match(titan):
-            raise ToolError("the titan commit must be a full 40-hex commit, got " + titan)
-        if args.titan:
-            # Dev runs only what titan-ops merged; compare <commit>...main is "ahead" or "identical" when main contains it.
-            status = json.loads(gh_api(run, "repos/" + TITAN + "/compare/" + titan + "...main"))["status"]
-            if status not in ("ahead", "identical"):
-                raise ToolError(titan + " is not on titan's main (compare: " + status + ")")
-
-        references = titan_references(root)
-        current = {commit for _, commits in references.values() for commit in commits}
-        if len(current) != 1 or not GIT_SHA.match(next(iter(current))):
-            raise ToolError("titan references must name one full commit, found " + ", ".join(sorted(current) or ["none"]))
-        old_titan = current.pop()
-        if old_titan != titan:
-            for path, (text, _) in references.items():
-                text = REMOTE_BASE.sub(lambda match: match.group(1) + titan, text)
-                writes[path] = SOURCE.sub(lambda match: match.group(1) + titan, text)
-            changes.append("titan: " + old_titan + " -> " + titan)
-
-        commits ={repo: repository_commit(run, repo, workflows) for repo, workflows in workflows_by_repo.items()}
+        commits = {repo: repository_commit(run, repo, workflows) for repo, workflows in workflows_by_repo.items()}
 
         for image in images:
             where = "gitops/" + image["app"] + "/kustomization.yaml"
             path = root / where
-            text = writes.get(path, path.read_text())
+            text = path.read_text()
             if image_in(text, where) != image["image"]:
                 raise ToolError(where + " does not end with " + image["image"])
             tags = TAG.findall(text)
             if len(tags) != 1:
                 raise ToolError(where + " has " + str(len(tags)) + " newTag lines; needs exactly one")
-            staging_path = "gitops/" + image["app"] + "/overlays/staging/kustomization.yaml"
-            staging = gh_api(run, "repos/" + TITAN + "/contents/" + staging_path + "?ref=" + titan, raw=True)
-            entry = image_in(staging, TITAN + ":" + staging_path)
-            old_entry = ENTRY_NAME.findall(images_block(text))[0][1]
-            new_text = with_entry(text, entry, image["image"], where)
-            if old_entry != entry:
-                changes.append(image["app"] + " entry: " + old_entry + " -> " + entry)
+            entry = ENTRY_NAME.findall(images_block(text))[0][1]
+            base_name = base_image_name(root, image["app"])
+            if entry != base_name:
+                raise ToolError(where + ": images entry " + entry + " matches nothing; base/" + image["app"]
+                                + " names its image " + base_name)
+            new_text = text
             wanted = commits[image["repo"]][:image["tag_length"]]
             if tags[0][1] != wanted:
                 new_text = TAG.sub(lambda match: match.group(1) + '"' + wanted + '"', new_text)

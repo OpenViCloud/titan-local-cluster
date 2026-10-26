@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: titan-auth-staging
+
+resources:
+  - configmap.yaml
+  - configmap-user-profile.yaml
+  - config-cli-job.yaml
+
+# The login theme as one ConfigMap; keys cannot hold "/", so the volume items in
+# base/keycloak/values.yaml map each key back to its path. Check: python3 scripts/keycloak-theme.py --check
+configMapGenerator:
+  - name: keycloak-theme-openvicloud
+    options:
+      disableNameSuffixHash: true
+    files:
+      - login__messages__messages_en.properties=theme/openvicloud/login/messages/messages_en.properties
+      - login__messages__messages_vi.properties=theme/openvicloud/login/messages/messages_vi.properties
+      - login__resources__css__openvicloud.css=theme/openvicloud/login/resources/css/openvicloud.css
+      - login__resources__fonts__OFL.txt=theme/openvicloud/login/resources/fonts/OFL.txt
+      - login__resources__fonts__be-vietnam-pro-latin-400-normal.woff2=theme/openvicloud/login/resources/fonts/be-vietnam-pro-latin-400-normal.woff2
+      - login__resources__fonts__be-vietnam-pro-latin-600-normal.woff2=theme/openvicloud/login/resources/fonts/be-vietnam-pro-latin-600-normal.woff2
+      - login__resources__fonts__be-vietnam-pro-latin-700-normal.woff2=theme/openvicloud/login/resources/fonts/be-vietnam-pro-latin-700-normal.woff2
+      - login__resources__fonts__be-vietnam-pro-vietnamese-400-normal.woff2=theme/openvicloud/login/resources/fonts/be-vietnam-pro-vietnamese-400-normal.woff2
+      - login__resources__fonts__be-vietnam-pro-vietnamese-600-normal.woff2=theme/openvicloud/login/resources/fonts/be-vietnam-pro-vietnamese-600-normal.woff2
+      - login__resources__fonts__be-vietnam-pro-vietnamese-700-normal.woff2=theme/openvicloud/login/resources/fonts/be-vietnam-pro-vietnamese-700-normal.woff2
+      - login__resources__img__favicon.svg=theme/openvicloud/login/resources/img/favicon.svg
+      - login__template.ftl=theme/openvicloud/login/template.ftl
+      - login__theme.properties=theme/openvicloud/login/theme.properties

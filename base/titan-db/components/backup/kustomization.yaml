@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Continuous backup of titan-db to R2 through the Barman Cloud Plugin: WAL archiving, a daily base backup, 7 days kept
+# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket). The bucket here is staging's; dev patches it in gitops/titan-db/.
+# Not in staging's overlay yet (dev's overlay gitops/titan-db/ has it): the Secret titan-db-backup-credentials must exist
+# first (2-secret), or WAL cannot leave the node and piles up on the PVC (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/runbook.md#backup-enable).
+resources:
+  - objectstore.yaml
+  - scheduled-backup.yaml
+
+patches:
+  - target:
+      kind: Cluster
+      name: titan-db
+    patch: |-
+      - op: add
+        path: /spec/plugins
+        value:
+          # enabled is CNPG's default, written out: left implicit, ArgoCD diffs the defaulted live Cluster against this and
+          # keeps the app OutOfSync.
+          - name: barman-cloud.cloudnative-pg.io
+            enabled: true
+            isWALArchiver: true
+            parameters:
+              barmanObjectName: titan-db-backup
