@@ -5,7 +5,7 @@ namespace: titan-staging
 
 # Staging's manifests with dev's own image tag (below) and local hostnames (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#host-access).
 resources:
-  - https://github.com/OpenViCloud/titan-ops//gitops/cloud-console/overlays/staging?ref=388341d0f454d0953cd3371ca79906f553eb0fcd
+  - https://github.com/OpenViCloud/titan-ops//gitops/cloud-console/overlays/staging?ref=4bb06db89be212d0ba729f02286dfdfe4aa8b1b8
   - ingress.yaml
 
 patches:
