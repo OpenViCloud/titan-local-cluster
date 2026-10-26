@@ -1,0 +1,51 @@
+# What every environment's control plane runs with. Each environment's overlay adds only its own values: hostnames,
+# the zone list, the backup endpoint and bucket, ASPNETCORE_ENVIRONMENT
+# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-plane
+spec:
+  template:
+    spec:
+      containers:
+        - name: control-plane
+          envFrom:
+            - secretRef:
+                name: control-plane-db
+            - secretRef:
+                name: control-plane-secrets
+            - configMapRef:
+                name: control-plane-zones
+            # The key pair of the backup bucket; optional so the pod starts before the Secret exists
+            # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/backup/design.md#backup-target).
+            - secretRef:
+                name: control-plane-backup-credentials
+                optional: true
+          env:
+            - name: Keycloak__Audience
+              value: titan-api
+            # Discovery and JWKS in-cluster, the token's issuer stays public
+            # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#keycloak-metadata).
+            - name: Authentication__Schemes__Bearer__MetadataAddress
+              value: http://keycloak-http.titan-auth-staging.svc.cluster.local/auth/realms/titan/.well-known/openid-configuration
+            - name: Authentication__Schemes__Bearer__RequireHttpsMetadata
+              value: "false"
+            - name: Logging__LogLevel__Microsoft.AspNetCore
+              value: Information
+            # The wallet-mutation notify bus (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/money-and-wallet.md#single-writer-outbox).
+            - name: Nats__Enabled
+              value: "true"
+            - name: Nats__Url
+              value: nats://nats.titan-nats.svc.cluster.local:4222
+            # The sweeper. These match the code's defaults and are written out so the safety net is visible here. Do NOT
+            # set Enabled=false: NATS core keeps no messages, and the sweeper is the only thing that picks up a command whose
+            # notify was lost; off means a top-up silently never arrives.
+            - name: WalletSweeper__Enabled
+              value: "true"
+            # Commands idle for 10 s+: anything younger belongs to a notify still in flight, and claiming it would put a
+            # second writer on the wallet.
+            - name: WalletSweeper__IntervalSeconds
+              value: "30"
+            - name: WalletSweeper__StaleAfterSeconds
+              value: "10"

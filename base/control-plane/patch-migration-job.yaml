@@ -1,0 +1,14 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: control-plane-migrate
+spec:
+  template:
+    spec:
+      containers:
+        - name: migrate
+          envFrom:
+            - secretRef:
+                name: control-plane-db
+            - secretRef:
+                name: control-plane-secrets

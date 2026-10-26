@@ -1,0 +1,34 @@
+# https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/money-and-wallet.md#single-writer-outbox S3 — NATS core for the wallet-mutation notify bus.
+#
+# NATS CORE, not JetStream: the bus is a NOTIFY layer only. The durable queue is the DB
+# (wallet_mutations); a message lost while the subscriber is down is a delayed apply, never lost
+# money, because the command is durable and the sweeper (S6) re-drives it. So persistence is deliberately
+# OFF (OD-2) — turning JetStream on here would add operational weight the design does not need.
+#
+# Single server, no cluster: control-plane runs at replicas: 1, so there is exactly one subscriber and
+# one writer per wallet (OD-3, iteration 1). Scale-out (JetStream + consistent-hash partitions) is the
+# strangler backlog, not this.
+config:
+  jetstream:
+    enabled: false
+  cluster:
+    enabled: false
+
+# One pod is enough for a notify-only bus at this scale (~1000–5000 VM, low mutation frequency).
+container:
+  merge:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+# No monitoring sidecar / reloader needed for iteration 1; keep the footprint small.
+natsBox:
+  enabled: false
+reloader:
+  enabled: false
+promExporter:
+  enabled: false

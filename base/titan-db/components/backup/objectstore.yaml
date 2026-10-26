@@ -1,0 +1,19 @@
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: titan-db-backup
+spec:
+  # Seven days. No bucket lock: barman rewrites backup.info, which a lock refuses (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#no-bucket-lock).
+  retentionPolicy: "7d"
+  configuration:
+    destinationPath: s3://titan-backup-staging/postgres/
+    endpointURL: https://f74ed847b6f7b77c81ba88208a275338.r2.cloudflarestorage.com
+    s3Credentials:
+      accessKeyId:
+        name: titan-db-backup-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: titan-db-backup-credentials
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip

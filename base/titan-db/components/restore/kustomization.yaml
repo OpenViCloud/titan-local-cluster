@@ -1,0 +1,51 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Brings titan-db up from the newest backup in the bucket instead of an empty database: add it, AFTER ../backup (it edits
+# the plugin entry that component adds, and fails the render when that is missing), to the overlay of the environment
+# being rebuilt (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/runbook.md#disaster-recovery). The bootstrap of a Cluster is read once, at creation.
+#
+# The restored cluster must not write into the old cluster's archive: the bucket already holds timeline 1 of "titan-db",
+# and barman refuses a non-empty archive. It archives under serverName titan-db-restored instead. The component must STAY
+# in the overlay afterwards: without it the cluster would go back to archiving under "titan-db" and fail.
+#
+# Two names, and they move on each restore: the one read (serverName in externalClusters) is the name the previous
+# cluster archived under, the one written (in plugins) is new. First restore: read "titan-db", write "titan-db-restored".
+# A second restore reads "titan-db-restored" and writes a new name (e.g. "titan-db-restored-2"): patch both names in
+# the overlay of that environment, not here (dev and staging share this component), or it restores from the stale
+# archive without an error.
+patches:
+  - target:
+      kind: Cluster
+      name: titan-db
+    patch: |-
+      - op: remove
+        path: /spec/bootstrap/initdb
+      - op: add
+        path: /spec/bootstrap/recovery
+        value:
+          # Set out, not left to CNPG's defaults ("app" and a generated secret): the owner keeps the password in
+          # titan-db-credentials, which Terraform makes.
+          database: titan
+          owner: titan
+          secret:
+            name: titan-db-credentials
+          source: titan-db-source
+      - op: add
+        path: /spec/externalClusters
+        value:
+          - name: titan-db-source
+            # enabled and isWALArchiver are CNPG's defaults, written out: left implicit, ArgoCD diffs the defaulted live
+            # Cluster against this and keeps the app OutOfSync.
+            plugin:
+              enabled: true
+              isWALArchiver: false
+              name: barman-cloud.cloudnative-pg.io
+              parameters:
+                barmanObjectName: titan-db-backup
+                serverName: titan-db
+      - op: replace
+        path: /spec/plugins/0/parameters
+        value:
+          barmanObjectName: titan-db-backup
+          serverName: titan-db-restored

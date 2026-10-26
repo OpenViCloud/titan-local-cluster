@@ -1,0 +1,112 @@
+# Keycloak Helm values every environment shares; each environment's app adds its own values file after this one.
+# Chart: codecentric/keycloakx
+# Docs: https://github.com/codecentric/helm-charts/tree/main/charts/keycloakx
+
+fullnameOverride: keycloak
+
+replicas: 1
+
+image:
+  tag: "26.5.5"
+
+command:
+  - "/opt/keycloak/bin/kc.sh"
+  - "start"
+  - "--import-realm"
+
+extraEnv: |
+  - name: KC_DB
+    value: "postgres"
+  - name: KC_DB_URL_HOST
+    value: "titan-db-rw.titan-db-staging.svc.cluster.local"
+  - name: KC_DB_URL_PORT
+    value: "5432"
+  - name: KC_DB_URL_DATABASE
+    value: "keycloak_staging"
+  - name: KC_DB_USERNAME
+    value: "titan"
+  - name: KC_DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: titan-db-credentials
+        key: password
+  - name: KC_BOOTSTRAP_ADMIN_USERNAME
+    value: "admin"
+  - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: keycloak-admin-secret
+        key: admin-password
+  - name: KC_HTTP_ENABLED
+    value: "true"
+  - name: KC_HTTP_RELATIVE_PATH
+    value: "/auth"
+  - name: KC_PROXY_HEADERS
+    value: "xforwarded"
+  - name: KC_HOSTNAME_STRICT
+    value: "false"
+  - name: KC_HEALTH_ENABLED
+    value: "true"
+
+# Restarts Keycloak when the login theme changes: production mode caches themes
+# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#keycloak-theme). Value: python3 scripts/keycloak-theme.py --print
+podAnnotations:
+  checksum/openvicloud-theme: "2ea45c5326abfcf5df61e15eb3c0fff3a2c8541361f72a8287ea3db6b05791a2"
+
+extraVolumes: |
+  - name: realm-import
+    configMap:
+      name: keycloak-realm-import
+  - name: theme-openvicloud
+    configMap:
+      name: keycloak-theme-openvicloud
+      items:
+        - key: login__messages__messages_en.properties
+          path: login/messages/messages_en.properties
+        - key: login__messages__messages_vi.properties
+          path: login/messages/messages_vi.properties
+        - key: login__resources__css__openvicloud.css
+          path: login/resources/css/openvicloud.css
+        - key: login__resources__fonts__OFL.txt
+          path: login/resources/fonts/OFL.txt
+        - key: login__resources__fonts__be-vietnam-pro-latin-400-normal.woff2
+          path: login/resources/fonts/be-vietnam-pro-latin-400-normal.woff2
+        - key: login__resources__fonts__be-vietnam-pro-latin-600-normal.woff2
+          path: login/resources/fonts/be-vietnam-pro-latin-600-normal.woff2
+        - key: login__resources__fonts__be-vietnam-pro-latin-700-normal.woff2
+          path: login/resources/fonts/be-vietnam-pro-latin-700-normal.woff2
+        - key: login__resources__fonts__be-vietnam-pro-vietnamese-400-normal.woff2
+          path: login/resources/fonts/be-vietnam-pro-vietnamese-400-normal.woff2
+        - key: login__resources__fonts__be-vietnam-pro-vietnamese-600-normal.woff2
+          path: login/resources/fonts/be-vietnam-pro-vietnamese-600-normal.woff2
+        - key: login__resources__fonts__be-vietnam-pro-vietnamese-700-normal.woff2
+          path: login/resources/fonts/be-vietnam-pro-vietnamese-700-normal.woff2
+        - key: login__resources__img__favicon.svg
+          path: login/resources/img/favicon.svg
+        - key: login__template.ftl
+          path: login/template.ftl
+        - key: login__theme.properties
+          path: login/theme.properties
+
+extraVolumeMounts: |
+  - name: realm-import
+    mountPath: /opt/keycloak/data/import
+    readOnly: true
+  - name: theme-openvicloud
+    mountPath: /opt/keycloak/themes/openvicloud
+    readOnly: true
+
+startupProbe: ""
+livenessProbe: ""
+readinessProbe: ""
+
+service:
+  httpPort: 80
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi

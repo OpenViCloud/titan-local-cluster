@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-console
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloud-console
+  template:
+    metadata:
+      labels:
+        app: cloud-console
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      volumes:
+        - name: cloud-console-config
+          configMap:
+            name: cloud-console-config
+      containers:
+        - name: cloud-console
+          image: cloud-console:latest
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: cloud-console-config
+              mountPath: /usr/share/nginx/html/config.json
+              subPath: config.json
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10

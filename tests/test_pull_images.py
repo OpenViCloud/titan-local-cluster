@@ -18,64 +18,46 @@ _spec = importlib.util.spec_from_file_location("pull_images", ROOT / "scripts" /
 pull = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(pull)
 
-OLD_TITAN = "1" * 40
-NEW_TITAN = "2" * 40
 SHA = "4410205e4c9b5d152537a26fe1bd1ff08c04b108"
 SITE = {"repo": "OpenViCloud/example-web", "workflow": "ci-site.yml", "image": "ghcr.io/openvicloud/example-web-site",
         "app": "site", "tag_length": 7}
 PORTAL = dict(SITE, workflow="ci-portal.yml", image="ghcr.io/openvicloud/example-web-portal", app="portal")
 
 
-def overlay(app, name, new_name, tag, titan=OLD_TITAN):
+def overlay(app, name, new_name, tag):
     images = "images:\n  - name: " + name + "\n"
     if new_name is not None:
         images += "    newName: " + new_name + "\n"
-    return ("resources:\n  - https://github.com/OpenViCloud/titan-ops//gitops/" + app + "/overlays/staging?ref=" + titan
-            + "\n" + images + '    newTag: "' + tag + '"\n')
+    return "resources:\n  - ../../base/" + app + "\n" + images + '    newTag: "' + tag + '"\n'
 
 
-def staging(app, new_name):
-    return "images:\n  - name: " + app + "\n    newName: " + new_name + '\n    newTag: "0eed82d"\n'
-
-
-APP_WITH_VALUES = ("  sources:\n    - repoURL: https://github.com/OpenViCloud/titan-ops\n      targetRevision: " + OLD_TITAN
-                   + "\n      ref: values\n")
+def base_deployment(name):
+    return "spec:\n  template:\n    spec:\n      containers:\n        - name: app\n          image: " + name + ":latest\n"
 
 
 class FakeGitHub:
-    """Answers workflow runs (head shas newest first, per workflow file), titan-ops's main, and titan-ops files at a commit."""
+    """Answers workflow runs (head shas newest first, per workflow file). Any read of titan-ops fails the test: dev
+    builds on this repository's base and moves no titan-ops commit."""
 
-    def __init__(self, head_shas, titan_main=NEW_TITAN, staging_names=None, fail=None, on_main=True, commit_runs=None,
-                 hang=None):
+    def __init__(self, head_shas, fail=None, commit_runs=None, hang=None):
         self.head_shas = head_shas
         # Runs of one commit per workflow file, one state per query (the last one repeats): None is no run yet,
         # else (status, conclusion).
         self.commit_runs = commit_runs or {}
         # A call matching `hang` times out, as run_command's timeout makes a stuck gh call do.
         self.hang = hang
-        self.titan_main = titan_main
-        # Name staging's overlay gives each app's image at NEW_TITAN.
-        self.staging_names = staging_names or {}
         self.fail = fail
-        self.on_main = on_main
         self.calls = []
 
     def __call__(self, cmd):
         self.calls.append(cmd)
         joined = " ".join(cmd)
+        if "titan-ops" in joined:
+            raise AssertionError("titan-ops read: " + joined)
         if self.hang is not None and self.hang in joined:
             raise subprocess.TimeoutExpired(cmd, pull.GH_TIMEOUT_SECONDS)
         if self.fail is not None and self.fail in joined:
             return subprocess.CompletedProcess(cmd, 1, "", "boom: " + self.fail)
-        if "repos/OpenViCloud/titan-ops/compare/" in joined:
-            return subprocess.CompletedProcess(cmd, 0, json.dumps({"status": "ahead" if self.on_main else "diverged"}), "")
-        if "repos/OpenViCloud/titan-ops/commits/main" in joined:
-            return subprocess.CompletedProcess(cmd, 0, json.dumps({"sha": self.titan_main}), "")
-        if "repos/OpenViCloud/titan-ops/contents/gitops/" in joined:
-            app = joined.split("contents/gitops/")[1].split("/")[0]
-            assert ("ref=" + NEW_TITAN) in joined, joined
-            name = self.staging_names.get(app, "ghcr.io/openvicloud/titan-" + app)
-            return subprocess.CompletedProcess(cmd, 0, staging(app, name), "")
         if "head_sha=" in joined:
             workflow = joined.split("/actions/workflows/")[1].split("/")[0]
             states = self.commit_runs[workflow]
@@ -122,85 +104,72 @@ class PullTests(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
         self.root = pathlib.Path(self.dir.name)
-        self.write("site", overlay("site", "ghcr.io/openvicloud/titan-site", SITE["image"], "f5bcd6c"))
-        self.apps = self.root / "gitops/apps"
-        self.apps.mkdir(parents=True)
-        (self.apps / "keycloak.yaml").write_text(APP_WITH_VALUES)
+        self.write("site", overlay("site", "site", SITE["image"], "f5bcd6c"))
 
     def tearDown(self):
         self.dir.cleanup()
 
-    def write(self, app, text):
+    def write(self, app, text, base_name=None):
         path = self.root / "gitops" / app / "kustomization.yaml"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
+        base = self.root / "base" / app / "deployment.yaml"
+        base.parent.mkdir(parents=True, exist_ok=True)
+        base.write_text(base_deployment(base_name or app))
 
     def read(self, app):
         return (self.root / "gitops" / app / "kustomization.yaml").read_text()
 
-    def test_writes_the_tag_of_the_newest_successful_push_run_on_main_and_moves_titan_to_its_main(self):
+    def test_writes_the_tag_of_the_newest_successful_push_run_on_main(self):
         runner = FakeGitHub({"ci-site.yml": SHA})
         code, out, _ = run([SITE], runner, self.root)
         self.assertEqual(code, 0)
-        self.assertEqual(self.read("site"),
-                         overlay("site", "ghcr.io/openvicloud/titan-site", SITE["image"], "4410205", titan=NEW_TITAN))
-        self.assertEqual((self.apps / "keycloak.yaml").read_text(), APP_WITH_VALUES.replace(OLD_TITAN, NEW_TITAN))
+        self.assertEqual(self.read("site"), overlay("site", "site", SITE["image"], "4410205"))
         self.assertIn("site: f5bcd6c -> 4410205", out)
-        self.assertIn("titan: " + OLD_TITAN + " -> " + NEW_TITAN, out)
         self.assertEqual(last_line(out), "PULL_RESULT=WRITTEN")
         query = " ".join(next(c for c in runner.calls if "/runs" in " ".join(c)))
         self.assertIn("repos/OpenViCloud/example-web/actions/workflows/ci-site.yml/runs", query)
         for condition in ("branch=main", "event=push", "status=success", "per_page=30"):
             self.assertIn(condition, query)
 
-    def test_a_given_titan_commit_is_used_instead_of_main(self):
-        runner = FakeGitHub({"ci-site.yml": SHA}, titan_main="9" * 40)
-        code, _, _ = run([SITE], runner, self.root, ["--titan", NEW_TITAN])
-        self.assertEqual(code, 0)
-        self.assertIn("ref=" + NEW_TITAN, self.read("site"))
-        self.assertFalse(any("commits/main" in " ".join(c) for c in runner.calls))
-
-    def test_a_given_titan_commit_off_main_is_an_error_and_writes_nothing(self):
-        # Dev runs only what titan-ops merged: a commit of a branch would test manifests staging never gets.
+    def test_the_titan_flag_is_gone_and_a_pull_with_it_writes_nothing(self):
+        # Dev pins no titan-ops commit: a flag naming one would ask for something dev cannot do.
         text = self.read("site")
-        code, out, err = run([SITE], FakeGitHub({"ci-site.yml": SHA}, on_main=False), self.root, ["--titan", NEW_TITAN])
+        runner = FakeGitHub({"ci-site.yml": SHA})
+        code, out, _ = run([SITE], runner, self.root, ["--titan", "2" * 40])
         self.assertEqual(code, 2)
         self.assertEqual(self.read("site"), text)
-        self.assertIn("not on titan's main", err)
+        self.assertEqual(runner.calls, [])
         self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
 
-    def test_a_titan_reference_in_a_yml_file_is_moved_too(self):
-        (self.apps / "nats.yml").write_text(APP_WITH_VALUES)
-        code, _, _ = run([SITE], FakeGitHub({"ci-site.yml": SHA}), self.root)
-        self.assertEqual(code, 0)
-        self.assertEqual((self.apps / "nats.yml").read_text(), APP_WITH_VALUES.replace(OLD_TITAN, NEW_TITAN))
-
-    def test_a_short_titan_commit_is_a_usage_error(self):
-        text = self.read("site")
-        code, out, _ = run([SITE], FakeGitHub({"ci-site.yml": SHA}), self.root, ["--titan", "2222222"])
+    def test_an_entry_other_than_the_name_the_base_gives_is_an_error_and_writes_nothing(self):
+        # The entry matches the image by the name base/<app> gives it; any other name matches nothing, and dev would
+        # silently run the base's placeholder image.
+        text = overlay("site", "ghcr.io/openvicloud/titan-site", SITE["image"], "f5bcd6c")
+        self.write("site", text)
+        code, out, err = run([SITE], FakeGitHub({"ci-site.yml": SHA}), self.root)
         self.assertEqual(code, 2)
         self.assertEqual(self.read("site"), text)
+        self.assertIn("base/site", err)
         self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
 
-    def test_the_entry_takes_the_name_staging_gives_at_the_new_titan_commit(self):
-        # Staging was promoted to the new name: an entry keeping the old name would match nothing, and dev would
-        # silently run staging's tag. The entry is the image itself now, so no newName is left.
-        runner = FakeGitHub({"ci-site.yml": SHA}, staging_names={"site": SITE["image"]})
-        code, out, _ = run([SITE], runner, self.root)
-        self.assertEqual(code, 0)
-        self.assertEqual(self.read("site"), overlay("site", SITE["image"], None, "4410205", titan=NEW_TITAN))
-        self.assertIn("site entry: ghcr.io/openvicloud/titan-site -> " + SITE["image"], out)
+    def test_a_base_without_a_deployment_image_is_an_error(self):
+        (self.root / "base/site/deployment.yaml").write_text("kind: Deployment\n")
+        code, out, err = run([SITE], FakeGitHub({"ci-site.yml": SHA}), self.root)
+        self.assertEqual(code, 2)
+        self.assertIn("base/site", err)
+        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
 
-    def test_an_entry_without_new_name_gets_one_when_staging_names_another_image(self):
-        self.write("site", overlay("site", SITE["image"], None, "f5bcd6c"))
-        runner = FakeGitHub({"ci-site.yml": SHA}, staging_names={"site": "ghcr.io/openvicloud/other-site"})
-        code, _, _ = run([SITE], runner, self.root)
-        self.assertEqual(code, 0)
-        self.assertEqual(self.read("site"), overlay("site", "ghcr.io/openvicloud/other-site", SITE["image"], "4410205",
-                                                    titan=NEW_TITAN))
+    def test_a_base_with_two_images_is_an_error(self):
+        # Two image lines leave the entry's name ambiguous: the pull cannot tell which one the tag is for.
+        (self.root / "base/site/deployment.yaml").write_text(base_deployment("site") + "          image: sidecar:latest\n")
+        code, out, err = run([SITE], FakeGitHub({"ci-site.yml": SHA}), self.root)
+        self.assertEqual(code, 2)
+        self.assertIn("base/site", err)
+        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
 
     def test_images_of_one_repository_take_the_newest_commit_every_workflow_published(self):
-        self.write("portal", overlay("portal", "ghcr.io/openvicloud/titan-portal", PORTAL["image"], "1111111"))
+        self.write("portal", overlay("portal", "portal", PORTAL["image"], "1111111"))
         newest, common, oldest = "c" * 40, "b" * 40, "a" * 40
         runner = FakeGitHub({"ci-site.yml": [newest, common, oldest], "ci-portal.yml": [common, oldest]})
         code, _, _ = run([SITE, PORTAL], runner, self.root)
@@ -209,42 +178,23 @@ class PullTests(unittest.TestCase):
         self.assertIn('newTag: "bbbbbbb"', self.read("portal"))
 
     def test_no_commit_every_workflow_of_a_repository_published_is_an_error_and_writes_nothing(self):
-        self.write("portal", overlay("portal", "ghcr.io/openvicloud/titan-portal", PORTAL["image"], "1111111"))
-        before = (self.read("site"), self.read("portal"), (self.apps / "keycloak.yaml").read_text())
+        self.write("portal", overlay("portal", "portal", PORTAL["image"], "1111111"))
+        before = (self.read("site"), self.read("portal"))
         code, out, err = run([SITE, PORTAL], FakeGitHub({"ci-site.yml": ["c" * 40], "ci-portal.yml": ["b" * 40]}),
                              self.root)
         self.assertEqual(code, 2)
-        self.assertEqual((self.read("site"), self.read("portal"), (self.apps / "keycloak.yaml").read_text()), before)
+        self.assertEqual((self.read("site"), self.read("portal")), before)
         self.assertIn("OpenViCloud/example-web", err)
         self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
 
-    def test_titan_references_on_two_commits_are_an_error_and_write_nothing(self):
-        (self.apps / "nats.yaml").write_text(APP_WITH_VALUES.replace(OLD_TITAN, "3" * 40))
-        before = self.read("site")
-        code, out, err = run([SITE], FakeGitHub({"ci-site.yml": SHA}), self.root)
-        self.assertEqual(code, 2)
-        self.assertEqual(self.read("site"), before)
-        self.assertIn("titan", err)
-        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
-
-    def test_a_titan_reference_on_a_branch_is_an_error(self):
-        self.write("site", self.read("site").replace("ref=" + OLD_TITAN, "ref=main"))
-        (self.apps / "keycloak.yaml").write_text(APP_WITH_VALUES.replace(OLD_TITAN, "main"))
-        code, out, _ = run([SITE], FakeGitHub({"ci-site.yml": SHA}), self.root)
-        self.assertEqual(code, 2)
-        self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
-
     def test_a_full_sha_tag_keeps_all_40_characters(self):
-        self.write("site", overlay("site", SITE["image"], None, "f5bcd6c"))
-        runner = FakeGitHub({"ci-site.yml": SHA}, staging_names={"site": SITE["image"]})
-        code, _, _ = run([dict(SITE, tag_length=40)], runner, self.root)
+        code, _, _ = run([dict(SITE, tag_length=40)], FakeGitHub({"ci-site.yml": SHA}), self.root)
         self.assertEqual(code, 0)
         self.assertIn('newTag: "' + SHA + '"', self.read("site"))
 
     def test_nothing_to_move_is_no_change(self):
-        text = overlay("site", "ghcr.io/openvicloud/titan-site", SITE["image"], "4410205", titan=NEW_TITAN)
+        text = overlay("site", "site", SITE["image"], "4410205")
         self.write("site", text)
-        (self.apps / "keycloak.yaml").write_text(APP_WITH_VALUES.replace(OLD_TITAN, NEW_TITAN))
         code, out, _ = run([SITE], FakeGitHub({"ci-site.yml": SHA}), self.root)
         self.assertEqual(code, 0)
         self.assertEqual(self.read("site"), text)
@@ -252,7 +202,7 @@ class PullTests(unittest.TestCase):
 
     def test_an_overlay_that_does_not_end_with_the_image_is_an_error_and_is_not_written(self):
         # Writing one repository's tag onto another repository's image would make dev pull a tag that image never had.
-        text = overlay("site", "ghcr.io/openvicloud/titan-site", None, "f5bcd6c")
+        text = overlay("site", "site", "ghcr.io/openvicloud/other-site", "f5bcd6c")
         self.write("site", text)
         code, out, err = run([SITE], FakeGitHub({"ci-site.yml": SHA}), self.root)
         self.assertEqual(code, 2)
@@ -268,23 +218,22 @@ class PullTests(unittest.TestCase):
         self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
 
     def test_names_outside_the_images_block_are_not_image_entries(self):
-        self.write("site", overlay("site", SITE["image"], None, "f5bcd6c") + "configMapGenerator:\n  - name: cfg\n")
-        runner = FakeGitHub({"ci-site.yml": SHA}, staging_names={"site": SITE["image"]})
-        code, _, _ = run([SITE], runner, self.root)
+        self.write("site", overlay("site", "site", SITE["image"], "f5bcd6c") + "configMapGenerator:\n  - name: cfg\n")
+        code, _, _ = run([SITE], FakeGitHub({"ci-site.yml": SHA}), self.root)
         self.assertEqual(code, 0)
         self.assertIn('newTag: "4410205"', self.read("site"))
         self.assertIn("configMapGenerator:\n  - name: cfg\n", self.read("site"))
 
     def test_a_github_call_that_times_out_writes_nothing(self):
         text = self.read("site")
-        code, out, _ = run([SITE], FakeGitHub({"ci-site.yml": SHA}, hang="contents/gitops"), self.root)
+        code, out, _ = run([SITE], FakeGitHub({"ci-site.yml": SHA}, hang="/runs"), self.root)
         self.assertEqual(code, 2)
         self.assertEqual(self.read("site"), text)
         self.assertEqual(last_line(out), "PULL_RESULT=ERROR")
 
     def test_a_failing_api_call_writes_nothing(self):
         text = self.read("site")
-        code, out, err = run([SITE], FakeGitHub({"ci-site.yml": SHA}, fail="contents/gitops"), self.root)
+        code, out, err = run([SITE], FakeGitHub({"ci-site.yml": SHA}, fail="/runs"), self.root)
         self.assertEqual(code, 2)
         self.assertEqual(self.read("site"), text)
         self.assertIn("boom", err)
@@ -303,16 +252,12 @@ class LocalTagTests(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
         self.root = pathlib.Path(self.dir.name)
-        (self.root / "gitops/apps").mkdir(parents=True)
-        (self.root / "gitops/apps/keycloak.yaml").write_text(APP_WITH_VALUES)
-        self.write("site", overlay("site", SITE["image"], None, self.LOCAL))
-        self.write("portal", overlay("portal", PORTAL["image"], None, self.LOCAL))
+        self.write("site", overlay("site", "site", SITE["image"], self.LOCAL))
+        self.write("portal", overlay("portal", "portal", PORTAL["image"], self.LOCAL))
         self.worker = dict(SITE, repo="OpenViCloud/titan-incus-worker", workflow="ci.yml",
                            image="ghcr.io/openvicloud/titan-incus-worker", app="incus-worker")
-        self.write("incus-worker", overlay("incus-worker", self.worker["image"], None, "f5bcd6c"))
-        self.runner = FakeGitHub({"ci-site.yml": SHA, "ci-portal.yml": SHA, "ci.yml": SHA},
-                                 staging_names={"site": SITE["image"], "portal": PORTAL["image"],
-                                                "incus-worker": self.worker["image"]})
+        self.write("incus-worker", overlay("incus-worker", "incus-worker", self.worker["image"], "f5bcd6c"))
+        self.runner = FakeGitHub({"ci-site.yml": SHA, "ci-portal.yml": SHA, "ci.yml": SHA})
 
     def tearDown(self):
         self.dir.cleanup()
@@ -346,23 +291,21 @@ class WaitTests(unittest.TestCase):
 
     def setUp(self):
         PullTests.setUp(self)
-        self.write("portal", overlay("portal", PORTAL["image"], None, "1111111"))
+        self.write("portal", overlay("portal", "portal", PORTAL["image"], "1111111"))
         self.worker = dict(SITE, repo="OpenViCloud/example-worker", workflow="ci.yml",
                            image="ghcr.io/openvicloud/example-worker", app="incus-worker")
-        self.write("incus-worker", overlay("incus-worker", self.worker["image"], None, "1111111"))
-        self.names = {"site": SITE["image"], "portal": PORTAL["image"], "incus-worker": self.worker["image"]}
+        self.write("incus-worker", overlay("incus-worker", "incus-worker", self.worker["image"], "1111111"))
         self.clock = FakeClock()
 
     def tearDown(self):
         self.dir.cleanup()
 
     def files(self):
-        return (self.read("site"), self.read("portal"), self.read("incus-worker"),
-                (self.apps / "keycloak.yaml").read_text())
+        return (self.read("site"), self.read("portal"), self.read("incus-worker"))
 
     def pull(self, commit_runs, wait="OpenViCloud/example-web@" + SHA, argv=(), hang=None, fail=None):
-        runner = FakeGitHub({"ci-site.yml": SHA, "ci-portal.yml": SHA, "ci.yml": SHA}, staging_names=self.names,
-                            commit_runs=commit_runs, hang=hang, fail=fail)
+        runner = FakeGitHub({"ci-site.yml": SHA, "ci-portal.yml": SHA, "ci.yml": SHA}, commit_runs=commit_runs,
+                            hang=hang, fail=fail)
         code, out, err = run([SITE, PORTAL, self.worker], runner, self.root, ["--wait", wait] + list(argv), self.clock)
         return code, out, err, runner
 
@@ -378,7 +321,7 @@ class WaitTests(unittest.TestCase):
         self.assertIn("  OpenViCloud/example-web ci-portal.yml: success", out)
         self.assertEqual(last_line(out), "WAIT_RESULT=OK")
         queries = [" ".join(c) for c in runner.calls]
-        # Only the named repository's runs of the commit are read: no titan, no other runs, no staging overlay.
+        # Only the named repository's runs of the commit are read: no other runs.
         # A finished workflow is not asked again.
         self.assertEqual(len(queries), 5)
         for query in queries:
@@ -457,10 +400,10 @@ class WaitTests(unittest.TestCase):
         self.assertEqual(last_line(out.getvalue()), "WAIT_RESULT=ERROR")
 
     def test_wait_with_titan_is_a_usage_error(self):
-        for titan in (NEW_TITAN, ""):
+        for titan in ("2" * 40, ""):
             code, out, err, runner = self.pull({}, argv=["--titan", titan])
             self.assertEqual(code, 2, titan)
-            self.assertIn("--wait takes no other flag", err, titan)
+            self.assertIn("bad arguments", err, titan)
             self.assertEqual(runner.calls, [], titan)
             self.assertEqual(last_line(out), "WAIT_RESULT=ERROR", titan)
 
@@ -499,6 +442,12 @@ class RepoTests(unittest.TestCase):
         for image in pull.IMAGES:
             path = "gitops/" + image["app"] + "/kustomization.yaml"
             self.assertEqual(pull.image_in((ROOT / path).read_text(), path), image["image"], path)
+
+    def test_every_pulled_overlay_entry_is_the_name_its_base_gives_the_image(self):
+        for image in pull.IMAGES:
+            path = "gitops/" + image["app"] + "/kustomization.yaml"
+            entry = pull.ENTRY_NAME.findall(pull.images_block((ROOT / path).read_text()))[0][1]
+            self.assertEqual(entry, pull.base_image_name(ROOT, image["app"]), path)
 
     def test_every_pulled_overlay_has_a_tag_of_its_row_length(self):
         # A wrong tag_length writes a tag the other repository never published: dev pulls an image that does not exist.

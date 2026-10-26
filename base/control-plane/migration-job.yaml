@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: control-plane-migrate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 2
+  template:
+    spec:
+      # Never: OnFailure restarts in place and the job-controller deletes the pod at the backoff limit,
+      # taking the logs with it; each failed attempt now keeps its pod for the SyncFail hook (deploy-hook-logs.yaml).
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-credentials
+      containers:
+        - name: migrate
+          image: control-plane:latest
+          command: ["/app/efbundle", "--connection", "$(ConnectionStrings__Titan)"]
+          envFrom:
+            - secretRef:
+                name: control-plane-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

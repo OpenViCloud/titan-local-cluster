@@ -7,7 +7,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - https://github.com/OpenViCloud/titan-ops//gitops/regression-runner?ref=4bb06db89be212d0ba729f02286dfdfe4aa8b1b8
+  - ../../base/regression-runner
 
 # One patch for both lanes: the CronJob of lane b (titan-regression-b) differs only in user and password.
 patches:

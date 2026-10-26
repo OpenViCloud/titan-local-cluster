@@ -20,9 +20,9 @@ spec:
       helm:
         releaseName: nats
         valueFiles:
-          - '$values/gitops/nats/staging-values.yaml'
-    - repoURL: https://github.com/OpenViCloud/titan-ops
-      targetRevision: 4bb06db89be212d0ba729f02286dfdfe4aa8b1b8
+          - '$values/base/nats/values.yaml'
+    - repoURL: https://github.com/OpenViCloud/titan-local-cluster
+      targetRevision: main
       ref: values
   destination:
     server: https://kubernetes.default.svc

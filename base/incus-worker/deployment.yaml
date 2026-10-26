@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: incus-worker
+spec:
+  # One replica: two would each lease commands, which is safe (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/provider-and-worker.md#provider-command-lease)
+  # but runs every reconciler twice.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: incus-worker
+  template:
+    metadata:
+      labels:
+        app: incus-worker
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      containers:
+        - name: incus-worker
+          image: incus-worker:latest
+          ports:
+            - name: health
+              containerPort: 8080
+          # CP_INTERNAL_TOKEN comes from worker-secrets.
+          envFrom:
+            - secretRef:
+                name: worker-secrets
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          # template.sync streams the distro's image (~700 MB) to a temporary file before the upload, never into
+          # memory (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/catalog/design.md#template-is-an-image-alias).
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 2Gi

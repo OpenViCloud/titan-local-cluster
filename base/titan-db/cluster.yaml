@@ -1,0 +1,36 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: titan-db
+spec:
+  instances: 1
+
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: 128MB
+
+  bootstrap:
+    initdb:
+      database: titan
+      owner: titan
+      secret:
+        name: titan-db-credentials
+      postInitTemplateSQL:
+        - "GRANT CREATE ON SCHEMA public TO PUBLIC"
+      postInitSQL:
+        - "CREATE DATABASE keycloak_staging OWNER titan"
+        - "CREATE DATABASE temporal OWNER titan"
+        - "CREATE DATABASE temporal_visibility OWNER titan"
+
+  storage:
+    size: 10Gi
+    storageClass: local-path
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi

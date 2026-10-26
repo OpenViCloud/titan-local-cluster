@@ -1,0 +1,15 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: titan-db-daily
+spec:
+  # Six fields, seconds first: every day at 02:00 UTC.
+  schedule: "0 0 2 * * *"
+  # One right away when the component is first applied, so the page has a backup to show before the first night.
+  immediate: true
+  backupOwnerReference: self
+  method: plugin
+  cluster:
+    name: titan-db
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

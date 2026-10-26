@@ -1,0 +1,98 @@
+# Keeps the logs of a failed deploy-time Job until someone reads them.
+#
+# The deploy-time migration Job uses BeforeHookCreation: the next sync — Argo's own retry
+# 30s later included — deletes the failed Job with its pods. generateName would let a failed Job survive, but
+# kustomize refuses a resource without metadata.name. So a SyncFail hook, which Argo runs when the sync fails and
+# before the next attempt, copies the pod logs into a ConfigMap:
+#   kubectl -n titan-staging get configmap control-plane-deploy-hook-logs -o yaml
+#
+# The RBAC is a PreSync hook in wave -1 so it exists before the migration Job, the first thing that can fail.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deploy-hook-logs
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deploy-hook-logs
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["control-plane-deploy-hook-logs"]
+    verbs: ["get", "update", "patch"]
+  # create cannot be limited by resourceNames: the name is unknown to RBAC until the object exists.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deploy-hook-logs
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deploy-hook-logs
+subjects:
+  - kind: ServiceAccount
+    name: deploy-hook-logs
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: control-plane-deploy-hook-logs
+  annotations:
+    argocd.argoproj.io/hook: SyncFail
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: deploy-hook-logs
+      containers:
+        - name: collect
+          image: alpine/k8s:1.33.13
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -u
+              out=/tmp/logs
+              mkdir -p "$out"
+              date -u +%Y-%m-%dT%H:%M:%SZ > "$out/collected-at"
+              for job in control-plane-migrate; do
+                kubectl get pods -l "job-name=$job" -o wide > "$out/$job.pods" 2>&1
+                for pod in $(kubectl get pods -l "job-name=$job" -o name); do
+                  # A ConfigMap holds at most 1 MiB; the end of a failed run is the part that explains it.
+                  kubectl logs "$pod" --all-containers --tail=400 > "$out/${pod#pod/}.log" 2>&1
+                done
+              done
+              kubectl create configmap control-plane-deploy-hook-logs --from-file="$out" \
+                --dry-run=client -o yaml | kubectl apply -f -
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

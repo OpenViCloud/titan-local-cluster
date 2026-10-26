@@ -1,4 +1,4 @@
-# Local cluster on the Mac: copy of titan-ops's gitops/apps-staging/plugin-barman-cloud.yaml, at the pinned titan-ops commit (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# Local cluster on the Mac: copy of titan-ops's gitops/apps-staging/plugin-barman-cloud.yaml, from base/barman-cloud-plugin here (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -10,9 +10,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/OpenViCloud/titan-ops
-    targetRevision: 4bb06db89be212d0ba729f02286dfdfe4aa8b1b8
-    path: gitops/barman-cloud-plugin
+    repoURL: https://github.com/OpenViCloud/titan-local-cluster
+    targetRevision: main
+    path: base/barman-cloud-plugin
   destination:
     server: https://kubernetes.default.svc
     namespace: cnpg-system

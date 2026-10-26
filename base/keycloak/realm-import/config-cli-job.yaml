@@ -1,0 +1,128 @@
+# keycloak-config-cli applies the realm config declaratively to a RUNNING Keycloak
+# via the admin API — incremental and idempotent. This is what makes client/realm
+# changes GitOps-managed: `--import-realm` (startup) only creates realms that don't
+# exist, so edits to the already-existing `titan` realm (e.g. adding the
+# titan-admin-portal client) never reach the running server without this.
+#
+# Runs as an ArgoCD PostSync hook on each environment's keycloak app, so every sync
+# re-applies the realm files. import.managed.*=no-delete → only creates/updates the
+# resources declared in the realm files; never deletes clients/roles/etc. it doesn't
+# know about.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: keycloak-config-cli
+  namespace: titan-auth-staging
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: keycloak-config-cli
+    spec:
+      restartPolicy: Never
+      volumes:
+        - name: realm-import
+          configMap:
+            name: keycloak-realm-import
+        - name: realm-user-profile
+          configMap:
+            name: keycloak-realm-user-profile
+      containers:
+        - name: keycloak-config-cli
+          # Tag = <config-cli version>-<keycloak version>; keep the KC suffix in
+          # lockstep with image.tag in base/keycloak/values.yaml (currently 26.5.5).
+          image: adorsys/keycloak-config-cli:6.5.1-26.5.5
+          volumeMounts:
+            - name: realm-import
+              mountPath: /config
+              readOnly: true
+            - name: realm-user-profile
+              mountPath: /config-user-profile
+              readOnly: true
+          env:
+            - name: KEYCLOAK_URL
+              value: "http://keycloak-http.titan-auth-staging.svc.cluster.local:80/auth"
+            - name: KEYCLOAK_USER
+              value: "admin"
+            - name: KEYCLOAK_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin-secret
+                  key: admin-password
+            - name: KEYCLOAK_LOGIN_REALM
+              value: "master"
+            - name: KEYCLOAK_AVAILABILITYCHECK_ENABLED
+              value: "true"
+            - name: KEYCLOAK_AVAILABILITYCHECK_TIMEOUT
+              value: "120s"
+            # The user profile is a second file, in its own ConfigMap (configmap-user-profile.yaml).
+            - name: IMPORT_FILES_LOCATIONS
+              value: "/config-user-profile/titan-user-profile.json,/config/titan.json"
+            # Var substitution: $(env:ADMIN_TEST_PASSWORD) in titan.json resolves from the
+            # admin-test-credentials secret (terraform 2-secrets) — password stays out of git.
+            - name: IMPORT_VARSUBSTITUTION_ENABLED
+              value: "true"
+            - name: ADMIN_TEST_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: admin-test-credentials
+                  key: password
+            # Same mechanism for the tenant-side test user. beta-user was self-registered
+            # and therefore vanished when the cluster was rebuilt on 2026-08-19; declaring
+            # it here is what makes it survive the next reprovision.
+            - name: BETA_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: beta-user-credentials
+                  key: password
+            # US-SL-01: GitHub OAuth broker credentials. $(env:...) in titan.json's
+            # identityProviders block resolves from these — same mechanism as ADMIN_TEST_PASSWORD.
+            # Sourced from the social-login-credentials secret (terraform 2-secrets, CUTOVER),
+            # which reads Infisical /tf-ws2. Values are human-owned in the vault (Tôn Chủ registers
+            # the OAuth app); never in git.
+            - name: GITHUB_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: social-login-credentials
+                  key: github-client-id
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: social-login-credentials
+                  key: github-client-secret
+            # Safety: add/update only — never delete resources absent from the realm files.
+            - name: IMPORT_MANAGED_CLIENT
+              value: "no-delete"
+            - name: IMPORT_MANAGED_USER
+              value: "no-delete"
+            - name: IMPORT_MANAGED_ROLE
+              value: "no-delete"
+            - name: IMPORT_MANAGED_GROUP
+              value: "no-delete"
+            - name: IMPORT_MANAGED_CLIENT_SCOPE
+              value: "no-delete"
+            - name: IMPORT_MANAGED_IDENTITY_PROVIDER
+              value: "no-delete"
+            - name: IMPORT_MANAGED_IDENTITY_PROVIDER_MAPPER
+              value: "no-delete"
+            - name: IMPORT_MANAGED_MESSAGE_BUNDLES
+              value: "no-delete"
+            - name: IMPORT_MANAGED_AUTHENTICATION_FLOW
+              value: "no-delete"
+            - name: IMPORT_MANAGED_REQUIRED_ACTION
+              value: "no-delete"
+            - name: IMPORT_MANAGED_COMPONENT
+              value: "no-delete"
+            - name: IMPORT_MANAGED_SUBCOMPONENT
+              value: "no-delete"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi

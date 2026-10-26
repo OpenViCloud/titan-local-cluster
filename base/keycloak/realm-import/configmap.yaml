@@ -1,0 +1,170 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm-import
+data:
+  titan.json: |
+    {
+      "realm": "titan",
+      "enabled": true,
+      "displayName": "OpenViCloud",
+      "loginTheme": "openvicloud",
+      "internationalizationEnabled": true,
+      "supportedLocales": ["en", "vi"],
+      "defaultLocale": "en",
+      "registrationAllowed": true,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "ssoSessionIdleTimeout": 1800,
+      "ssoSessionMaxLifespan": 36000,
+      "accessTokenLifespan": 300,
+      "roles": {
+        "realm": [
+          { "name": "platform-admin", "description": "Full admin access across all tenants" }
+        ]
+      },
+      "users": [
+        {
+          "username": "admin-test",
+          "email": "admin-test@openvicloud.com",
+          "emailVerified": true,
+          "enabled": true,
+          "realmRoles": ["platform-admin", "default-roles-titan"],
+          "credentials": [
+            {
+              "type": "password",
+              "value": "$(env:ADMIN_TEST_PASSWORD)",
+              "temporary": false
+            }
+          ]
+        },
+        {
+          "username": "beta-user",
+          "email": "beta-user@openvicloud.com",
+          "emailVerified": true,
+          "enabled": true,
+          "realmRoles": ["default-roles-titan"],
+          "credentials": [
+            {
+              "type": "password",
+              "value": "$(env:BETA_USER_PASSWORD)",
+              "temporary": false
+            }
+          ]
+        }
+      ],
+      "clients": [
+        {
+          "clientId": "titan-portal",
+          "name": "Titan Portal",
+          "enabled": true,
+          "publicClient": true,
+          "standardFlowEnabled": true,
+          "attributes": {
+            "pkce.code.challenge.method": "S256",
+            "post.logout.redirect.uris": "https://portal-titan-staging.openvicloud.com##http://localhost:5173##http://portal.localhost:8080"
+          },
+          "redirectUris": ["https://portal-titan-staging.openvicloud.com/*", "http://localhost:5173/*", "http://portal.localhost:8080/*"],
+          "webOrigins": ["https://portal-titan-staging.openvicloud.com", "http://localhost:5173", "http://portal.localhost:8080"],
+          "protocolMappers": [
+            {
+              "name": "titan-api-audience",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-audience-mapper",
+              "consentRequired": false,
+              "config": {
+                "included.client.audience": "titan-api",
+                "access.token.claim": "true",
+                "id.token.claim": "false"
+              }
+            }
+          ]
+        },
+        {
+          "clientId": "titan-admin-portal",
+          "name": "Titan Admin Portal",
+          "enabled": true,
+          "publicClient": true,
+          "standardFlowEnabled": true,
+          "attributes": {
+            "pkce.code.challenge.method": "S256",
+            "post.logout.redirect.uris": "https://admin-titan-staging.openvicloud.com##http://localhost:5173##http://admin.localhost:8080"
+          },
+          "redirectUris": ["https://admin-titan-staging.openvicloud.com/*", "http://localhost:5173/*", "http://admin.localhost:8080/*"],
+          "webOrigins": ["https://admin-titan-staging.openvicloud.com", "http://localhost:5173", "http://admin.localhost:8080"],
+          "protocolMappers": [
+            {
+              "name": "titan-api-audience",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-audience-mapper",
+              "consentRequired": false,
+              "config": {
+                "included.client.audience": "titan-api",
+                "access.token.claim": "true",
+                "id.token.claim": "false"
+              }
+            }
+          ]
+        },
+        {
+          "clientId": "openvicloud-cli",
+          "name": "OpenViCloud CLI",
+          "enabled": true,
+          "publicClient": true,
+          "standardFlowEnabled": false,
+          "implicitFlowEnabled": false,
+          "directAccessGrantsEnabled": false,
+          "attributes": {
+            "oauth2.device.authorization.grant.enabled": "true"
+          },
+          "protocolMappers": [
+            {
+              "name": "titan-api-audience",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-audience-mapper",
+              "consentRequired": false,
+              "config": {
+                "included.client.audience": "titan-api",
+                "access.token.claim": "true",
+                "id.token.claim": "false"
+              }
+            }
+          ]
+        },
+        {
+          "clientId": "titan-api",
+          "name": "Titan API",
+          "enabled": true,
+          "publicClient": false,
+          "bearerOnly": true,
+          "standardFlowEnabled": false
+        }
+      ],
+      "identityProviders": [
+        {
+          "alias": "github",
+          "providerId": "github",
+          "enabled": true,
+          "trustEmail": true,
+          "storeToken": false,
+          "config": {
+            "clientId": "$(env:GITHUB_CLIENT_ID)",
+            "clientSecret": "$(env:GITHUB_CLIENT_SECRET)",
+            "defaultScope": "read:user user:email",
+            "syncMode": "IMPORT"
+          }
+        }
+      ],
+      "identityProviderMappers": [
+        {
+          "name": "github-name-to-profile-name",
+          "identityProviderAlias": "github",
+          "identityProviderMapper": "github-user-attribute-mapper",
+          "config": {
+            "jsonField": "name",
+            "userAttribute": "profileName",
+            "syncMode": "IMPORT"
+          }
+        }
+      ]
+    }

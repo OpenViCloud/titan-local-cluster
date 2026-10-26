@@ -1,0 +1,133 @@
+# The runner's own files. Specs are NOT here — they live in OpenViCloud/titan-regression (<module>/)
+# (plus a release's new specs); the agent loads OpenViCloud/titan-regression:lib + one module
+# per job into a ConfigMap of that job (titan-regression-specs-<job>, see cronjob.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: titan-regression-runner
+data:
+  run.sh: |
+    #!/usr/bin/env bash
+    # No `set -x` here: it would print values that came from the secrets.
+    set -u
+    mkdir -p /work/e2e "$RESULTS_DIR"
+    shopt -s nullglob
+
+    specs=(/specs/*.spec.ts)
+    if [ "${#specs[@]}" -eq 0 ]; then
+      echo "NO_SPECS: load *.spec.ts into the job's specs ConfigMap before starting a run"
+      echo "REGRESSION_EXIT=2"
+      exit 2
+    fi
+    # Specs and their helper modules (*.ts) both go in.
+    for f in /specs/*.ts; do
+      cp "$f" /work/e2e/
+    done
+    cp /runner/playwright.config.ts /work/
+
+    cd /work
+    npm init -y >/dev/null
+    # Keep the version in lockstep with the image tag in cronjob.yaml.
+    if ! npm install --no-audit --no-fund --loglevel=error @playwright/test@1.62.1 >/dev/null 2>&1; then
+      echo "NPM_INSTALL_FAILED"
+      echo "REGRESSION_EXIT=3"
+      exit 3
+    fi
+
+    echo "RUNNING ${#specs[@]} spec file(s)"
+    npx playwright test 2>&1 | node /runner/redact.js
+    rc=${PIPESTATUS[0]}
+
+    # Specs may write text files next to their screenshots; redact those too.
+    node /runner/redact.js --files "$RESULTS_DIR"
+
+    echo "REGRESSION_EXIT=$rc"
+    ls -la "$RESULTS_DIR"
+    touch "$RESULTS_DIR/.done"
+    echo "RESULTS_READY holding ${HOLD_SECONDS}s for kubectl cp"
+    sleep "$HOLD_SECONDS"
+    exit "$rc"
+
+  redact.js: |
+    // Replaces every occurrence of a test-account password with *** — in the log
+    // stream (stdin → stdout) or, with --files <dir>, in every text file under dir.
+    // Defence in depth: specs must never print a credential in the first place.
+    const fs = require('fs')
+    const path = require('path')
+
+    const secrets = ['BETA_USER_PASSWORD', 'ADMIN_TEST_PASSWORD']
+      .map((name) => process.env[name] || '')
+      .filter((value) => value.length >= 4)
+
+    function redact(text) {
+      let out = text
+      for (const secret of secrets) {
+        out = out.split(secret).join('***')
+      }
+      return out
+    }
+
+    const textExtensions = ['.txt', '.log', '.json', '.md', '.html', '.csv']
+
+    function redactFiles(dir) {
+      if (!fs.existsSync(dir)) {
+        return
+      }
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          redactFiles(full)
+          continue
+        }
+        const isText = textExtensions.includes(path.extname(entry.name).toLowerCase())
+        if (isText) {
+          fs.writeFileSync(full, redact(fs.readFileSync(full, 'utf8')))
+        }
+      }
+    }
+
+    if (process.argv[2] === '--files') {
+      redactFiles(process.argv[3])
+    } else {
+      let pending = ''
+      process.stdin.setEncoding('utf8')
+      process.stdin.on('data', (chunk) => {
+        pending += chunk
+        const lines = pending.split('\n')
+        pending = lines.pop()
+        for (const line of lines) {
+          process.stdout.write(redact(line) + '\n')
+        }
+      })
+      process.stdin.on('end', () => {
+        if (pending.length > 0) {
+          process.stdout.write(redact(pending) + '\n')
+        }
+      })
+    }
+
+  playwright.config.ts: |
+    import { defineConfig, devices } from '@playwright/test'
+
+    // trace/video/screenshot-on-failure are OFF so a credential can never land in an
+    // artifact; specs take explicit screenshots at safe points into RESULTS_DIR.
+    export default defineConfig({
+      testDir: './e2e',
+      outputDir: `${process.env.RESULTS_DIR}/test-output`,
+      timeout: 120_000,
+      expect: { timeout: 15_000 },
+      fullyParallel: false,
+      workers: 1,
+      retries: 0,
+      reporter: [['list']],
+      use: {
+        baseURL: process.env.PORTAL_BASE_URL,
+        headless: true,
+        trace: 'off',
+        video: 'off',
+        screenshot: 'off',
+        actionTimeout: 20_000,
+        navigationTimeout: 45_000,
+      },
+      projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+    })
