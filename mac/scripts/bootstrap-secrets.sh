@@ -3,8 +3,9 @@
 # - the two GitHub tokens from Infisical env "local" (re-applied every run, so a rotated token lands);
 # - the fixed test passwords of the integration-test role titan_it and of the realm user admin-test (re-applied every run);
 # - the S3 key pair of the dev backup bucket (R2 token scoped to titan-backup-dev) from Infisical env "local", folder
-#   /infra, as two Secrets with the same pair (CNPG reads one, the control plane the other: a Secret cannot be shared across
-#   namespaces); re-applied every run, so a rotated key lands, and the control plane reads it again after a restart;
+#   /infra, as three Secrets with the same pair (CNPG reads one, the control plane one, the worker one for Incus's uploads:
+#   CNPG is in another namespace, and each reader has its own key names); re-applied every run, so a rotated key
+#   lands, and the control plane and the worker read it again after a restart;
 # - the internal ones (DB password, internal token, cluster key, the Keycloak admin and beta-user passwords), generated once: a second
 #   run keeps them, because the database already holds the first password;
 # - the password of the second regression test tenant (beta-user-2), generated once too (a rerun keeps it, or Keycloak
@@ -102,8 +103,11 @@ printf 'password=admin-test-local-only\n' | apply_secret titan-auth-staging admi
 # ── Backup key of the dev bucket, re-applied every run ────────────────────────
 # titan-db-backup-credentials: key names the Barman Cloud Plugin reads from the Secret of the ObjectStore (gitops/titan-db of titan-ops).
 # control-plane-backup-credentials: the setting names of the control plane's BackupTarget section (gitops/control-plane of titan-ops).
-# Absent keys skip both Secrets with a warning and do not stop the bootstrap; but gitops/titan-db runs the backup component,
-# so until they are there CNPG cannot archive WAL (it piles up on the PVC) and the Backups page has no key pair.
+# incus-worker-backup-credentials: the worker's BACKUP_S3_* names; the worker hands the pair to Incus, which uploads VM and
+# volume backups itself (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/backup/design.md#incus-backup).
+# Absent keys skip all three Secrets with a warning and do not stop the bootstrap; but gitops/titan-db runs the backup component,
+# so until they are there CNPG cannot archive WAL (it piles up on the PVC), the Backups page has no key pair, and every VM and
+# volume backup fails.
 backup_key_id=$(read_infisical BACKUP_DEV_ACCESS_KEY_ID /infra)
 backup_secret_key=$(read_infisical BACKUP_DEV_SECRET_ACCESS_KEY /infra)
 if [ -n "$backup_key_id" ] && [ -n "$backup_secret_key" ]; then
@@ -111,9 +115,12 @@ if [ -n "$backup_key_id" ] && [ -n "$backup_secret_key" ]; then
     apply_secret titan-db-staging titan-db-backup-credentials
   printf 'BackupTarget__AccessKeyId=%s\nBackupTarget__SecretAccessKey=%s\n' "$backup_key_id" "$backup_secret_key" |
     apply_secret titan-staging control-plane-backup-credentials
+  printf 'BACKUP_S3_ACCESS_KEY_ID=%s\nBACKUP_S3_SECRET_ACCESS_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
+    apply_secret titan-staging incus-worker-backup-credentials
 else
   echo "WARNING: BACKUP_DEV_ACCESS_KEY_ID or BACKUP_DEV_SECRET_ACCESS_KEY is missing in Infisical env local, folder /infra:" \
-    "secrets titan-db-staging/titan-db-backup-credentials and titan-staging/control-plane-backup-credentials not applied." >&2
+    "secrets titan-db-staging/titan-db-backup-credentials, titan-staging/control-plane-backup-credentials and" \
+    "titan-staging/incus-worker-backup-credentials not applied." >&2
 fi
 unset backup_key_id backup_secret_key
 

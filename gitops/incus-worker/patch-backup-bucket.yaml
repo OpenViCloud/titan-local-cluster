@@ -1,0 +1,15 @@
+# Dev's own bucket: staging's overlay names titan-backup-staging. The endpoint and the optional key-pair Secret
+# (incus-worker-backup-credentials, written by mac/scripts/bootstrap-secrets.sh) come from staging's overlay, as for the
+# control plane. tests/render_test.py holds bucket and endpoint equal to the control plane's.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: incus-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: incus-worker
+          env:
+            - name: BACKUP_S3_BUCKET
+              value: titan-backup-dev
