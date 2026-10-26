@@ -134,15 +134,22 @@ class DevBackup(unittest.TestCase):
         self.assertEqual(found.get("plugin-barman-cloud", ("", ""))[1], "base/barman-cloud-plugin")
 
 
-class DevFreshDatabase(unittest.TestCase):
-    """Dev's titan-db starts empty on dev's own S3 and archives under its own name: nothing restores from the old R2 archive."""
+class DevRestore(unittest.TestCase):
+    """titan-k3s was rebuilt on a bucket that already held titan-db's archive, so the cluster restores from it and archives
+    under a new name, or barman refuses the non-empty archive (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook)."""
 
-    def test_the_cluster_is_created_empty(self):
+    def test_the_cluster_recovers_from_the_last_archive_and_archives_under_a_new_name(self):
         spec = first(render("titan-db"), "Cluster", "titan-db")["spec"]
-        self.assertIn("initdb", spec["bootstrap"])
-        self.assertNotIn("recovery", spec["bootstrap"])
-        self.assertNotIn("externalClusters", spec)
-        self.assertNotIn("serverName", spec["plugins"][0]["parameters"])
+        self.assertNotIn("initdb", spec["bootstrap"])
+        self.assertEqual(spec["bootstrap"]["recovery"]["source"], "titan-db-source")
+        read = {c["name"]: c["plugin"]["parameters"]["serverName"] for c in spec["externalClusters"]}
+        self.assertEqual(read, {"titan-db-source": "titan-db"})
+        self.assertEqual(spec["plugins"][0]["parameters"]["serverName"], "titan-db-restored")
+
+    def test_the_restore_reads_the_same_object_store(self):
+        # The same ObjectStore, so the same endpoint and CA (DevS3.test_cnpg_reaches_s3_at_the_shared_endpoint_and_trusts_the_ca).
+        spec = first(render("titan-db"), "Cluster", "titan-db")["spec"]
+        self.assertEqual([c["plugin"]["parameters"]["barmanObjectName"] for c in spec["externalClusters"]], ["titan-db-backup"])
 
 
 def yaml_file(path):
