@@ -2,7 +2,7 @@
 # mac/scripts/bootstrap-secrets.sh) comes from base/incus-worker. tests/render_test.py holds bucket and endpoint equal to the
 # control plane's. Incus uploads, and trusts the CA through titan-incus's system store (mac/scripts/trust-s3-ca.sh); the
 # worker itself asks the bucket whether the object arrived, so it gets the CA too, as one more file in /etc/ssl/certs, which
-# Go is expected to read whole (not yet measured on a rebuilt cluster).
+# Go reads whole (the worker read an uploaded backup over TLS on the rebuilt cluster, 2026-10-26).
 apiVersion: apps/v1
 kind: Deployment
 metadata:

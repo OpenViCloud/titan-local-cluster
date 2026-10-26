@@ -32,6 +32,15 @@ spec:
             - -s3.cert.file=/etc/seaweedfs/tls/tls.crt
             - -s3.key.file=/etc/seaweedfs/tls/tls.key
             - -s3.config=/etc/seaweedfs/s3/s3.json
+            # Uploads in flight are held in memory, with no bound by default: a 670 MB VM backup from Incus got the pod
+            # OOM-killed at 512 MiB (measured 2026-10-26). These bounds and GOMEMLIMIT below brought it through, still
+            # at 512 MiB the cgroup peaked at 515 MiB with page cache of the data folder, so the limit is 640 MiB.
+            - -s3.concurrentUploadLimitMB=64
+            - -filer.concurrentUploadLimitMB=64
+            - -volume.concurrentUploadLimitMB=64
+          env:
+            - name: GOMEMLIMIT
+              value: 350MiB
           ports:
             - name: s3
               containerPort: 8333
@@ -43,16 +52,19 @@ spec:
               containerPort: 8888
             - name: filer-grpc
               containerPort: 18888
+          # On the master's plain HTTP port: a TCP probe on the S3 port opens a TLS connection it never finishes, one log
+          # line every period.
           readinessProbe:
-            tcpSocket:
-              port: s3
+            httpGet:
+              path: /cluster/status
+              port: master
             periodSeconds: 10
           resources:
             requests:
               cpu: 50m
               memory: 128Mi
             limits:
-              memory: 512Mi
+              memory: 640Mi
           volumeMounts:
             - name: data
               mountPath: /data
