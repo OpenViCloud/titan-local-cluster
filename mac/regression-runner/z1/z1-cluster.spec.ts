@@ -134,9 +134,9 @@ test('Z-1 — cluster local-mac is titan-incus, template sync on arm64', async (
   }
   expect(trustedAt, 'the certificate was not trusted within 15 minutes').toBeGreaterThan(0)
 
-  // Z1-5: the OS images are read live from titan-incus, through the trust Z1-4 waited for.
+  // Z1-5: the OS images are read live from titan-incus, through the trust Z1-4 waited for. A titan-incus just built
+  // holds none until Z1-6 syncs, so only the answer is checked here.
   const images = JSON.parse(await expectCode(await request.get(`${API}/v1/os-images`), 200))
-  expect(images.length, 'titan-incus lists no VM image').toBeGreaterThan(0)
   log(`Z1-5 os images ${images.length}`)
 
   // Z1-6: sync every template into the cluster, then wait for each to settle.
