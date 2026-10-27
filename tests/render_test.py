@@ -13,6 +13,7 @@ import json
 import pathlib
 import re
 import subprocess
+import tempfile
 import unittest
 
 GITOPS = pathlib.Path(__file__).resolve().parent.parent / "gitops"
@@ -372,7 +373,8 @@ class DevClusterIdRename(unittest.TestCase):
 
     def test_runs_before_the_control_plane_and_after_the_migration(self):
         notes = self.job()["metadata"]["annotations"]
-        self.assertEqual(notes["argocd.argoproj.io/hook"], "PreSync")
+        # PreSync: before the new control plane starts. PostSync again: rows the old pod wrote while PreSync ran.
+        self.assertEqual(notes["argocd.argoproj.io/hook"], "PreSync,PostSync")
         migrate = first(render("control-plane"), "Job", "control-plane-migrate")["metadata"]["annotations"]
         self.assertGreater(int(notes["argocd.argoproj.io/sync-wave"]), int(migrate.get("argocd.argoproj.io/sync-wave", "0")))
 
@@ -385,6 +387,25 @@ class DevClusterIdRename(unittest.TestCase):
         self.assertIn("DELETE FROM core.vm_template_clusters", script)
         sql = script[script.index("WITH "):]
         self.assertEqual(sql.count(";"), 1, "one statement: all rows move or none")
+
+    def run_script(self, psql_body):
+        container = self.job()["spec"]["template"]["spec"]["containers"][0]
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = pathlib.Path(tmp) / "psql"
+            fake.write_text("#!/bin/sh\n" + psql_body + "\n")
+            fake.chmod(0o755)
+            env = {"PATH": f"{tmp}:/usr/bin:/bin", "SQL": "SELECT 1;",
+                   "ConnectionStrings__Titan": "Host=h;Port=5432;Database=titan;Username=titan;Password=abc123"}
+            return subprocess.run(["sh", "-c", container["args"][0]], env=env, capture_output=True, text=True)
+
+    def test_a_failed_psql_fails_the_job(self):
+        # A failing hook stops the sync, so the control plane never rolls onto local with the rows still under local-mac.
+        self.assertNotEqual(self.run_script('echo "could not connect" >&2; exit 2').returncode, 0)
+
+    def test_a_working_psql_reports_the_count(self):
+        out = self.run_script('[ "$PGHOST" = h ] && [ "$PGUSER" = titan ] && [ "$PGPASSWORD" = abc123 ] && echo 24')
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("24", out.stdout)
 
     def test_reads_the_connection_the_migration_reads(self):
         env = self.job()["spec"]["template"]["spec"]["containers"][0]["envFrom"]

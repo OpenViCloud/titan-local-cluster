@@ -52,6 +52,11 @@ Sign in to the portal as `beta-user`, with the password `BETA_USER_PASSWORD` in 
 as `admin-test`, whose fixed test password is in `lima/scripts/bootstrap-secrets.sh`. On a new cluster the very first
 sign-in can fail once with an error (two requests race to create the tenant); sign in again.
 
+On a cluster that was up before the rename of 2026-10-27 (cluster `local-mac`, Applications `*-local-mac`), run
+`bash lima/scripts/drop-old-applications.sh` right after the merge reaches it (or `up.sh`, which runs it): the old root lists
+itself and does not prune itself, and two roots would keep relabelling the same children. The database's rows move by
+themselves, in a hook of the control plane's sync (`gitops/control-plane/rename-cluster-id-job.yaml`).
+
 `up.sh` joins cluster `local` to titan-incus (`lima/scripts/join-cluster.sh`): it makes Titan's client identity once
 (`~/.config/titan-local-cluster/titan-client.crt` and `.key`), reads titan-incus's server fingerprint and the Incus
 endpoint for this host's OS (`lima/scripts/host-os.sh`), has titan-incus trust Titan's certificate, and puts all of them in
