@@ -8,5 +8,6 @@ data:
       "keycloakUrl": "http://auth.localhost:8080/auth",
       "keycloakRealm": "titan",
       "keycloakClientId": "titan-portal",
-      "apiBaseUrl": "http://api.localhost:8080"
+      "apiBaseUrl": "http://api.localhost:8080",
+      "topUpEnabled": true
     }
