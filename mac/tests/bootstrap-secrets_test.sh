@@ -86,7 +86,7 @@ run() {
 # value FILE KEY: the value of KEY in an env file.
 value() { sed -n "s/^$2=//p" "$1"; }
 
-KEYS="TITAN_DB_PASSWORD INTERNAL_TOKEN CLUSTER_ENCRYPTION_KEY KEYCLOAK_ADMIN_PASSWORD BETA_USER_PASSWORD BETA_USER_2_PASSWORD
+KEYS="TITAN_DB_PASSWORD INTERNAL_TOKEN KEYCLOAK_ADMIN_PASSWORD BETA_USER_PASSWORD BETA_USER_2_PASSWORD
   BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY"
 
 echo "first run on a new cluster: no vault, no GitHub token, no secrets.env"
@@ -106,13 +106,12 @@ done
 [ -z "$missing" ] && ok "every generated value is in the file" || bad "missing or empty:$missing"
 db=$(value "$FILE" TITAN_DB_PASSWORD)
 token=$(value "$FILE" INTERNAL_TOKEN)
-key=$(value "$FILE" CLUSTER_ENCRYPTION_KEY)
 printf 'username=titan\npassword=%s\n' "$db" | cmp -s - "$WORK/fresh.stdin.titan-db-credentials" \
   && ok "the database's Secret carries the file's password" || bad "titan-db-credentials differs from the file"
 grep -q "Password=$db\$" "$WORK/fresh.stdin.control-plane-db" \
   && ok "the control plane's connection string carries the same password" || bad "control-plane-db differs from the file"
-printf 'Internal__Token=%s\nEncryption__ClusterKey=%s\n' "$token" "$key" | cmp -s - "$WORK/fresh.stdin.control-plane-secrets" \
-  && ok "the control plane gets the file's internal token and cluster key" || bad "control-plane-secrets differs from the file"
+printf 'Internal__Token=%s\n' "$token" | cmp -s - "$WORK/fresh.stdin.control-plane-secrets" \
+  && ok "the control plane gets the file's internal token, and no cluster key" || bad "control-plane-secrets differs from the file"
 printf 'CP_INTERNAL_TOKEN=%s\n' "$token" | cmp -s - "$WORK/fresh.stdin.worker-secrets" \
   && ok "the worker gets the same internal token" || bad "worker-secrets differs from the file"
 printf 'admin-password=%s\n' "$(value "$FILE" KEYCLOAK_ADMIN_PASSWORD)" | cmp -s - "$WORK/fresh.stdin.keycloak-admin-secret" \
@@ -149,12 +148,12 @@ echo "a file from an older script, without some keys"
 mkdir -p "$WORK/old/.config/titan-local-cluster"
 OLD="$WORK/old/.config/titan-local-cluster/secrets.env"
 # A key that starts with another key's name comes first: a lookup by prefix would read it.
-printf 'TITAN_DB_PASSWORD_BEFORE_ROTATION=not-this\nTITAN_DB_PASSWORD=kept-db\nCLUSTER_ENCRYPTION_KEY=kept/key+b64=\n' > "$OLD"
+printf 'TITAN_DB_PASSWORD_BEFORE_ROTATION=not-this\nTITAN_DB_PASSWORD=kept-db\nBETA_USER_PASSWORD=kept/pw+b64=\n' > "$OLD"
 chmod 644 "$OLD"
 chmod 755 "$(dirname "$OLD")"
 run old "$WORK/old" FAKE_EMPTY_CLUSTER=1
 [ "$RC" -eq 0 ] && ok "exit 0" || bad "exit $RC: $OUT"
-[ "$(value "$OLD" TITAN_DB_PASSWORD)" = "kept-db" ] && [ "$(value "$OLD" CLUSTER_ENCRYPTION_KEY)" = "kept/key+b64=" ] \
+[ "$(value "$OLD" TITAN_DB_PASSWORD)" = "kept-db" ] && [ "$(value "$OLD" BETA_USER_PASSWORD)" = "kept/pw+b64=" ] \
   && ok "the values already there are kept" || bad "a kept value changed: $(sed 's/=.*/=<value>/' "$OLD")"
 missing=""
 for key in $KEYS; do
@@ -166,8 +165,8 @@ done
   || bad "folder mode $(stat -f '%Lp' "$(dirname "$OLD")")"
 printf 'username=titan\npassword=kept-db\n' | cmp -s - "$WORK/old.stdin.titan-db-credentials" \
   && ok "the value is read by its exact name, not by a prefix" || bad "titan-db-credentials did not get kept-db"
-grep -q 'Encryption__ClusterKey=kept/key+b64=$' "$WORK/old.stdin.control-plane-secrets" \
-  && ok "a value with / + = reaches the Secret unchanged" || bad "control-plane-secrets lost the cluster key"
+grep -q 'password=kept/pw+b64=$' "$WORK/old.stdin.beta-user-credentials" \
+  && ok "a value with / + = reaches the Secret unchanged" || bad "beta-user-credentials lost the kept password"
 
 echo "openssl failing"
 mkdir -p "$WORK/nossl"

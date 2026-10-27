@@ -2,7 +2,7 @@
 """Renders dev's overlays and reads dev's ArgoCD Applications.
 
 What must hold on dev: the control plane and the worker run only their own container (the Incus tunnel sidecar is
-staging's alone), the control plane lists zone local-mac only, and no Application or app directory is a fake service
+staging's alone), the control plane lists cluster local-mac only, and no Application or app directory is a fake service
 (Titan's rule: doubles only in unit tests).
 
 Run:  python3 tests/render_test.py     (needs kubectl for `kubectl kustomize` and ruby; the overlays build on base/ here,
@@ -91,11 +91,6 @@ class DevRender(unittest.TestCase):
     def test_the_workers_backup_key_pair_comes_from_an_optional_secret(self):
         refs = [r["secretRef"] for c in containers(render("incus-worker"), "incus-worker") for r in c.get("envFrom", []) if "secretRef" in r]
         self.assertIn({"name": "incus-worker-backup-credentials", "optional": True}, refs)
-
-    def test_zone_list_is_local_mac_only(self):
-        listed = zones(render("control-plane"))
-        self.assertEqual({k: v for k, v in listed.items() if k.startswith("Zones__")},
-                         {"Zones__0__Id": "local-mac", "Zones__0__Name": "Local Mac"})
 
     # The fingerprint is not in git: it changes with titan-incus and comes from Secret control-plane-cluster.
     def test_the_cluster_list_is_local_mac_on_titan_incus(self):

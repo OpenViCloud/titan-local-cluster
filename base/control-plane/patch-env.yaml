@@ -1,5 +1,5 @@
 # What every environment's control plane runs with. Each environment's overlay adds only its own values: hostnames,
-# the zone list, the backup endpoint and bucket, ASPNETCORE_ENVIRONMENT
+# the cluster list, the backup endpoint and bucket, ASPNETCORE_ENVIRONMENT
 # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
 apiVersion: apps/v1
 kind: Deployment

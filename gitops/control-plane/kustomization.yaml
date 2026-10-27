@@ -3,7 +3,7 @@ kind: Kustomization
 
 namespace: titan-staging
 
-# The local cluster on the Mac runs the shared manifests of base/ with its own image (below), hostnames, zone list
+# The local cluster on the Mac runs the shared manifests of base/ with its own image (below), hostnames, cluster list
 # and token issuer (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
 resources:
   - ../../base/control-plane
@@ -12,8 +12,6 @@ resources:
 configMapGenerator:
   - name: control-plane-zones
     literals:
-      - Zones__0__Id=local-mac
-      - Zones__0__Name=Local Mac
       # Cluster local-mac is titan-incus. Its server fingerprint changes when the VM is rebuilt, so it comes with Titan's
       # client identity from Secret control-plane-cluster (mac/scripts/join-cluster.sh).
       - Clusters__0__Id=local-mac
