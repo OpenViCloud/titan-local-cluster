@@ -76,8 +76,8 @@ class DevRender(unittest.TestCase):
         self.assertEqual(names, ["incus-worker"])
 
     def test_the_customer_portal_offers_buying_credit_on_dev(self):
-        # The portal shows Buy credit only when config.json holds the boolean true; without it every top-up case of
-        # the regression suite fails on dev
+        # The portal shows Buy credit and receipts only when config.json holds the boolean true; without it the
+        # regression cases that read them in the portal fail on dev
         # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/billing/topup/design.md#topup-portal).
         self.assertIs(portal_config(render("cloud-console")).get("topUpEnabled"), True)
 
