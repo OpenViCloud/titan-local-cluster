@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Renders dev's overlays and reads dev's ArgoCD Applications.
+"""Renders dev's overlays (and tests/restore, base's restore path that no Application uses) and reads dev's ArgoCD
+Applications.
 
 What must hold on dev: the control plane and the worker run only their own container (the Incus tunnel sidecar is
 staging's alone), the control plane lists cluster local-mac only, and no Application or app directory is a fake service
@@ -284,7 +285,8 @@ class DevS3(unittest.TestCase):
 
 
 class DevDatabases(unittest.TestCase):
-    """Keycloak's database is a Database object, not initdb's postInitSQL: a restored cluster runs no initdb."""
+    """titan-db's databases: Keycloak's is a Database object, not initdb's postInitSQL (a restored cluster runs no initdb),
+    and only their owner creates in schema public."""
 
     def test_keycloak_database_is_declared_on_titan_db_and_never_dropped(self):
         objects = render("titan-db")
@@ -297,8 +299,11 @@ class DevDatabases(unittest.TestCase):
         # PostgreSQL 15 lets only the database owner (titan) and superusers create in schema public; a grant TO PUBLIC, in
         # any of initdb's SQL lists, would let every role that can connect in.
         initdb = first(render("titan-db"), "Cluster", "titan-db")["spec"]["bootstrap"]["initdb"]
-        sql = [s for key in ("postInitSQL", "postInitTemplateSQL", "postInitApplicationSQL") for s in initdb.get(key, [])]
-        self.assertEqual([s for s in sql if re.search(r"\bTO\s+PUBLIC\b", s, re.IGNORECASE)], [])
+        lists = ("postInitSQL", "postInitTemplateSQL", "postInitApplicationSQL")
+        # SQL from a ConfigMap or Secret (the *Refs lists) is not in the render, so none may hide a grant there.
+        self.assertEqual([key + "Refs" for key in lists if key + "Refs" in initdb], [])
+        sql = [s for key in lists for s in initdb.get(key, [])]
+        self.assertEqual([s for s in sql if re.search(r"\bTO\b[^;]*\bPUBLIC\b", s, re.IGNORECASE)], [])
 
 
 class RestorePath(unittest.TestCase):
