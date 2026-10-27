@@ -65,6 +65,37 @@ spec:
     configs:
       params:
         server.insecure: true
+      cm:
+        # ArgoCD gives an Application no health of its own, so root's sync waves would only order the creation of the
+        # Applications, not wait for each to be Healthy: titan-db would be applied before cnpg-operator's webhook answers.
+        # This is the check ArgoCD's docs give for app-of-apps.
+        resource.customizations.health.argoproj.io_Application: |
+          hs = {}
+          hs.status = "Progressing"
+          hs.message = ""
+          if obj.status ~= nil and obj.status.health ~= nil then
+            hs.status = obj.status.health.status
+            if obj.status.health.message ~= nil then
+              hs.message = obj.status.health.message
+            end
+          end
+          return hs
+        # ArgoCD has no health for CNPG's Database either: without it titan-db is Healthy before keycloak_staging exists,
+        # and keycloak's wave starts on a missing database. Not applied yet is Progressing, not Degraded: CNPG retries
+        # while the cluster comes up.
+        resource.customizations.health.postgresql.cnpg.io_Database: |
+          hs = {}
+          hs.status = "Progressing"
+          hs.message = ""
+          if obj.status ~= nil then
+            if obj.status.applied == true then
+              hs.status = "Healthy"
+            end
+            if obj.status.message ~= nil then
+              hs.message = obj.status.message
+            end
+          end
+          return hs
     dex:
       enabled: false
     notifications:

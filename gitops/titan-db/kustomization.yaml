@@ -3,7 +3,7 @@ kind: Kustomization
 
 # The shared database of base/ with a smaller memory request: on titan-k3s (measured at 3 GiB, now 4) PostgreSQL uses about 100 MiB, and a
 # 512 MiB request only blocks scheduling (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget). The limit stays.
-# The Application ignores /spec/resources, so a running cluster takes this on a manual sync; a new one at creation.
+# The Application ignores /spec/resources in its diff, so a running cluster takes this with the app's next sync; a new one at creation.
 namespace: titan-db-staging
 
 resources:

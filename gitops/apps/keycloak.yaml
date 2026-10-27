@@ -5,7 +5,8 @@ metadata:
   name: keycloak-local-mac
   namespace: argocd
   annotations:
-    # wave 1, after titan-db (wave 0): the keycloak_staging database must exist first
+    # wave 1, after titan-db (wave 0): titan-db is Healthy once Database keycloak-staging is applied (its health check in
+    # mac/provision/k3s.sh), so the database exists before Keycloak starts
     argocd.argoproj.io/sync-wave: "1"
 spec:
   project: default

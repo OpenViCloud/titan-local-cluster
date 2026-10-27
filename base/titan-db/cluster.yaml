@@ -18,10 +18,8 @@ spec:
         name: titan-db-credentials
       postInitTemplateSQL:
         - "GRANT CREATE ON SCHEMA public TO PUBLIC"
-      postInitSQL:
-        - "CREATE DATABASE keycloak_staging OWNER titan"
-        - "CREATE DATABASE temporal OWNER titan"
-        - "CREATE DATABASE temporal_visibility OWNER titan"
+      # Every other database is a Database object (database-keycloak.yaml): initdb runs once, at creation, and not at all
+      # on a cluster restored from a backup.
 
   storage:
     size: 10Gi

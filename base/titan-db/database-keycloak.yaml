@@ -1,0 +1,14 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: keycloak-staging
+spec:
+  # CNPG adopts the database when it already exists (a cluster made by initdb before this object, or one restored from a
+  # backup), and makes it otherwise.
+  name: keycloak_staging
+  owner: titan
+  cluster:
+    name: titan-db
+  # CNPG's defaults, written out so the file says what is applied. retain: deleting this object never drops Keycloak's data.
+  ensure: present
+  databaseReclaimPolicy: retain
