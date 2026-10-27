@@ -104,7 +104,7 @@ PRESEED
 fi
 
 # ── OVN uplink for public IPv6 ────────────────────────────────────────────────
-# ovnup is the zone's OVN uplink, in the shape of singapore01's (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#uplink):
+# ovnup is the cluster's OVN uplink, in the shape of singapore01's (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#uplink):
 # physical on ovnbr, a bridge with no address of Incus's. Only a network with public IPv6 goes on it; every other
 # tenant network keeps network=none (OpenViCloud/titan-incus-worker:resource/network/create.go). Incus refuses a network whose
 # IPv4 CIDR the uplink does not route: the private ranges are listed, anycast because two tenants may pick the same

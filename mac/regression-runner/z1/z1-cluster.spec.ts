@@ -15,7 +15,7 @@ const need = (k: string) => {
   return v
 }
 
-const ZONE = 'local-mac'
+const CLUSTER = 'local-mac'
 
 async function login(page: Page, host: string, user: string, password: string) {
   await page.goto(host + '/', { waitUntil: 'domcontentloaded' })
@@ -62,7 +62,7 @@ const lines: string[] = []
 const log = (line: string) => {
   lines.push(line)
   console.log(line)
-  fs.writeFileSync(`${RESULTS}/z1-zone-${ZONE}.txt`, lines.join('\n') + '\n')
+  fs.writeFileSync(`${RESULTS}/z1-cluster-${CLUSTER}.txt`, lines.join('\n') + '\n')
 }
 
 // The access token lives minutes and the waits below are longer: sign in again in a fresh context.
@@ -84,15 +84,15 @@ test.beforeAll(async () => {
   await startLocalProxyIfNeeded(ADMIN)
 })
 
-test('Z-1 — zone local-mac on titan-incus, template sync on arm64', async ({ browser, request }) => {
+test('Z-1 — cluster local-mac is titan-incus, template sync on arm64', async ({ browser, request }) => {
   test.setTimeout(45 * 60_000)
   browserRef = browser
   await signInAdmin('z1-admin-signed-in.png')
 
-  // Z1-1: the zone list is this cluster's zone only.
-  const zones = JSON.parse(await expectCode(await request.get(`${API}/v1/zones`), 200))
-  log(`Z1-1 zones ${JSON.stringify(zones)}`)
-  expect(zones.map((z: { id: string }) => z.id)).toEqual([ZONE])
+  // Z1-1: the configured clusters are local-mac only.
+  const clusters = JSON.parse(await expectCode(await request.get(`${API}/v1/clusters`), 200))
+  log(`Z1-1 clusters ${JSON.stringify(clusters)}`)
+  expect(clusters.map((z: { id: string }) => z.id)).toEqual([CLUSTER])
 
   // Z1-2: Titan's client certificate, the one join-cluster.sh put in the Secret.
   const certificate = JSON.parse(await expectCode(
@@ -100,13 +100,13 @@ test('Z-1 — zone local-mac on titan-incus, template sync on arm64', async ({ b
   log(`Z1-2 client certificate fingerprint ${certificate.fingerprint}`)
 
   // Z1-3: the cluster comes from config, with the server fingerprint read from titan-incus and its provider settings.
-  type Cluster = { zoneId: string, endpoint: string, serverFingerprint: string, providerSettings: { ovnUplinkNetwork: string | null, storagePool: string | null } }
+  type Cluster = { clusterId: string, endpoint: string, serverFingerprint: string, providerSettings: { ovnUplinkNetwork: string | null, storagePool: string | null } }
   const configured: Cluster[] = JSON.parse(await expectCode(await request.get(`${API}/v1/admin/clusters`, { headers: admin }), 200))
-  const cluster = configured.find((c) => c.zoneId === ZONE)
-  expect(cluster, `cluster ${ZONE} is not configured`).toBeDefined()
+  const cluster = configured.find((c) => c.clusterId === CLUSTER)
+  expect(cluster, `cluster ${CLUSTER} is not configured`).toBeDefined()
   expect(cluster!.serverFingerprint).toMatch(/^[0-9a-f]{64}$/)
   expect(cluster!.providerSettings).toMatchObject({ ovnUplinkNetwork: 'ovnup', storagePool: 'default' })
-  log(`Z1-3 cluster ${ZONE} configured: ${cluster!.endpoint} ${cluster!.serverFingerprint}`)
+  log(`Z1-3 cluster ${CLUSTER} configured: ${cluster!.endpoint} ${cluster!.serverFingerprint}`)
 
   // Z1-4: titan-incus answers trusted (join-cluster.sh trusted Titan); a wait covers a control plane still restarting.
   let firstError = ''
@@ -134,16 +134,18 @@ test('Z-1 — zone local-mac on titan-incus, template sync on arm64', async ({ b
   }
   expect(trustedAt, 'the certificate was not trusted within 15 minutes').toBeGreaterThan(0)
 
-  const clusters = JSON.parse(await expectCode(await request.get(`${API}/v1/zones/${ZONE}/clusters`), 200))
-  log(`Z1-5 zone clusters ${JSON.stringify(clusters)}`)
+  // Z1-5: the OS images are read live from titan-incus, through the trust Z1-4 waited for.
+  const images = JSON.parse(await expectCode(await request.get(`${API}/v1/os-images`), 200))
+  expect(images.length, 'titan-incus lists no VM image').toBeGreaterThan(0)
+  log(`Z1-5 os images ${images.length}`)
 
-  // Z1-6: sync every template into the zone, then wait for each to settle.
+  // Z1-6: sync every template into the cluster, then wait for each to settle.
   await signInAdmin()
   await expectCode(await request.post(`${API}/v1/admin/templates/sync`, { headers: admin }), 202)
   log('Z1-6 templates/sync 202')
 
-  type ZoneRow = { zoneId: string, currentExistence: string, transition: string | null, requestFailureReason: string | null, externalTemplateId: string | null }
-  type Template = { name: string, os: string, zones: ZoneRow[] }
+  type ClusterRow = { clusterId: string, currentExistence: string, transition: string | null, requestFailureReason: string | null, externalTemplateId: string | null }
+  type Template = { name: string, os: string, clusters: ClusterRow[] }
   let settled: Template[] = []
   const syncStart = Date.now()
   while (Date.now() - syncStart < 25 * 60_000) {
@@ -154,7 +156,7 @@ test('Z-1 — zone local-mac on titan-incus, template sync on arm64', async ({ b
     }
     const templates: Template[] = JSON.parse(await expectCode(res, 200))
     const waiting = templates.filter((t) => {
-      const row = t.zones.find((z) => z.zoneId === ZONE)
+      const row = t.clusters.find((z) => z.clusterId === CLUSTER)
       return row === undefined || row.transition !== null
     })
     if (waiting.length === 0) {
@@ -163,10 +165,10 @@ test('Z-1 — zone local-mac on titan-incus, template sync on arm64', async ({ b
     }
     await new Promise((resolve) => setTimeout(resolve, 20_000))
   }
-  expect(settled.length, `templates did not settle in zone ${ZONE} within 25 minutes`).toBeGreaterThan(0)
+  expect(settled.length, `templates did not settle in cluster ${CLUSTER} within 25 minutes`).toBeGreaterThan(0)
   log(`Z1-6 settled after ${Math.round((Date.now() - syncStart) / 1000)}s`)
   for (const t of settled) {
-    const row = t.zones.find((z) => z.zoneId === ZONE)!
+    const row = t.clusters.find((z) => z.clusterId === CLUSTER)!
     log(`Z1-7 ${t.name} os=${t.os} existence=${row.currentExistence} external=${row.externalTemplateId} failure=${JSON.stringify(row.requestFailureReason)}`)
   }
   await signInAdmin('z1-admin-after-sync.png')
