@@ -47,6 +47,13 @@ def zones(objects):
     raise AssertionError("no ConfigMap control-plane-zones")
 
 
+def portal_config(objects):
+    for obj in objects:
+        if obj["kind"] == "ConfigMap" and obj["metadata"]["name"].startswith("cloud-console-config"):
+            return json.loads(obj["data"]["config.json"])
+    raise AssertionError("no ConfigMap cloud-console-config")
+
+
 def applications():
     found = []
     for manifest in sorted((GITOPS / "apps").glob("*.yaml")):
@@ -67,6 +74,12 @@ class DevRender(unittest.TestCase):
     def test_incus_worker_has_only_its_own_container(self):
         names = [c["name"] for c in containers(render("incus-worker"), "incus-worker")]
         self.assertEqual(names, ["incus-worker"])
+
+    def test_the_customer_portal_offers_buying_credit_on_dev(self):
+        # The portal shows Buy credit and receipts only when config.json holds the boolean true; without it the
+        # regression cases that read them in the portal fail on dev
+        # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/billing/topup/design.md#topup-portal).
+        self.assertIs(portal_config(render("cloud-console")).get("topUpEnabled"), True)
 
     def test_backup_target_is_the_dev_bucket_not_stagings(self):
         env = {e["name"]: e.get("value") for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
