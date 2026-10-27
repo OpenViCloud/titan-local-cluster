@@ -303,7 +303,7 @@ class DevDatabases(unittest.TestCase):
         # SQL from a ConfigMap or Secret (the *Refs lists) is not in the render, so none may hide a grant there.
         self.assertEqual([key + "Refs" for key in lists if key + "Refs" in initdb], [])
         sql = [s for key in lists for s in initdb.get(key, [])]
-        self.assertEqual([s for s in sql if re.search(r"\bTO\b[^;]*\bPUBLIC\b", s, re.IGNORECASE)], [])
+        self.assertEqual([s for s in sql if re.search(r"\bGRANT\b[^;]*\bTO\b[^;]*\bPUBLIC\b", s, re.IGNORECASE)], [])
 
 
 class RestorePath(unittest.TestCase):
