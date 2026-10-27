@@ -43,3 +43,6 @@ jobs:
 
       - name: Cluster join
         run: bash lima/tests/join-cluster_test.sh
+
+      - name: Old Applications dropped
+        run: bash lima/tests/drop-old-applications_test.sh

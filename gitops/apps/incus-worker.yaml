@@ -2,7 +2,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: incus-worker-local-mac
+  name: incus-worker-local
   namespace: argocd
   annotations:
     # After the control plane (wave 2) it talks to.

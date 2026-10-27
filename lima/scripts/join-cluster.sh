@@ -1,11 +1,11 @@
 #!/bin/bash
-# Joins cluster local-mac to titan-incus (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/cluster/design.md#cluster-from-config):
+# Joins cluster local to titan-incus (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/cluster/design.md#cluster-from-config):
 # - Titan's client identity (ECDSA P-384, client auth) is made once on the host next to secrets.env and kept, so a rebuilt
 #   VM trusts the same certificate again.
 # - The server fingerprint is read from `incus info` each run: a rebuilt titan-incus has a new server certificate, so it
 #   cannot live in git. The endpoint is where titan-k3s reaches the Incus API, which differs by host OS
 #   (lima/scripts/host-os.sh): git holds macOS's (gitops/control-plane), and this host's in the Secret overrides it.
-# - titan-incus trusts Titan's certificate under the name titan-local-mac, added only when it does not yet.
+# - titan-incus trusts Titan's certificate under the name titan-local, added only when it does not yet.
 # - Secret titan-staging/control-plane-cluster holds the endpoint, the fingerprint and the identity; the control plane restarts only
 #   when the Secret changed, since it reads them once at start.
 # Values go through files and the Secret only: nothing printed.
@@ -17,7 +17,7 @@ KUBECONFIG_FILE="$HOME/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml"
 SECRETS_DIR="$HOME/.config/titan-local-cluster"
 CLIENT_CERT="$SECRETS_DIR/titan-client.crt"
 CLIENT_KEY="$SECRETS_DIR/titan-client.key"
-TRUST_NAME=titan-local-mac
+TRUST_NAME=titan-local
 VM_COPY=/tmp/titan-client.crt
 
 k() {

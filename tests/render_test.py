@@ -2,7 +2,7 @@
 """Renders dev's overlays and reads dev's ArgoCD Applications.
 
 What must hold on dev: the control plane and the worker run only their own container (the Incus tunnel sidecar is
-staging's alone), the control plane lists cluster local-mac only, and no Application or app directory is a fake service
+staging's alone), the control plane lists cluster local only, and no Application or app directory is a fake service
 (Titan's rule: doubles only in unit tests).
 
 Run:  python3 tests/render_test.py     (needs kubectl for `kubectl kustomize` and ruby; the overlays build on base/ here,
@@ -13,6 +13,7 @@ import json
 import pathlib
 import re
 import subprocess
+import tempfile
 import unittest
 
 GITOPS = pathlib.Path(__file__).resolve().parent.parent / "gitops"
@@ -109,11 +110,11 @@ class DevRender(unittest.TestCase):
 
     # The fingerprint is not in git: it changes with titan-incus and comes from Secret control-plane-cluster. The endpoint in
     # git is macOS's; lima/scripts/join-cluster.sh writes this host's into the same Secret, which overrides it (next test).
-    def test_the_cluster_list_is_local_mac_on_titan_incus(self):
+    def test_the_cluster_list_is_local_on_titan_incus(self):
         listed = zones(render("control-plane"))
         self.assertEqual({k: v for k, v in listed.items() if k.startswith("Clusters__")}, {
-            "Clusters__0__Id": "local-mac",
-            "Clusters__0__Name": "Local Mac",
+            "Clusters__0__Id": "local",
+            "Clusters__0__Name": "Local",
             "Clusters__0__Endpoint": "https://192.168.104.1:8443",
             "Clusters__0__OvnUplinkNetwork": "ovnup",
             "Clusters__0__StoragePool": "default",
@@ -279,7 +280,7 @@ class DevS3(unittest.TestCase):
         found = {name: (file, path) for file, name, path in applications()}
         self.assertEqual(found.get("seaweedfs", ("", ""))[1], "gitops/seaweedfs")
         wave = lambda name: int(re.search(r'sync-wave:\s*"(-?\d+)"', (GITOPS / "apps" / found[name][0]).read_text()).group(1))
-        self.assertLess(wave("seaweedfs"), wave("titan-db-local-mac"))
+        self.assertLess(wave("seaweedfs"), wave("titan-db-local"))
 
 
 class DevDatabases(unittest.TestCase):
@@ -361,11 +362,72 @@ class NoTitanRead(unittest.TestCase):
         self.assertEqual(offenders, [])
 
 
+class DevClusterIdRename(unittest.TestCase):
+    """The cluster id was local-mac until 2026-10-27. A PreSync hook of the control plane moves a dev database's rows to
+    local in the same sync that rolls the control plane onto the new id, so no command meets a cluster that is gone."""
+
+    def job(self):
+        jobs = [o for o in render("control-plane") if o["kind"] == "Job" and o["metadata"]["name"] == "control-plane-rename-cluster-id"]
+        self.assertEqual(len(jobs), 1)
+        return jobs[0]
+
+    def test_runs_after_the_migration_before_and_after_the_control_plane_rolls(self):
+        notes = self.job()["metadata"]["annotations"]
+        # PreSync: before the new control plane starts. PostSync again: rows the old pod wrote while PreSync ran.
+        self.assertEqual(notes["argocd.argoproj.io/hook"], "PreSync,PostSync")
+        migrate = first(render("control-plane"), "Job", "control-plane-migrate")["metadata"]["annotations"]
+        self.assertGreater(int(notes["argocd.argoproj.io/sync-wave"]), int(migrate.get("argocd.argoproj.io/sync-wave", "0")))
+
+    def test_one_statement_moves_every_table_keyed_by_cluster(self):
+        container = self.job()["spec"]["template"]["spec"]["containers"][0]
+        script = [e["value"] for e in container["env"] if e["name"] == "SQL"][0]
+        self.assertIn('psql -v ON_ERROR_STOP=1 -At -c "$SQL"', " ".join(container["args"]))
+        for table in ("vms", "volumes", "networks", "load_balancers", "provider_commands", "vm_template_clusters"):
+            self.assertIn(f"UPDATE core.{table} SET cluster_id = 'local' WHERE cluster_id = 'local-mac'", script, table)
+        self.assertIn("DELETE FROM core.vm_template_clusters", script)
+        sql = script[script.index("WITH "):]
+        self.assertEqual(sql.count(";"), 1, "one statement: all rows move or none")
+
+    def run_script(self, psql_body):
+        container = self.job()["spec"]["template"]["spec"]["containers"][0]
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = pathlib.Path(tmp) / "psql"
+            fake.write_text("#!/bin/sh\n" + psql_body + "\n")
+            fake.chmod(0o755)
+            env = {"PATH": f"{tmp}:/usr/bin:/bin", "SQL": "SELECT 1;",
+                   "ConnectionStrings__Titan": "Host=h;Port=5432;Database=titan;Username=titan;Password=abc123"}
+            return subprocess.run(["sh", "-c", container["args"][0]], env=env, capture_output=True, text=True)
+
+    def test_a_failed_psql_fails_the_job(self):
+        # A failing PreSync run stops the sync, so the control plane does not roll onto local with the rows still under
+        # local-mac; a failing PostSync run marks the sync failed.
+        self.assertNotEqual(self.run_script('echo "could not connect" >&2; exit 2').returncode, 0)
+
+    def test_a_working_psql_reports_the_count(self):
+        out = self.run_script('[ "$PGHOST" = h ] && [ "$PGUSER" = titan ] && [ "$PGPASSWORD" = abc123 ] && echo 24')
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("24", out.stdout)
+
+    def test_reads_the_connection_the_migration_reads(self):
+        env = self.job()["spec"]["template"]["spec"]["containers"][0]["envFrom"]
+        self.assertIn({"secretRef": {"name": "control-plane-db"}}, env)
+
+    def test_staging_has_no_such_job(self):
+        base = subprocess.run(["kubectl", "kustomize", str(GITOPS.parent / "base" / "control-plane")], capture_output=True,
+                              text=True, check=True).stdout
+        self.assertNotIn("rename-cluster-id", base)
+
+
 class NoFakeService(unittest.TestCase):
     def test_reads_the_applications(self):
         names = [name for _, name, _ in applications()]
-        self.assertIn("root-local-mac", names)
-        self.assertIn("control-plane-local-mac", names)
+        self.assertIn("root-local", names)
+        self.assertIn("control-plane-local", names)
+
+    def test_no_application_is_named_after_one_os(self):
+        # One dev environment on macOS or Ubuntu: the names ArgoCD shows must not say which.
+        names = [name for _, name, _ in applications()]
+        self.assertEqual([n for n in names if "mac" in n or "ubuntu" in n or "linux" in n], [])
 
     def test_no_application_deploys_a_fake(self):
         offenders = [f"{file}: {name} {path}" for file, name, path in applications() if FAKE.search(name + " " + path)]

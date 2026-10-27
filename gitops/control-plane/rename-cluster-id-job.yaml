@@ -1,0 +1,42 @@
+# Dev only (staging's cluster id singapore01 never changed): the local cluster's id was local-mac until 2026-10-27, and
+# the control plane keys resources, provider commands and template sync states by cluster id. This hook moves a dev
+# database's rows to local in the sync that rolls the control plane onto Clusters__0__Id=local: in PreSync, after the
+# migration (wave 0), before the new control plane starts; and again in PostSync, for rows the old pod (still on
+# local-mac until the Recreate) wrote meanwhile. One statement: the rows move together or not at all; a template sync
+# state that a local one already replaced is dropped. A psql failure fails the hook and so the sync. A database with no
+# local-mac row changes nothing, so every later sync is a no-op. SyncFail's log collector (deploy-hook-logs.yaml)
+# keeps only the migration's logs.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: control-plane-rename-cluster-id
+  annotations:
+    argocd.argoproj.io/hook: PreSync,PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rename
+          # For its psql: the image titan-db ran on dev when this was written (base/titan-db sets none; the operator picks).
+          image: ghcr.io/cloudnative-pg/postgresql:17.5
+          command: ["sh", "-c"]
+          args:
+            - "set -eu\nfor kv in $(printf '%s' \"$ConnectionStrings__Titan\" | tr ';' ' '); do\n  case \"$kv\" in\n    Host=*) export PGHOST=\"${kv#*=}\" ;;\n    Port=*) export PGPORT=\"${kv#*=}\" ;;\n    Database=*) export PGDATABASE=\"${kv#*=}\" ;;\n    Username=*) export PGUSER=\"${kv#*=}\" ;;\n    Password=*) export PGPASSWORD=\"${kv#*=}\" ;;\n  esac\ndone\nchanged=$(psql -v ON_ERROR_STOP=1 -At -c \"$SQL\")\necho \"rows changed from cluster local-mac to local: $changed\"\n"
+          env:
+            - name: SQL
+              value: "WITH dropped AS (DELETE FROM core.vm_template_clusters o WHERE o.cluster_id = 'local-mac' AND EXISTS (SELECT 1 FROM core.vm_template_clusters n WHERE n.cluster_id = 'local' AND n.template_id = o.template_id) RETURNING 1), t AS (UPDATE core.vm_template_clusters SET cluster_id = 'local' WHERE cluster_id = 'local-mac' AND NOT EXISTS (SELECT 1 FROM core.vm_template_clusters n WHERE n.cluster_id = 'local' AND n.template_id = vm_template_clusters.template_id) RETURNING 1), vms AS (UPDATE core.vms SET cluster_id = 'local' WHERE cluster_id = 'local-mac' RETURNING 1), volumes AS (UPDATE core.volumes SET cluster_id = 'local' WHERE cluster_id = 'local-mac' RETURNING 1), networks AS (UPDATE core.networks SET cluster_id = 'local' WHERE cluster_id = 'local-mac' RETURNING 1), load_balancers AS (UPDATE core.load_balancers SET cluster_id = 'local' WHERE cluster_id = 'local-mac' RETURNING 1), provider_commands AS (UPDATE core.provider_commands SET cluster_id = 'local' WHERE cluster_id = 'local-mac' RETURNING 1), changed AS (SELECT 1 FROM dropped UNION ALL SELECT 1 FROM t UNION ALL SELECT 1 FROM vms UNION ALL SELECT 1 FROM volumes UNION ALL SELECT 1 FROM networks UNION ALL SELECT 1 FROM load_balancers UNION ALL SELECT 1 FROM provider_commands) SELECT count(*) FROM changed;"
+          envFrom:
+            - secretRef:
+                name: control-plane-db
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi

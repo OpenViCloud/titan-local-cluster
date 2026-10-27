@@ -2,7 +2,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: control-plane-local-mac
+  name: control-plane-local
   namespace: argocd
   annotations:
     # wave 2, after keycloak (wave 1)

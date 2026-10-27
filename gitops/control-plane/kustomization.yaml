@@ -8,15 +8,16 @@ namespace: titan-staging
 resources:
   - ../../base/control-plane
   - ingress.yaml
+  - rename-cluster-id-job.yaml
 
 configMapGenerator:
   - name: control-plane-zones
     literals:
-      # Cluster local-mac is titan-incus. Its server fingerprint changes when the VM is rebuilt, so it comes with Titan's
+      # Cluster local is titan-incus. Its server fingerprint changes when the VM is rebuilt, so it comes with Titan's
       # client identity from Secret control-plane-cluster (lima/scripts/join-cluster.sh). The endpoint here is macOS's:
       # the script writes this host's into that Secret, which comes later in the control plane's envFrom and wins.
-      - Clusters__0__Id=local-mac
-      - Clusters__0__Name=Local Mac
+      - Clusters__0__Id=local
+      - Clusters__0__Name=Local
       - Clusters__0__Endpoint=https://192.168.104.1:8443
       - Clusters__0__OvnUplinkNetwork=ovnup
       - Clusters__0__StoragePool=default

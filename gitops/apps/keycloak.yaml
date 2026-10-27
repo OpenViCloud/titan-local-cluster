@@ -2,7 +2,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: keycloak-local-mac
+  name: keycloak-local
   namespace: argocd
   annotations:
     # wave 1, after titan-db (wave 0): titan-db is Healthy once Database keycloak-staging is applied (its health check in

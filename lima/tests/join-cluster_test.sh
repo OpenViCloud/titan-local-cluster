@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# join-cluster_test.sh — lima/scripts/join-cluster.sh joins cluster local-mac to titan-incus with no step by hand.
+# join-cluster_test.sh — lima/scripts/join-cluster.sh joins cluster local to titan-incus with no step by hand.
 #
 # WHY this file exists: the control plane reads its cluster from config and its client identity from a Secret
 # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/cluster/design.md#cluster-from-config). titan-incus
@@ -104,7 +104,7 @@ openssl x509 -in "$CONFIG/titan-client.crt" -noout -text | grep -q 'TLS Web Clie
 openssl x509 -in "$CONFIG/titan-client.crt" -noout -text | grep -q 'secp384r1\|P-384' \
   && ok "the key is ECDSA P-384, like the identity the control plane used to make" || bad "not P-384"
 grep -qx "$(client_fp)" "$WORK/vm/trusted" && ok "titan-incus trusts Titan's certificate" || bad "not trusted: $(cat "$WORK/vm.log")"
-grep -q 'add-certificate .* --name titan-local-mac$' "$WORK/vm.log" && ok "under the name titan-local-mac" || bad "wrong trust name"
+grep -q 'add-certificate .* --name titan-local$' "$WORK/vm.log" && ok "under the name titan-local" || bad "wrong trust name"
 [ ! -e "$WORK/vm/titan-client.crt" ] && ok "the copy in the VM is removed" || bad "the certificate was left in the VM's /tmp"
 grep -q "^Clusters__0__ServerFingerprint=$SERVER_FP$" "$WORK/k8s/secret" && ok "the server fingerprint read from incus info goes in the Secret" || bad "fingerprint missing: $(head -c 300 "$WORK/k8s/secret")"
 grep -q '^Clusters__0__Endpoint=https://192.168.104.1:8443$' "$WORK/k8s/secret" && ok "on macOS the endpoint is titan-incus's user-v2 address, in the Secret" || bad "endpoint: $(grep Endpoint "$WORK/k8s/secret")"
