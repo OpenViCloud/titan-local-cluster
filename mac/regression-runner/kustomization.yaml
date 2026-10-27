@@ -2,7 +2,7 @@
 # the pod reads the generated test-account passwords through secretKeyRef, the agent never sees them.
 #   kubectl --kubeconfig ~/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml apply -k mac/regression-runner
 # The browser in the pod must reach *.localhost:8080 like the Mac does, because Keycloak's issuer carries that
-# port: a spec starts a loopback proxy on 8080 towards Traefik (z1/local-proxy.ts).
+# port: a spec starts a loopback proxy on 8080 towards Traefik (lib/local-proxy.ts of titan-regression).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 

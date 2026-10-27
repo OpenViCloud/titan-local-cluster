@@ -17,6 +17,12 @@ spec:
                 name: control-plane-secrets
             - configMapRef:
                 name: control-plane-zones
+            # Titan's client identity toward every cluster, and what of a cluster the environment cannot commit; optional
+            # so the pod starts before the Secret exists
+            # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/cluster/design.md#provider-client-identity).
+            - secretRef:
+                name: control-plane-cluster
+                optional: true
             # The key pair of the backup bucket; optional so the pod starts before the Secret exists
             # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/backup/design.md#backup-target).
             - secretRef:

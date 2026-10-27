@@ -44,8 +44,10 @@ Sign in to the portal as `beta-user`, with the password `BETA_USER_PASSWORD` in 
 as `admin-test`, whose fixed test password is in `mac/scripts/bootstrap-secrets.sh`. On a new cluster the very first
 sign-in can fail once with an error (two requests race to create the tenant); sign in again.
 
-Zone `local-mac` is not yet connected to titan-incus after `up.sh`: that step is not automated, so the portal cannot
-create a VM until it is.
+`up.sh` joins cluster `local-mac` to titan-incus (`mac/scripts/join-cluster.sh`): it makes Titan's client identity once
+(`~/.config/titan-local-cluster/titan-client.crt` and `.key`), reads titan-incus's server fingerprint, has titan-incus trust
+Titan's certificate, and puts both in Secret `control-plane-cluster`. The portal offers an OS once an admin has synced the
+templates (admin console, Catalog).
 
 `down.sh` stops the guest VMs in titan-incus with it, and `up.sh` does not start them again: start them again through Titan (the VM's start).
 Once, after `down.sh` with a guest VM running, Incus's LVM pool failed its check at boot ("Manual repair required!") and
