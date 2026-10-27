@@ -49,8 +49,8 @@ After `up.sh`, ArgoCD keeps installing for a while; the cluster is ready when ev
 (`kubectl --kubeconfig ~/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml get applications -n argocd`).
 Sign in to the portal as `beta-user`, with the password `BETA_USER_PASSWORD` in `~/.config/titan-local-cluster/secrets.env`
 (`grep BETA_USER_PASSWORD ~/.config/titan-local-cluster/secrets.env`), and to the admin console (http://admin.localhost:8080)
-as `admin-test`, whose fixed test password is in `lima/scripts/bootstrap-secrets.sh`. On a new cluster the very first
-sign-in can fail once with an error (two requests race to create the tenant); sign in again.
+as `admin-test`, whose fixed test password is in `lima/scripts/bootstrap-secrets.sh`. These test accounts carry the realm
+role `auto-approve` and are approved on their first sign-in; any other account waits until an admin approves it in the admin console.
 
 On a cluster that was up before the rename of 2026-10-27 (cluster `local-mac`, Applications `*-local-mac`), run
 `bash lima/scripts/drop-old-applications.sh` right after the merge reaches it (or `up.sh`, which runs it): the old root lists
