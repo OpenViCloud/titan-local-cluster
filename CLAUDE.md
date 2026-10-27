@@ -8,7 +8,10 @@ https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-in
   to one commit of this repository. Overlays here (`gitops/<app>/`) build on `../../base/<app>` and patch only what the local
   cluster needs. A change that staging needs too belongs in `base/`. Nothing ArgoCD renders here reads titan-ops, which is private
   (`tests/render_test.py`, `NoTitanRead`); links to titan-ops's docs in comments and the sweeper check do.
-- Application names stay as they are (`*-local-mac`, `cnpg-operator`): ArgoCD on the running cluster knows them by those names.
+- Application names are `*-local` (and `cnpg-operator`, `cert-manager`, `plugin-barman-cloud`, `seaweedfs`), cluster id `local`, the
+  same on macOS and Ubuntu (`tests/render_test.py`). Renaming an Application: root prunes the old one, which has no finalizer, so its
+  resources stay and the new Application adopts them. The cluster id was `local-mac` until 2026-10-27: `lima/scripts/rename-cluster-id.sh`
+  (run by `up.sh`) moves a dev database's rows to `local`.
   An app renamed on purpose (as the customer portal's app when titan-ops renamed its folder to `cloud-console`): root
   prunes the old Application, which has no finalizer, so every object it rendered stays behind (for the customer
   portal: Deployment, Service, ConfigMap and Ingress) and is deleted by hand on dev right after the merge.

@@ -2,7 +2,7 @@ import { test, expect, type Browser, type Page, type APIResponse } from '@playwr
 import * as fs from 'node:fs'
 import { startLocalProxyIfNeeded } from './local-proxy'
 
-// LOCAL-CLUSTER Z-1: cluster `local-mac` is titan-incus, and template sync runs against real Incus (arm64 on macOS, amd64 on Ubuntu).
+// LOCAL-CLUSTER Z-1: cluster `local` is titan-incus, and template sync runs against real Incus (arm64 on macOS, amd64 on Ubuntu).
 // Runs INSIDE the titan-regression runner of the local cluster, with lib/local-proxy.ts of titan-regression beside it.
 // lima/scripts/join-cluster.sh (up.sh) configured the cluster and made titan-incus trust Titan: nothing is registered here.
 // Never prints a credential or a bearer token.
@@ -15,7 +15,7 @@ const need = (k: string) => {
   return v
 }
 
-const CLUSTER = 'local-mac'
+const CLUSTER = 'local'
 
 async function login(page: Page, host: string, user: string, password: string) {
   await page.goto(host + '/', { waitUntil: 'domcontentloaded' })
@@ -84,12 +84,12 @@ test.beforeAll(async () => {
   await startLocalProxyIfNeeded(ADMIN)
 })
 
-test('Z-1 — cluster local-mac is titan-incus, template sync', async ({ browser, request }) => {
+test('Z-1 — cluster local is titan-incus, template sync', async ({ browser, request }) => {
   test.setTimeout(45 * 60_000)
   browserRef = browser
   await signInAdmin('z1-admin-signed-in.png')
 
-  // Z1-1: the configured clusters are local-mac only.
+  // Z1-1: the configured clusters are local only.
   const clusters = JSON.parse(await expectCode(await request.get(`${API}/v1/clusters`), 200))
   log(`Z1-1 clusters ${JSON.stringify(clusters)}`)
   expect(clusters.map((z: { id: string }) => z.id)).toEqual([CLUSTER])

@@ -2,7 +2,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: titan-db-local-mac
+  name: titan-db-local
   namespace: argocd
   annotations:
     # Deploy after cnpg-operator (wave -1): its CRDs must exist first

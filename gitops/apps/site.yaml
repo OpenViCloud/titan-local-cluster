@@ -2,7 +2,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: site-local-mac
+  name: site-local
   namespace: argocd
   annotations:
     # wave 2, with control-plane

@@ -2,7 +2,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: admin-portal-local-mac
+  name: admin-portal-local
   namespace: argocd
   annotations:
     # wave 2, with cloud-console and control-plane

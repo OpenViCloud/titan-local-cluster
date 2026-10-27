@@ -6,7 +6,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: nats-local-mac
+  name: nats-local
   namespace: argocd
   annotations:
     # wave 0 — no dependency on titan-db; just needs to exist before control-plane connects.

@@ -144,7 +144,7 @@ echo "secret titan-db-staging/titan-it-credentials applied"
 
 # User admin-test (platform-admin) of the dev realm: a fixed test password, so an agent can sign in to the admin console on dev
 # without reading a Secret. Not a secret for the same reason as titan_it: dev's hosts are *.localhost. Keycloak takes a changed
-# value at the next run of keycloak-config-cli, a PostSync hook: sync keycloak-local-mac once after this
+# value at the next run of keycloak-config-cli, a PostSync hook: sync keycloak-local once after this
 # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets).
 printf 'password=admin-test-local-only\n' | apply_secret titan-auth-staging admin-test-credentials
 

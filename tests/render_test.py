@@ -2,7 +2,7 @@
 """Renders dev's overlays and reads dev's ArgoCD Applications.
 
 What must hold on dev: the control plane and the worker run only their own container (the Incus tunnel sidecar is
-staging's alone), the control plane lists cluster local-mac only, and no Application or app directory is a fake service
+staging's alone), the control plane lists cluster local only, and no Application or app directory is a fake service
 (Titan's rule: doubles only in unit tests).
 
 Run:  python3 tests/render_test.py     (needs kubectl for `kubectl kustomize` and ruby; the overlays build on base/ here,
@@ -109,11 +109,11 @@ class DevRender(unittest.TestCase):
 
     # The fingerprint is not in git: it changes with titan-incus and comes from Secret control-plane-cluster. The endpoint in
     # git is macOS's; lima/scripts/join-cluster.sh writes this host's into the same Secret, which overrides it (next test).
-    def test_the_cluster_list_is_local_mac_on_titan_incus(self):
+    def test_the_cluster_list_is_local_on_titan_incus(self):
         listed = zones(render("control-plane"))
         self.assertEqual({k: v for k, v in listed.items() if k.startswith("Clusters__")}, {
-            "Clusters__0__Id": "local-mac",
-            "Clusters__0__Name": "Local Mac",
+            "Clusters__0__Id": "local",
+            "Clusters__0__Name": "Local",
             "Clusters__0__Endpoint": "https://192.168.104.1:8443",
             "Clusters__0__OvnUplinkNetwork": "ovnup",
             "Clusters__0__StoragePool": "default",
@@ -279,7 +279,7 @@ class DevS3(unittest.TestCase):
         found = {name: (file, path) for file, name, path in applications()}
         self.assertEqual(found.get("seaweedfs", ("", ""))[1], "gitops/seaweedfs")
         wave = lambda name: int(re.search(r'sync-wave:\s*"(-?\d+)"', (GITOPS / "apps" / found[name][0]).read_text()).group(1))
-        self.assertLess(wave("seaweedfs"), wave("titan-db-local-mac"))
+        self.assertLess(wave("seaweedfs"), wave("titan-db-local"))
 
 
 class DevDatabases(unittest.TestCase):
@@ -364,8 +364,13 @@ class NoTitanRead(unittest.TestCase):
 class NoFakeService(unittest.TestCase):
     def test_reads_the_applications(self):
         names = [name for _, name, _ in applications()]
-        self.assertIn("root-local-mac", names)
-        self.assertIn("control-plane-local-mac", names)
+        self.assertIn("root-local", names)
+        self.assertIn("control-plane-local", names)
+
+    def test_no_application_is_named_after_one_os(self):
+        # One dev environment on macOS or Ubuntu: the names ArgoCD shows must not say which.
+        names = [name for _, name, _ in applications()]
+        self.assertEqual([n for n in names if "mac" in n or "ubuntu" in n or "linux" in n], [])
 
     def test_no_application_deploys_a_fake(self):
         offenders = [f"{file}: {name} {path}" for file, name, path in applications() if FAKE.search(name + " " + path)]

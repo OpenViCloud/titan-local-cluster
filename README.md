@@ -1,7 +1,7 @@
 # titan-local-cluster — OpenViCloud's dev environment on a Mac or an Ubuntu machine
 
 The dev environment of [OpenViCloud](https://github.com/OpenViCloud): two Lima VMs on one macOS or Ubuntu machine (k3s with
-ArgoCD, and a one-node Incus 7.0 LTS that is cluster `local-mac`), and the GitOps that ArgoCD on that k3s follows. Both
+ArgoCD, and a one-node Incus 7.0 LTS that is cluster `local`), and the GitOps that ArgoCD on that k3s follows. Both
 deployments share everything; what differs is the two VM files (`lima/macos/`, `lima/ubuntu/`) and the per-OS branches of
 `lima/scripts/host-os.sh`.
 
@@ -20,7 +20,7 @@ Design, rules and runbook live in titan-ops:
 |---|---|
 | `lima/` | What both deployments share: `provision/` of the two VMs; `scripts/`: `up.sh` · `down.sh`, the secrets bootstrap, a Terraform acceptance token for dev; `tests/` of the provisioning; the regression runner overlay |
 | `lima/macos/` · `lima/ubuntu/` | The two Lima VM files of each OS, and a link to `lima/provision` (Lima refuses `..` in a provision path); `up.sh` picks the folder by `uname -s` |
-| `gitops/apps/` | ArgoCD app-of-apps: `root-local-mac` and one Application per app |
+| `gitops/apps/` | ArgoCD app-of-apps: `root-local` and one Application per app |
 | `base/` | The manifests every environment shares; staging builds on them from titan-ops |
 | `gitops/<app>/` | Dev's overlay of each app, on `../../base/<app>` |
 | `scripts/pull-images.py` | Moves dev to the images other repositories published from main |
@@ -37,7 +37,7 @@ repositories and the images (linux/arm64 and linux/amd64) are public. titan-incu
 The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/` (`secrets.env`, the S3 CA and SeaweedFS's certificate; keys mode 600), so a rebuilt cluster gets them again; keep that folder. Backups go to SeaweedFS in titan-k3s (`gitops/seaweedfs`), over TLS at `https://lima-titan-k3s.internal:30833`, with its data in `~/.local/share/titan-local-cluster/s3` on the host, which outlives the VM. Docker must not be running.
 
 ```sh
-bash lima/scripts/up.sh      # creates the VMs on first run, then starts them, applies secrets, trusts the S3 CA, joins cluster local-mac to titan-incus, applies root-local-mac
+bash lima/scripts/up.sh      # creates the VMs on first run, then starts them, applies secrets, trusts the S3 CA, joins cluster local to titan-incus, moves dev's rows of the old cluster id `local-mac`, applies root-local
 bash lima/scripts/down.sh    # stops both VMs; disks stay (guest VMs in titan-incus stop too, see below)
 ```
 
@@ -52,7 +52,7 @@ Sign in to the portal as `beta-user`, with the password `BETA_USER_PASSWORD` in 
 as `admin-test`, whose fixed test password is in `lima/scripts/bootstrap-secrets.sh`. On a new cluster the very first
 sign-in can fail once with an error (two requests race to create the tenant); sign in again.
 
-`up.sh` joins cluster `local-mac` to titan-incus (`lima/scripts/join-cluster.sh`): it makes Titan's client identity once
+`up.sh` joins cluster `local` to titan-incus (`lima/scripts/join-cluster.sh`): it makes Titan's client identity once
 (`~/.config/titan-local-cluster/titan-client.crt` and `.key`), reads titan-incus's server fingerprint and the Incus
 endpoint for this host's OS (`lima/scripts/host-os.sh`), has titan-incus trust Titan's certificate, and puts all of them in
 Secret `control-plane-cluster`. The portal offers an OS once an admin has synced the
@@ -111,6 +111,7 @@ bash lima/tests/incus-uplink_test.sh
 bash lima/tests/bootstrap-secrets_test.sh   # macOS only (stat -f)
 bash lima/tests/trust-s3-ca_test.sh
 bash lima/tests/join-cluster_test.sh
+bash lima/tests/rename-cluster-id_test.sh
 ```
 
 CI runs all of these but `sweeper_test.sh` and `bootstrap-secrets_test.sh` on every push to `main` and every pull request into it.
