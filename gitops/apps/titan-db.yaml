@@ -16,6 +16,8 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: titan-db-staging
+  # Both fields restart the single PostgreSQL instance when they change. Ignored, and without RespectIgnoreDifferences, so a
+  # change in git shows Synced and waits for a manual sync instead of restarting the database on the next automated one.
   ignoreDifferences:
     - group: postgresql.cnpg.io
       kind: Cluster
