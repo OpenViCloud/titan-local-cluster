@@ -342,14 +342,14 @@ def overlay_image(app):
 
 
 def realm_users(base_dir):
-    """Users and realm roles a realm import of base/keycloak declares, read from its ConfigMap's JSON."""
+    """Users and realm roles a realm import of base/keycloak declares: the JSON of its ConfigMap of the same name."""
     out = subprocess.run(["kubectl", "kustomize", str(GITOPS.parent / "base" / "keycloak" / base_dir)],
                          capture_output=True, text=True, check=True).stdout
     as_json = subprocess.run(
         ["ruby", "-ryaml", "-rjson", "-e", "puts JSON.generate(YAML.load_stream(STDIN.read).compact)"],
         input=out, capture_output=True, text=True, check=True).stdout
     for obj in json.loads(as_json):
-        if obj["kind"] == "ConfigMap":
+        if obj["kind"] == "ConfigMap" and obj["metadata"]["name"] == "keycloak-" + base_dir:
             realm = json.loads(next(iter(obj["data"].values())))
             roles = [role["name"] for role in realm.get("roles", {}).get("realm", [])]
             return roles, {user["username"]: user.get("realmRoles", []) for user in realm["users"]}

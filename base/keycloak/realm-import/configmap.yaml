@@ -21,7 +21,7 @@ data:
       "roles": {
         "realm": [
           { "name": "platform-admin", "description": "Full admin access across all tenants" },
-          { "name": "auto-approve", "description": "Tenant approved on first sign-in; every other signup waits for an admin" }
+          { "name": "auto-approve", "description": "Tenant approved on sign-in while pending approval; every other signup waits for an admin" }
         ]
       },
       "users": [
