@@ -1,7 +1,7 @@
 # titan-local-cluster — OpenViCloud's dev environment on a Mac
 
 The dev environment of [OpenViCloud](https://github.com/OpenViCloud): two Lima VMs on one Mac (k3s with ArgoCD,
-and a one-node Incus 7.0 LTS that is zone `local-mac`), and the GitOps that ArgoCD on that k3s follows.
+and a one-node Incus 7.0 LTS that is cluster `local-mac`), and the GitOps that ArgoCD on that k3s follows.
 
 `base/` holds the manifests every environment shares: the apps, the database with its backup and restore components, the
 Keycloak realm import and values, and the values of NATS, CloudNativePG and the Barman Cloud plugin's manifest. Every overlay here
