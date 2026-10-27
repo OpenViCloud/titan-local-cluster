@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Renders dev's overlays and reads dev's ArgoCD Applications.
+"""Renders dev's overlays (and tests/restore, base's restore path that no Application uses) and reads dev's ArgoCD
+Applications.
 
 What must hold on dev: the control plane and the worker run only their own container (the Incus tunnel sidecar is
 staging's alone), the control plane lists cluster local only, and no Application or app directory is a fake service
@@ -17,6 +18,7 @@ import tempfile
 import unittest
 
 GITOPS = pathlib.Path(__file__).resolve().parent.parent / "gitops"
+TESTS = pathlib.Path(__file__).resolve().parent
 LIMA = GITOPS.parent / "lima"
 # Dev's S3 (SeaweedFS): one name for pods and titan-incus alike (macOS: Lima's user-v2 network; Ubuntu: Lima's host
 # resolver, tests/test_lima_files.py), and the NodePort of gitops/seaweedfs.
@@ -25,9 +27,9 @@ CA_FILE = "/etc/ssl/certs/titan-local-s3.crt"
 FAKE = re.compile(r"stub|mock|fake", re.IGNORECASE)
 
 
-def render(app):
-    """Every object of `kubectl kustomize gitops/<app>`, as dicts (YAML read by ruby's stdlib: python's has none)."""
-    out = subprocess.run(["kubectl", "kustomize", str(GITOPS / app)], capture_output=True, text=True, check=True).stdout
+def render(app, root=GITOPS):
+    """Every object of `kubectl kustomize <root>/<app>`, as dicts (YAML read by ruby's stdlib: python's has none)."""
+    out = subprocess.run(["kubectl", "kustomize", str(root / app)], capture_output=True, text=True, check=True).stdout
     as_json = subprocess.run(
         ["ruby", "-ryaml", "-rjson", "-e", "puts JSON.generate(YAML.load_stream(STDIN.read).compact)"],
         input=out, capture_output=True, text=True, check=True).stdout
@@ -284,7 +286,8 @@ class DevS3(unittest.TestCase):
 
 
 class DevDatabases(unittest.TestCase):
-    """Keycloak's database is a Database object, not initdb's postInitSQL: a restored cluster runs no initdb."""
+    """titan-db's databases: Keycloak's is a Database object, not initdb's postInitSQL (a restored cluster runs no initdb),
+    and only their owner creates in schema public."""
 
     def test_keycloak_database_is_declared_on_titan_db_and_never_dropped(self):
         objects = render("titan-db")
@@ -292,6 +295,30 @@ class DevDatabases(unittest.TestCase):
         self.assertEqual((spec["name"], spec["owner"], spec["cluster"]["name"]), ("keycloak_staging", "titan", "titan-db"))
         self.assertEqual((spec["ensure"], spec["databaseReclaimPolicy"]), ("present", "retain"))
         self.assertNotIn("postInitSQL", first(objects, "Cluster", "titan-db")["spec"]["bootstrap"].get("initdb", {}))
+
+    def test_only_the_owner_creates_objects_in_public(self):
+        # PostgreSQL 15 lets only the database owner (titan) and superusers create in schema public; a grant TO PUBLIC, in
+        # any of initdb's SQL lists, would let every role that can connect in.
+        initdb = first(render("titan-db"), "Cluster", "titan-db")["spec"]["bootstrap"]["initdb"]
+        lists = ("postInitSQL", "postInitTemplateSQL", "postInitApplicationSQL")
+        # SQL from a ConfigMap or Secret (the *Refs lists) is not in the render, so none may hide a grant there.
+        self.assertEqual([key + "Refs" for key in lists if key + "Refs" in initdb], [])
+        sql = [s for key in lists for s in initdb.get(key, [])]
+        self.assertEqual([s for s in sql if re.search(r"\bGRANT\b[^;]*\bTO\b[^;]*\bPUBLIC\b", s, re.IGNORECASE)], [])
+
+
+class RestorePath(unittest.TestCase):
+    """base's restore component, as an environment being rebuilt adds it (no dev overlay does: dev starts empty). The
+    cluster reads the archive the last cluster wrote and writes under another name: barman refuses a non-empty archive,
+    and a cluster that read and wrote one name would restore from a stale archive or stop archiving."""
+
+    def test_a_restore_reads_one_name_and_writes_another_in_the_same_object_store(self):
+        spec = first(render("restore", TESTS), "Cluster", "titan-db")["spec"]
+        self.assertEqual(list(spec["bootstrap"]), ["recovery"])
+        source = [c for c in spec["externalClusters"] if c["name"] == spec["bootstrap"]["recovery"]["source"]][0]
+        read, write = source["plugin"]["parameters"], spec["plugins"][0]["parameters"]
+        self.assertEqual(read["barmanObjectName"], write["barmanObjectName"])
+        self.assertNotEqual(read["serverName"], write["serverName"])
 
 
 class DevWaves(unittest.TestCase):
