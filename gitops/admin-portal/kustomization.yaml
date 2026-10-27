@@ -17,4 +17,4 @@ images:
   # Matched by the name base/admin-portal gives the image (scripts/pull-images.py stops on any other).
   - name: admin-portal
     newName: ghcr.io/openvicloud/titan-admin-console
-    newTag: "f6856b6"
+    newTag: "1cad1ad"
