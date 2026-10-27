@@ -2,7 +2,7 @@
 # Puts the local cluster's secrets into titan-k3s (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets).
 # Needs no vault and no token: the repositories and the images are public.
 # - ~/.config/titan-local-cluster/secrets.env (mode 600) keeps every value generated once: the DB password, the internal
-#   token, the cluster key, the Keycloak admin and the two beta-user passwords. The first run writes them; later runs read
+#   token, the Keycloak admin and the two beta-user passwords. The first run writes them; later runs read
 #   them and only add a key a newer script needs. The file outlives the VM, so a cluster rebuilt with `limactl delete`
 #   gets the same values, which the database restored from a backup already holds. It also keeps the key pair of dev's S3
 #   (SeaweedFS, gitops/seaweedfs), generated the same way.
@@ -83,7 +83,6 @@ touch "$SECRETS_FILE"
 chmod 600 "$SECRETS_FILE"
 ensure_value TITAN_DB_PASSWORD openssl rand -hex 24
 ensure_value INTERNAL_TOKEN openssl rand -hex 32
-ensure_value CLUSTER_ENCRYPTION_KEY openssl rand -base64 32
 ensure_value KEYCLOAK_ADMIN_PASSWORD openssl rand -hex 16
 ensure_value BETA_USER_PASSWORD openssl rand -hex 16
 ensure_value BETA_USER_2_PASSWORD openssl rand -hex 16
@@ -195,7 +194,7 @@ printf 'username=titan\npassword=%s\n' "$db_password" | apply_secret titan-db-st
 printf 'username=titan\npassword=%s\n' "$db_password" | apply_secret titan-auth-staging titan-db-credentials
 printf 'ConnectionStrings__Titan=Host=titan-db-rw.titan-db-staging.svc.cluster.local;Port=5432;Database=titan;Username=titan;Password=%s\n' "$db_password" |
   apply_secret titan-staging control-plane-db
-printf 'Internal__Token=%s\nEncryption__ClusterKey=%s\n' "$internal_token" "$(from_file CLUSTER_ENCRYPTION_KEY)" |
+printf 'Internal__Token=%s\n' "$internal_token" |
   apply_secret titan-staging control-plane-secrets
 printf 'CP_INTERNAL_TOKEN=%s\n' "$internal_token" | apply_secret titan-staging worker-secrets
 printf 'admin-password=%s\n' "$(from_file KEYCLOAK_ADMIN_PASSWORD)" | apply_secret titan-auth-staging keycloak-admin-secret
