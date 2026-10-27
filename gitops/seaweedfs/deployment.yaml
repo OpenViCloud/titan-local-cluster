@@ -75,7 +75,7 @@ spec:
               mountPath: /etc/seaweedfs/s3
               readOnly: true
       volumes:
-        # The folder mac/titan-k3s.yaml mounts from the Mac, so the data outlives `limactl delete titan-k3s`. Directory, not
+        # The folder titan-k3s.yaml (lima/macos/, lima/ubuntu/) mounts from the host, so the data outlives `limactl delete titan-k3s`. Directory, not
         # DirectoryOrCreate: without the mount the pod fails instead of writing into the VM's disk.
         - name: data
           hostPath:

@@ -1,5 +1,6 @@
-# S3 for pods and for titan-incus alike, at https://lima-titan-k3s.internal:30833: that name resolves to titan-k3s on Lima's
-# user-v2 network from both VMs and from pods, whatever address DHCP gives the VM.
+# S3 for pods and for titan-incus alike, at https://lima-titan-k3s.internal:30833. On macOS Lima's user-v2 network resolves
+# that name to titan-k3s, whatever address DHCP gives the VM; on Ubuntu the hostResolver of lima/ubuntu/*.yaml maps it to
+# Lima's fixed addresses, and titan-incus reaches this NodePort through the host's 127.0.0.1.
 apiVersion: v1
 kind: Service
 metadata:

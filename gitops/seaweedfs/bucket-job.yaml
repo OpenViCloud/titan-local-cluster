@@ -1,5 +1,5 @@
 # The bucket the control plane, CNPG and the worker write (BackupTarget__Bucket of gitops/control-plane), made after every sync
-# when it is missing: SeaweedFS keeps it on the Mac's folder, and creating an existing bucket exits 1 (measured on 4.51).
+# when it is missing: SeaweedFS keeps it on the host's folder, and creating an existing bucket exits 1 (measured on 4.51).
 apiVersion: batch/v1
 kind: Job
 metadata:

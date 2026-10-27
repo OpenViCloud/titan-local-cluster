@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# trust-s3-ca_test.sh — mac/scripts/trust-s3-ca.sh puts the S3 CA into titan-incus's system store.
+# trust-s3-ca_test.sh — lima/scripts/trust-s3-ca.sh puts the S3 CA into titan-incus's system store.
 #
 # WHY this file exists: Incus uploads VM and volume backups to SeaweedFS over https and trusts only the system store, which
 # Go reads once per process. So the CA must land there, and Incus must restart when it changed, and only then: a restart on
 # every `up.sh` would cut the worker's Incus calls for nothing. The script runs against a fake `limactl` that keeps the VM's
 # file in a folder.
 #
-# Run:  bash mac/tests/trust-s3-ca_test.sh     (from the repo root)
+# Run:  bash lima/tests/trust-s3-ca_test.sh     (from the repo root)
 
 set -uo pipefail
 
@@ -68,7 +68,7 @@ run
 cmp -s "$CA" "$WORK/vm/titan-local-s3.crt" && grep -q 'systemctl restart incus$' "$WORK/vm.log" \
   && ok "the new CA replaces the old one and Incus restarts" || bad "the VM kept the old CA or Incus did not restart"
 
-echo "no CA on the Mac"
+echo "no CA on the host"
 rm "$CA" "$WORK/vm.log"
 run
 [ "$RC" -ne 0 ] && printf '%s' "$OUT" | grep -q 'bootstrap-secrets.sh' && ok "stops and names the script that makes it" || bad "rc=$RC $OUT"

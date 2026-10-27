@@ -1,5 +1,5 @@
 #!/bin/bash
-# Provision of titan-k3s (mac/titan-k3s.yaml): k3s at staging's version, with its own Traefik ingress
+# Provision of titan-k3s (titan-k3s.yaml of lima/macos/ and lima/ubuntu/): k3s at staging's version, with its own Traefik ingress
 # (staging uses cloudflared instead), and ArgoCD at staging's chart version, trimmed for RAM
 # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget). Lima runs it as root on every boot.
 set -euo pipefail
@@ -109,7 +109,7 @@ spec:
         hostname: argocd.localhost
 YAML
 
-# Lima publishes every LoadBalancer port on the Mac, and a port below 1024 on every interface: drop Traefik's 443
+# Lima publishes every LoadBalancer port on the host, and a port below 1024 on every interface: drop Traefik's 443
 # so only the ingress on 80 (published as 127.0.0.1:8080) is left (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#host-access).
 cat > /var/lib/rancher/k3s/server/manifests/traefik-config.yaml <<'YAML'
 apiVersion: helm.cattle.io/v1

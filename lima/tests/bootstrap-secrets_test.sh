@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bootstrap-secrets_test.sh — what mac/scripts/bootstrap-secrets.sh keeps in ~/.config/titan-local-cluster/ (secrets.env,
+# bootstrap-secrets_test.sh — what lima/scripts/bootstrap-secrets.sh keeps in ~/.config/titan-local-cluster/ (secrets.env,
 # the S3 CA and SeaweedFS's certificate) and puts into the cluster.
 #
 # WHY this file exists: the script is the only place the dev cluster's secrets come from, and it must work for someone with
@@ -8,7 +8,7 @@
 # `kubectl` and `openssl` on PATH, and an `infisical` that fails if called: the values must reach kubectl on stdin and
 # nowhere else, and the Secret key names must be the ones their readers use.
 #
-# Run:  bash mac/tests/bootstrap-secrets_test.sh     (from the repo root; macOS bash 3.2 and python3)
+# Run:  bash lima/tests/bootstrap-secrets_test.sh     (from the repo root; macOS bash 3.2 and python3)
 
 set -uo pipefail
 

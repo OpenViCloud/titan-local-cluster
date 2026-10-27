@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # sweeper_test.sh — titan-incus installs the same guest-log sweeper as the production-like cluster.
 #
-# The sweeper's text is owned by OpenViCloud/titan-ops's singapore01 cloud-init template; mac/provision/incus.sh carries a
-# copy so the local cluster is tested on the same text (mac/tests/incus-log-sweeper_test.sh tests that copy). This
+# The sweeper's text is owned by OpenViCloud/titan-ops's singapore01 cloud-init template; lima/provision/incus.sh carries a
+# copy so the local cluster is tested on the same text (lima/tests/incus-log-sweeper_test.sh tests that copy). This
 # compares the copy with the template on titan-ops's main, read through `gh api` so a private titan-ops reads the same. The template is a Terraform template: `$${` is a literal `${`
 # there, and a bare `${` would be a template variable, which this cannot compare.
 #
@@ -12,7 +12,7 @@
 set -uo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-LOCAL="$HERE/../mac/provision/incus.sh"
+LOCAL="$HERE/../lima/provision/incus.sh"
 TEMPLATE="repos/OpenViCloud/titan-ops/contents/terraform/ovh-incus-cluster-singapore01/cloud-init/incus.sh.tpl?ref=main"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
@@ -36,7 +36,7 @@ def block(path):
     return lines[start:end + 1]
 template, local = block(sys.argv[1]), block(sys.argv[2])
 if template is None or local is None:
-    print("sweeper block missing in %s" % ("the titan-ops template" if template is None else "mac/provision/incus.sh"))
+    print("sweeper block missing in %s" % ("the titan-ops template" if template is None else "lima/provision/incus.sh"))
     sys.exit()
 variables = [line for line in template if re.search(r"(?<!\$)\$\{|(?<!%)%\{", line)]
 if variables:

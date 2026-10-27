@@ -1,6 +1,6 @@
 # titan-incus: the Incus node of the local cluster (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#layout).
 # Guest VMs run as KVM inside this VM, so it needs nested virtualization (Apple M3 or later).
-#   limactl create --name titan-incus mac/titan-incus.yaml
+#   limactl create --name titan-incus lima/macos/titan-incus.yaml
 # Debian 13, the OS of the staging machine singapore01 (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/incus/user-stories.md#us-incus-singapore01-01).
 base: template://debian-13
 vmType: vz

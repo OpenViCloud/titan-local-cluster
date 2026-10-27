@@ -1,5 +1,5 @@
 # The CA of dev's S3 as one more file in the system store, so the image's own CAs stay: .NET reads every file in
-# /etc/ssl/certs (the Backups page's Test connected on the rebuilt cluster, 2026-10-26). Secret s3-ca comes from mac/scripts/bootstrap-secrets.sh.
+# /etc/ssl/certs (the Backups page's Test connected on the rebuilt cluster, 2026-10-26). Secret s3-ca comes from lima/scripts/bootstrap-secrets.sh.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

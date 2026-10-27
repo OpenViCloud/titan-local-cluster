@@ -16,8 +16,9 @@ import subprocess
 import unittest
 
 GITOPS = pathlib.Path(__file__).resolve().parent.parent / "gitops"
-MAC = GITOPS.parent / "mac"
-# Dev's S3 (SeaweedFS): one name for pods and titan-incus alike, on Lima's user-v2 network, and the NodePort of gitops/seaweedfs.
+LIMA = GITOPS.parent / "lima"
+# Dev's S3 (SeaweedFS): one name for pods and titan-incus alike (macOS: Lima's user-v2 network; Ubuntu: Lima's host
+# resolver, tests/test_lima_files.py), and the NodePort of gitops/seaweedfs.
 S3_ENDPOINT = "https://lima-titan-k3s.internal:30833"
 CA_FILE = "/etc/ssl/certs/titan-local-s3.crt"
 FAKE = re.compile(r"stub|mock|fake", re.IGNORECASE)
@@ -93,7 +94,8 @@ class DevRender(unittest.TestCase):
         refs = [r["secretRef"] for c in containers(render("incus-worker"), "incus-worker") for r in c.get("envFrom", []) if "secretRef" in r]
         self.assertIn({"name": "incus-worker-backup-credentials", "optional": True}, refs)
 
-    # The fingerprint is not in git: it changes with titan-incus and comes from Secret control-plane-cluster.
+    # The fingerprint is not in git: it changes with titan-incus and comes from Secret control-plane-cluster. The endpoint in
+    # git is macOS's; lima/scripts/join-cluster.sh writes this host's into the same Secret, which overrides it (next test).
     def test_the_cluster_list_is_local_mac_on_titan_incus(self):
         listed = zones(render("control-plane"))
         self.assertEqual({k: v for k, v in listed.items() if k.startswith("Clusters__")}, {
@@ -103,6 +105,15 @@ class DevRender(unittest.TestCase):
             "Clusters__0__OvnUplinkNetwork": "ovnup",
             "Clusters__0__StoragePool": "default",
         })
+
+    # A key in two envFrom sources takes the value of the later one: Secret control-plane-cluster must come after the
+    # ConfigMap, or Ubuntu's endpoint loses to macOS's.
+    def test_the_cluster_secret_overrides_the_cluster_list(self):
+        sources = [r.get("secretRef", r.get("configMapRef"))["name"] for c in containers(render("control-plane"), "control-plane")
+                   for r in c.get("envFrom", [])]
+        zones_cm = [n for n in sources if n.startswith("control-plane-zones")]
+        self.assertEqual(len(zones_cm), 1, sources)
+        self.assertGreater(sources.index("control-plane-cluster"), sources.index(zones_cm[0]), sources)
 
     def test_the_cluster_secret_is_optional_so_the_pod_starts_before_it(self):
         refs = [r["secretRef"] for c in containers(render("control-plane"), "control-plane") for r in c.get("envFrom", []) if "secretRef" in r]
@@ -187,7 +198,7 @@ def mounts_of(objects, deployment, container):
 
 
 class DevS3(unittest.TestCase):
-    """SeaweedFS in titan-k3s over TLS, with its data on a folder of the Mac (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#s3)."""
+    """SeaweedFS in titan-k3s over TLS, with its data on a folder of the host machine (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#s3)."""
 
     def test_cnpg_reaches_s3_at_the_shared_endpoint_and_trusts_the_ca(self):
         configuration = first(render("titan-db"), "ObjectStore", "titan-db-backup")["spec"]["configuration"]
@@ -232,7 +243,7 @@ class DevS3(unittest.TestCase):
         self.assertEqual(probe.get("httpGet", {}).get("port"), "master")
 
     def test_seaweedfs_data_is_the_folder_titan_k3s_mounts_from_the_mac(self):
-        mounts = yaml_file(MAC / "titan-k3s.yaml")["mounts"]
+        mounts = yaml_file(LIMA / "macos" / "titan-k3s.yaml")["mounts"]
         self.assertEqual(len(mounts), 1, mounts)
         self.assertEqual(mounts[0]["location"], "~/.local/share/titan-local-cluster/s3")
         self.assertTrue(mounts[0]["writable"])
@@ -275,7 +286,7 @@ class DevWaves(unittest.TestCase):
 
     def test_argocd_reads_the_health_of_an_application_and_of_a_database(self):
         # The HelmChart k3s.sh writes, read as YAML down to the chart's values: a key under the wrong parent fails here.
-        script = (MAC / "provision" / "k3s.sh").read_text()
+        script = (LIMA / "provision" / "k3s.sh").read_text()
         chart = re.search(r"manifests/argocd\.yaml <<YAML\n(.*?)\nYAML\n", script, re.DOTALL).group(1)
         cm = yaml_text(yaml_text(chart)["spec"]["valuesContent"])["configs"]["cm"]
         self.assertIn("hs.status = obj.status.health.status", cm["resource.customizations.health.argoproj.io_Application"])
