@@ -157,10 +157,14 @@ class DevStartsEmpty(unittest.TestCase):
                          {"barmanObjectName": "titan-db-backup", "serverName": "titan-db-restored"})
 
 
-def yaml_file(path):
+def yaml_text(text):
     as_json = subprocess.run(["ruby", "-ryaml", "-rjson", "-e", "puts JSON.generate(YAML.load(STDIN.read))"],
-                             input=path.read_text(), capture_output=True, text=True, check=True).stdout
+                             input=text, capture_output=True, text=True, check=True).stdout
     return json.loads(as_json)
+
+
+def yaml_file(path):
+    return yaml_text(path.read_text())
 
 
 def mounts_of(objects, deployment, container):
@@ -257,10 +261,13 @@ class DevWaves(unittest.TestCase):
     """Root's sync waves order the apps only when ArgoCD can read an Application's health: without the check, each wave
     is applied as soon as the one before it is created, Healthy or not."""
 
-    def test_argocd_reads_the_health_of_an_application(self):
+    def test_argocd_reads_the_health_of_an_application_and_of_a_database(self):
+        # The HelmChart k3s.sh writes, read as YAML down to the chart's values: a key under the wrong parent fails here.
         script = (MAC / "provision" / "k3s.sh").read_text()
-        self.assertIn("resource.customizations.health.argoproj.io_Application: |", script)
-        self.assertIn("hs.status = obj.status.health.status", script)
+        chart = re.search(r"manifests/argocd\.yaml <<YAML\n(.*?)\nYAML\n", script, re.DOTALL).group(1)
+        cm = yaml_text(yaml_text(chart)["spec"]["valuesContent"])["configs"]["cm"]
+        self.assertIn("hs.status = obj.status.health.status", cm["resource.customizations.health.argoproj.io_Application"])
+        self.assertIn("obj.status.applied == true", cm["resource.customizations.health.postgresql.cnpg.io_Database"])
 
 
 def overlay_image(app):

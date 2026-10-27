@@ -9,7 +9,6 @@ spec:
   owner: titan
   cluster:
     name: titan-db
-  # CNPG's defaults, written out: left implicit, ArgoCD diffs the defaulted live object against this and keeps the app
-  # OutOfSync. retain: deleting this object never drops Keycloak's data.
+  # CNPG's defaults, written out so the file says what is applied. retain: deleting this object never drops Keycloak's data.
   ensure: present
   databaseReclaimPolicy: retain
