@@ -16,8 +16,6 @@ spec:
       owner: titan
       secret:
         name: titan-db-credentials
-      postInitTemplateSQL:
-        - "GRANT CREATE ON SCHEMA public TO PUBLIC"
       # Every other database is a Database object (database-keycloak.yaml): initdb runs once, at creation, and not at all
       # on a cluster restored from a backup.
 
