@@ -44,5 +44,5 @@ jobs:
       - name: Cluster join
         run: bash lima/tests/join-cluster_test.sh
 
-      - name: Dev rows to the new cluster id
-        run: bash lima/tests/rename-cluster-id_test.sh
+      - name: Old Applications dropped
+        run: bash lima/tests/drop-old-applications_test.sh

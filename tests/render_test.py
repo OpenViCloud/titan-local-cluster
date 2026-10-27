@@ -361,6 +361,41 @@ class NoTitanRead(unittest.TestCase):
         self.assertEqual(offenders, [])
 
 
+class DevClusterIdRename(unittest.TestCase):
+    """The cluster id was local-mac until 2026-10-27. A PreSync hook of the control plane moves a dev database's rows to
+    local in the same sync that rolls the control plane onto the new id, so no command meets a cluster that is gone."""
+
+    def job(self):
+        jobs = [o for o in render("control-plane") if o["kind"] == "Job" and o["metadata"]["name"] == "control-plane-rename-cluster-id"]
+        self.assertEqual(len(jobs), 1)
+        return jobs[0]
+
+    def test_runs_before_the_control_plane_and_after_the_migration(self):
+        notes = self.job()["metadata"]["annotations"]
+        self.assertEqual(notes["argocd.argoproj.io/hook"], "PreSync")
+        migrate = first(render("control-plane"), "Job", "control-plane-migrate")["metadata"]["annotations"]
+        self.assertGreater(int(notes["argocd.argoproj.io/sync-wave"]), int(migrate.get("argocd.argoproj.io/sync-wave", "0")))
+
+    def test_one_statement_moves_every_table_keyed_by_cluster(self):
+        container = self.job()["spec"]["template"]["spec"]["containers"][0]
+        script = [e["value"] for e in container["env"] if e["name"] == "SQL"][0]
+        self.assertIn('psql -v ON_ERROR_STOP=1 -At -c "$SQL"', " ".join(container["args"]))
+        for table in ("vms", "volumes", "networks", "load_balancers", "provider_commands", "vm_template_clusters"):
+            self.assertIn(f"UPDATE core.{table} SET cluster_id = 'local' WHERE cluster_id = 'local-mac'", script, table)
+        self.assertIn("DELETE FROM core.vm_template_clusters", script)
+        sql = script[script.index("WITH "):]
+        self.assertEqual(sql.count(";"), 1, "one statement: all rows move or none")
+
+    def test_reads_the_connection_the_migration_reads(self):
+        env = self.job()["spec"]["template"]["spec"]["containers"][0]["envFrom"]
+        self.assertIn({"secretRef": {"name": "control-plane-db"}}, env)
+
+    def test_staging_has_no_such_job(self):
+        base = subprocess.run(["kubectl", "kustomize", str(GITOPS.parent / "base" / "control-plane")], capture_output=True,
+                              text=True, check=True).stdout
+        self.assertNotIn("rename-cluster-id", base)
+
+
 class NoFakeService(unittest.TestCase):
     def test_reads_the_applications(self):
         names = [name for _, name, _ in applications()]

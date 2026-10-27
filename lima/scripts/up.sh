@@ -1,7 +1,7 @@
 #!/bin/bash
 # Starts the local cluster (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#layout): both Lima VMs, created on first use,
-# then the secrets, cluster local joined to titan-incus, dev's rows of the old id local-mac moved to it, and ArgoCD's root
-# application. Safe to run again.
+# then the secrets, cluster local joined to titan-incus, and ArgoCD's root application (and the Applications of the names
+# before 2026-10-27 dropped). Safe to run again.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(cd "$here/.." && pwd)
@@ -44,7 +44,6 @@ done
 bash "$here/scripts/bootstrap-secrets.sh"
 bash "$here/scripts/trust-s3-ca.sh"
 bash "$here/scripts/join-cluster.sh"
-bash "$here/scripts/rename-cluster-id.sh"
 
 # k3s's helm controller installs ArgoCD after provisioning ends: on a fresh VM the Application kind does not
 # exist yet, and applying root fails with NotFound.
@@ -61,6 +60,7 @@ for attempt in $(seq 1 60); do
 done
 kubectl --kubeconfig "$kubeconfig" --request-timeout=30s wait --for=condition=Established "$crd" --timeout=120s >/dev/null
 kubectl --kubeconfig "$kubeconfig" --request-timeout=30s apply -f "$repo/gitops/apps/root.yaml"
+bash "$here/scripts/drop-old-applications.sh"
 
 cat <<URLS
 Local cluster up (kubectl: KUBECONFIG=$kubeconfig):

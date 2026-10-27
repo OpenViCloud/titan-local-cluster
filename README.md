@@ -37,7 +37,7 @@ repositories and the images (linux/arm64 and linux/amd64) are public. titan-incu
 The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/` (`secrets.env`, the S3 CA and SeaweedFS's certificate; keys mode 600), so a rebuilt cluster gets them again; keep that folder. Backups go to SeaweedFS in titan-k3s (`gitops/seaweedfs`), over TLS at `https://lima-titan-k3s.internal:30833`, with its data in `~/.local/share/titan-local-cluster/s3` on the host, which outlives the VM. Docker must not be running.
 
 ```sh
-bash lima/scripts/up.sh      # creates the VMs on first run, then starts them, applies secrets, trusts the S3 CA, joins cluster local to titan-incus, moves dev's rows of the old cluster id `local-mac`, applies root-local
+bash lima/scripts/up.sh      # creates the VMs on first run, then starts them, applies secrets, trusts the S3 CA, joins cluster local to titan-incus, applies root-local, drops the Applications of the old names
 bash lima/scripts/down.sh    # stops both VMs; disks stay (guest VMs in titan-incus stop too, see below)
 ```
 
@@ -111,7 +111,7 @@ bash lima/tests/incus-uplink_test.sh
 bash lima/tests/bootstrap-secrets_test.sh   # macOS only (stat -f)
 bash lima/tests/trust-s3-ca_test.sh
 bash lima/tests/join-cluster_test.sh
-bash lima/tests/rename-cluster-id_test.sh
+bash lima/tests/drop-old-applications_test.sh
 ```
 
 CI runs all of these but `sweeper_test.sh` and `bootstrap-secrets_test.sh` on every push to `main` and every pull request into it.

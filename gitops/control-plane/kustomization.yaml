@@ -8,6 +8,7 @@ namespace: titan-staging
 resources:
   - ../../base/control-plane
   - ingress.yaml
+  - rename-cluster-id-job.yaml
 
 configMapGenerator:
   - name: control-plane-zones
