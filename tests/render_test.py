@@ -371,7 +371,7 @@ class DevClusterIdRename(unittest.TestCase):
         self.assertEqual(len(jobs), 1)
         return jobs[0]
 
-    def test_runs_before_the_control_plane_and_after_the_migration(self):
+    def test_runs_after_the_migration_before_and_after_the_control_plane_rolls(self):
         notes = self.job()["metadata"]["annotations"]
         # PreSync: before the new control plane starts. PostSync again: rows the old pod wrote while PreSync ran.
         self.assertEqual(notes["argocd.argoproj.io/hook"], "PreSync,PostSync")
@@ -399,7 +399,8 @@ class DevClusterIdRename(unittest.TestCase):
             return subprocess.run(["sh", "-c", container["args"][0]], env=env, capture_output=True, text=True)
 
     def test_a_failed_psql_fails_the_job(self):
-        # A failing hook stops the sync, so the control plane never rolls onto local with the rows still under local-mac.
+        # A failing PreSync run stops the sync, so the control plane does not roll onto local with the rows still under
+        # local-mac; a failing PostSync run marks the sync failed.
         self.assertNotEqual(self.run_script('echo "could not connect" >&2; exit 2').returncode, 0)
 
     def test_a_working_psql_reports_the_count(self):

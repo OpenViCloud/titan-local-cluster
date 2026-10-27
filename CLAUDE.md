@@ -11,7 +11,7 @@ https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-in
 - Application names are `*-local` (and `cnpg-operator`, `cert-manager`, `plugin-barman-cloud`, `seaweedfs`), cluster id `local`, the
   same on macOS and Ubuntu (`tests/render_test.py`). Renaming an Application: root prunes the old one, which has no finalizer, so its
   resources stay and the new Application adopts them; `lima/scripts/drop-old-applications.sh` (run by `up.sh`) deletes an old one
-  that is left, the old root included. The cluster id was `local-mac` until 2026-10-27: the PreSync hook
+  that is left, the old root included. The cluster id was `local-mac` until 2026-10-27: the PreSync and PostSync hook
   `gitops/control-plane/rename-cluster-id-job.yaml` moves a dev database's rows to `local` in the sync that rolls the control plane.
   An app renamed on purpose (as the customer portal's app when titan-ops renamed its folder to `cloud-console`): root
   prunes the old Application, which has no finalizer, so every object it rendered stays behind (for the customer
