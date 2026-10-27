@@ -294,9 +294,11 @@ class DevDatabases(unittest.TestCase):
         self.assertNotIn("postInitSQL", first(objects, "Cluster", "titan-db")["spec"]["bootstrap"].get("initdb", {}))
 
     def test_only_the_owner_creates_objects_in_public(self):
-        # PostgreSQL 15 gives schema public to the database owner (titan) alone; a grant to PUBLIC would let any role in.
+        # PostgreSQL 15 lets only the database owner (titan) and superusers create in schema public; a grant TO PUBLIC, in
+        # any of initdb's SQL lists, would let every role that can connect in.
         initdb = first(render("titan-db"), "Cluster", "titan-db")["spec"]["bootstrap"]["initdb"]
-        self.assertEqual([sql for sql in initdb.get("postInitTemplateSQL", []) if "PUBLIC" in sql.upper()], [])
+        sql = [s for key in ("postInitSQL", "postInitTemplateSQL", "postInitApplicationSQL") for s in initdb.get(key, [])]
+        self.assertEqual([s for s in sql if re.search(r"\bTO\s+PUBLIC\b", s, re.IGNORECASE)], [])
 
 
 class RestorePath(unittest.TestCase):
