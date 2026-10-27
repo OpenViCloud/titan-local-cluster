@@ -1,6 +1,6 @@
 #!/bin/bash
 # Starts the local cluster (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#layout): both Lima VMs, created on first use,
-# then the secrets and ArgoCD's root application. Safe to run again.
+# then the secrets, cluster local-mac joined to titan-incus, and ArgoCD's root application. Safe to run again.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(cd "$here/.." && pwd)
@@ -37,6 +37,7 @@ done
 
 bash "$here/scripts/bootstrap-secrets.sh"
 bash "$here/scripts/trust-s3-ca.sh"
+bash "$here/scripts/join-cluster.sh"
 
 # k3s's helm controller installs ArgoCD after provisioning ends: on a fresh VM the Application kind does not
 # exist yet, and applying root fails with NotFound.

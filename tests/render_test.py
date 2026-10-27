@@ -93,7 +93,24 @@ class DevRender(unittest.TestCase):
         self.assertIn({"name": "incus-worker-backup-credentials", "optional": True}, refs)
 
     def test_zone_list_is_local_mac_only(self):
-        self.assertEqual(zones(render("control-plane")), {"Zones__0__Id": "local-mac", "Zones__0__Name": "Local Mac"})
+        listed = zones(render("control-plane"))
+        self.assertEqual({k: v for k, v in listed.items() if k.startswith("Zones__")},
+                         {"Zones__0__Id": "local-mac", "Zones__0__Name": "Local Mac"})
+
+    # The fingerprint is not in git: it changes with titan-incus and comes from Secret control-plane-cluster.
+    def test_the_cluster_list_is_local_mac_on_titan_incus(self):
+        listed = zones(render("control-plane"))
+        self.assertEqual({k: v for k, v in listed.items() if k.startswith("Clusters__")}, {
+            "Clusters__0__Id": "local-mac",
+            "Clusters__0__Name": "Local Mac",
+            "Clusters__0__Endpoint": "https://192.168.104.1:8443",
+            "Clusters__0__OvnUplinkNetwork": "ovnup",
+            "Clusters__0__StoragePool": "default",
+        })
+
+    def test_the_cluster_secret_is_optional_so_the_pod_starts_before_it(self):
+        refs = [r["secretRef"] for c in containers(render("control-plane"), "control-plane") for r in c.get("envFrom", []) if "secretRef" in r]
+        self.assertIn({"name": "control-plane-cluster", "optional": True}, refs)
 
 
 def first(objects, kind, name):

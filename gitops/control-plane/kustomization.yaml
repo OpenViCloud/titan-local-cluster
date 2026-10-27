@@ -14,6 +14,13 @@ configMapGenerator:
     literals:
       - Zones__0__Id=local-mac
       - Zones__0__Name=Local Mac
+      # Cluster local-mac is titan-incus. Its server fingerprint changes when the VM is rebuilt, so it comes with Titan's
+      # client identity from Secret control-plane-cluster (mac/scripts/join-cluster.sh).
+      - Clusters__0__Id=local-mac
+      - Clusters__0__Name=Local Mac
+      - Clusters__0__Endpoint=https://192.168.104.1:8443
+      - Clusters__0__OvnUplinkNetwork=ovnup
+      - Clusters__0__StoragePool=default
 
 patches:
   - path: patch-env.yaml

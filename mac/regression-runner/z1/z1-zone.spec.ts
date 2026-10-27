@@ -1,11 +1,11 @@
 import { test, expect, type Browser, type Page, type APIResponse } from '@playwright/test'
 import * as fs from 'node:fs'
-import type { Server } from 'node:net'
-import { startLocalProxy } from './local-proxy'
+import { startLocalProxyIfNeeded } from './local-proxy'
 
-// LOCAL-CLUSTER Z-1: zone `local-mac` gets cluster titan-incus, and template sync runs against real Incus on arm64.
-// Runs INSIDE the titan-regression runner of the local cluster. Prints Titan's client CERTIFICATE (public) so the
-// agent can trust it in Incus while the test waits; never prints a credential or a bearer token.
+// LOCAL-CLUSTER Z-1: cluster `local-mac` is titan-incus, and template sync runs against real Incus on arm64.
+// Runs INSIDE the titan-regression runner of the local cluster, with lib/local-proxy.ts of titan-regression beside it.
+// mac/scripts/join-cluster.sh (up.sh) configured the cluster and made titan-incus trust Titan: nothing is registered here.
+// Never prints a credential or a bearer token.
 const API = process.env.API_BASE_URL || 'http://api.localhost:8080'
 const ADMIN = process.env.ADMIN_BASE_URL || 'http://admin.localhost:8080'
 const RESULTS = process.env.RESULTS_DIR || 'results'
@@ -16,8 +16,6 @@ const need = (k: string) => {
 }
 
 const ZONE = 'local-mac'
-const INCUS_ENDPOINT = 'https://192.168.104.1:8443'
-const INCUS_FINGERPRINT = '7164589a742013cd5386e17de02fdef0a48226a8849726f27c4452fc794d2159'
 
 async function login(page: Page, host: string, user: string, password: string) {
   await page.goto(host + '/', { waitUntil: 'domcontentloaded' })
@@ -58,7 +56,6 @@ async function expectCode(res: APIResponse, status: number) {
   return body
 }
 
-let proxy: Server | null = null
 let browserRef: Browser | null = null
 let admin: Record<string, string> = {}
 const lines: string[] = []
@@ -84,13 +81,7 @@ async function signInAdmin(screenshot?: string): Promise<void> {
 }
 
 test.beforeAll(async () => {
-  proxy = await startLocalProxy()
-})
-
-test.afterAll(async () => {
-  if (proxy !== null) {
-    proxy.close()
-  }
+  await startLocalProxyIfNeeded(ADMIN)
 })
 
 test('Z-1 — zone local-mac on titan-incus, template sync on arm64', async ({ browser, request }) => {
@@ -103,31 +94,27 @@ test('Z-1 — zone local-mac on titan-incus, template sync on arm64', async ({ b
   log(`Z1-1 zones ${JSON.stringify(zones)}`)
   expect(zones.map((z: { id: string }) => z.id)).toEqual([ZONE])
 
-  // Z1-2: Titan's client certificate, for the agent to trust in Incus.
+  // Z1-2: Titan's client certificate, the one join-cluster.sh put in the Secret.
   const certificate = JSON.parse(await expectCode(
     await request.get(`${API}/v1/admin/clusters/client-certificate`, { headers: admin }), 200))
-  fs.writeFileSync(`${RESULTS}/titan-client.crt`, certificate.certificatePem)
   log(`Z1-2 client certificate fingerprint ${certificate.fingerprint}`)
-  console.log('Z1_CERT_BEGIN')
-  console.log(certificate.certificatePem.trim())
-  console.log('Z1_CERT_END')
 
-  // Z1-3: register the cluster and its provider settings.
-  await expectCode(await request.put(`${API}/v1/admin/clusters/${ZONE}`, {
-    headers: admin, data: { name: 'titan-incus', endpoint: INCUS_ENDPOINT, serverFingerprint: INCUS_FINGERPRINT },
-  }), 204)
-  await expectCode(await request.put(`${API}/v1/admin/clusters/${ZONE}/provider-settings`, {
-    headers: admin, data: { ovnUplinkNetwork: 'ovnup', storagePool: 'default' },
-  }), 204)
-  log(`Z1-3 cluster ${ZONE} registered: 204 + provider settings 204`)
+  // Z1-3: the cluster comes from config, with the server fingerprint read from titan-incus and its provider settings.
+  type Cluster = { zoneId: string, endpoint: string, serverFingerprint: string, providerSettings: { ovnUplinkNetwork: string | null, storagePool: string | null } }
+  const configured: Cluster[] = JSON.parse(await expectCode(await request.get(`${API}/v1/admin/clusters`, { headers: admin }), 200))
+  const cluster = configured.find((c) => c.zoneId === ZONE)
+  expect(cluster, `cluster ${ZONE} is not configured`).toBeDefined()
+  expect(cluster!.serverFingerprint).toMatch(/^[0-9a-f]{64}$/)
+  expect(cluster!.providerSettings).toMatchObject({ ovnUplinkNetwork: 'ovnup', storagePool: 'default' })
+  log(`Z1-3 cluster ${ZONE} configured: ${cluster!.endpoint} ${cluster!.serverFingerprint}`)
 
-  // Z1-4: the test answers untrusted first, then ok once the agent has trusted the certificate.
+  // Z1-4: titan-incus answers trusted (join-cluster.sh trusted Titan); a wait covers a control plane still restarting.
   let firstError = ''
   let trustedAt = 0
   const waitStart = Date.now()
   while (Date.now() - waitStart < 15 * 60_000) {
     let res = await request.post(`${API}/v1/admin/clusters/test`, {
-      headers: admin, data: { endpoint: INCUS_ENDPOINT, serverFingerprint: INCUS_FINGERPRINT },
+      headers: admin, data: { endpoint: cluster!.endpoint, serverFingerprint: cluster!.serverFingerprint },
     })
     if (res.status() === 401) {
       await signInAdmin()
@@ -142,7 +129,6 @@ test('Z-1 — zone local-mac on titan-incus, template sync on arm64', async ({ b
     if (firstError === '') {
       firstError = result.error
       log(`Z1-4 test before trust: ok=false error=${JSON.stringify(result.error)}`)
-      console.log('Z1_WAITING_FOR_TRUST')
     }
     await new Promise((resolve) => setTimeout(resolve, 10_000))
   }
