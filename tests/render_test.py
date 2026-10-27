@@ -341,6 +341,39 @@ def overlay_image(app):
     return name.group(1) + ":" + re.search(r'newTag:\s*"([^"]+)"', text).group(1)
 
 
+def realm_users(base_dir):
+    """Users and realm roles a realm import of base/keycloak declares, read from its ConfigMap's JSON."""
+    out = subprocess.run(["kubectl", "kustomize", str(GITOPS.parent / "base" / "keycloak" / base_dir)],
+                         capture_output=True, text=True, check=True).stdout
+    as_json = subprocess.run(
+        ["ruby", "-ryaml", "-rjson", "-e", "puts JSON.generate(YAML.load_stream(STDIN.read).compact)"],
+        input=out, capture_output=True, text=True, check=True).stdout
+    for obj in json.loads(as_json):
+        if obj["kind"] == "ConfigMap":
+            realm = json.loads(next(iter(obj["data"].values())))
+            roles = [role["name"] for role in realm.get("roles", {}).get("realm", [])]
+            return roles, {user["username"]: user.get("realmRoles", []) for user in realm["users"]}
+    raise AssertionError("no ConfigMap in base/keycloak/" + base_dir)
+
+
+class TestAccounts(unittest.TestCase):
+    """The control plane approves on sign-in only accounts with the realm role auto-approve; every other signup waits
+    for an admin. The test accounts carry it, or on an empty database nobody could approve anybody
+    (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/tenancy-and-admin.md#approval-is-activation)."""
+
+    def test_the_realm_declares_the_role(self):
+        roles, _ = realm_users("realm-import")
+        self.assertIn("auto-approve", roles)
+
+    def test_every_test_account_carries_it(self):
+        _, users = realm_users("realm-import")
+        _, second = realm_users("realm-import-beta-user-2")
+        users.update(second)
+        self.assertEqual(sorted(users), ["admin-test", "beta-user", "beta-user-2"])
+        for name, roles in users.items():
+            self.assertIn("auto-approve", roles, name)
+
+
 class DevImages(unittest.TestCase):
     """An `images` entry matches the name base/<app> gives the image. An entry with another name matches nothing, and
     dev silently runs the base's placeholder image."""

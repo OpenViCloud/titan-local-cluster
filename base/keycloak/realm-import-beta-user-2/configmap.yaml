@@ -12,7 +12,7 @@ data:
           "email": "beta-user-2@openvicloud.com",
           "emailVerified": true,
           "enabled": true,
-          "realmRoles": ["default-roles-titan"],
+          "realmRoles": ["auto-approve", "default-roles-titan"],
           "credentials": [
             {
               "type": "password",
