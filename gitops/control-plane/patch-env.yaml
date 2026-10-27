@@ -10,7 +10,7 @@ spec:
           env:
             - name: ASPNETCORE_ENVIRONMENT
               value: Staging
-            # Dev's S3, SeaweedFS of gitops/seaweedfs, over TLS with the CA of mac/scripts/bootstrap-secrets.sh (patch-s3-ca.yaml);
+            # Dev's S3, SeaweedFS of gitops/seaweedfs, over TLS with the CA of lima/scripts/bootstrap-secrets.sh (patch-s3-ca.yaml);
             # the key pair is the Secret control-plane-backup-credentials that the same script writes. SeaweedFS ignores
             # the region, the S3 client needs one.
             - name: BackupTarget__Endpoint

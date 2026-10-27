@@ -1,5 +1,5 @@
 #!/bin/bash
-# Provision of titan-incus (mac/titan-incus.yaml): Incus 7.0 LTS with an LVM thin pool and
+# Provision of titan-incus (titan-incus.yaml of lima/macos/ and lima/ubuntu/): Incus 7.0 LTS with an LVM thin pool and
 # a single-node OVN, the same shape as the labs recorded in OpenViCloud/titan-incus-worker:incus/provider/testdata/
 # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#replaces-incus-lab). Lima runs it as root on every boot,
 # so every step checks before it creates.
@@ -65,7 +65,7 @@ if ! command -v incus >/dev/null 2>&1 || ! command -v ovn-nbctl >/dev/null 2>&1 
 fi
 
 if [ ! -e /dev/kvm ]; then
-  echo "ERROR: no /dev/kvm; Incus cannot run virtual machines here. Is nestedVirtualization on?" >&2
+  echo "ERROR: no /dev/kvm; Incus cannot run virtual machines here. Is nested virtualization on (macOS: nestedVirtualization in the VM file; Ubuntu: the host kernel's kvm_intel nested=Y or kvm_amd nested=1)?" >&2
   exit 1
 fi
 
@@ -153,7 +153,7 @@ done
 # ── ipv4.address=auto on this VM ──────────────────────────────────────────────
 # Incus also skips a 10.x subnet whose .1 or .254 address answers ping or TCP 22. Every 10.x address tried got a ping
 # reply through eth0, so without this table ipv4.address=auto finds no subnet. The table also drops ping and TCP 22
-# from this VM to any real 10.x host behind the Mac (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#uplink).
+# from this VM to any real 10.x host behind the host machine (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#uplink).
 if nft list table inet titan-auto-subnet >/dev/null 2>&1; then
   nft delete table inet titan-auto-subnet
 fi
@@ -170,7 +170,7 @@ NFT
 # ── Guest logs ────────────────────────────────────────────────────────────────
 # Incus 7.0.1 keeps /var/log/incus/<project>_<instance>/ after the instance is deleted, and its API refuses to delete
 # qemu.log: a timer removes the directory of an instance that no longer exists
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/vm/design.md#vm-design-debts). mac/tests/incus-log-sweeper_test.sh tests this text.
+# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/vm/design.md#vm-design-debts). lima/tests/incus-log-sweeper_test.sh tests this text.
 cat > /usr/local/sbin/incus-log-sweeper <<'SWEEPER'
 #!/bin/bash
 # Removes the log directory of an Incus instance that no longer exists.
@@ -236,9 +236,10 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now incus-log-sweeper.timer
 
-# ── API on the user-v2 address only ───────────────────────────────────────────
-# user-v2 is this VM's only NIC (it also carries the default route); its address comes from Lima's
-# DHCP, keyed on the instance's MAC. Read it from the default route, not from an interface name.
+# ── API on the default-route address only ─────────────────────────────────────
+# The VM's only NIC carries the default route: user-v2 on macOS, Lima's user-mode network on Ubuntu, whose
+# lima/ubuntu/titan-incus.yaml forwards this port to the host's 127.0.0.1. Its address comes from Lima's DHCP;
+# read it from the default route, not from an interface name.
 api_address=""
 for attempt in $(seq 1 30); do
   uplink_dev=$(ip -4 route show default | awk '{ print $5; exit }') || uplink_dev=""
@@ -251,7 +252,7 @@ for attempt in $(seq 1 30); do
   sleep 2
 done
 if [ -z "$api_address" ]; then
-  echo "ERROR: no IPv4 address on the default-route interface; is the user-v2 network attached?" >&2
+  echo "ERROR: no IPv4 address on the default-route interface; is the VM's network attached?" >&2
   exit 1
 fi
 incus config set core.https_address="$api_address:8443"

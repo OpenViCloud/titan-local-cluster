@@ -1,15 +1,17 @@
 #!/bin/bash
 # Joins cluster local-mac to titan-incus (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/cluster/design.md#cluster-from-config):
-# - Titan's client identity (ECDSA P-384, client auth) is made once on the Mac next to secrets.env and kept, so a rebuilt
+# - Titan's client identity (ECDSA P-384, client auth) is made once on the host next to secrets.env and kept, so a rebuilt
 #   VM trusts the same certificate again.
 # - The server fingerprint is read from `incus info` each run: a rebuilt titan-incus has a new server certificate, so it
-#   cannot live in git.
+#   cannot live in git. The endpoint is where titan-k3s reaches the Incus API, which differs by host OS
+#   (lima/scripts/host-os.sh): git holds macOS's (gitops/control-plane), and this host's in the Secret overrides it.
 # - titan-incus trusts Titan's certificate under the name titan-local-mac, added only when it does not yet.
-# - Secret titan-staging/control-plane-cluster holds the fingerprint and the identity; the control plane restarts only
-#   when the Secret changed, since it reads both once at start.
+# - Secret titan-staging/control-plane-cluster holds the endpoint, the fingerprint and the identity; the control plane restarts only
+#   when the Secret changed, since it reads them once at start.
 # Values go through files and the Secret only: nothing printed.
 # Needs: titan-incus and titan-k3s running.
 set -euo pipefail
+source "$(cd "$(dirname "$0")" && pwd)/host-os.sh"
 
 KUBECONFIG_FILE="$HOME/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml"
 SECRETS_DIR="$HOME/.config/titan-local-cluster"
@@ -50,6 +52,17 @@ if ! [[ "$server_fingerprint" =~ ^[0-9a-f]{64}$ ]]; then
   exit 1
 fi
 
+# ── The endpoint ──────────────────────────────────────────────────────────────
+api_address=$(in_vm incus config get core.https_address)
+if [ -z "$api_address" ]; then
+  echo "ERROR: titan-incus reports no core.https_address; nothing changed." >&2
+  exit 1
+fi
+if ! endpoint=$(incus_endpoint "$(uname -s)" "$api_address"); then
+  echo "ERROR: no Incus endpoint for $(uname -s); lima/ has macos/ and ubuntu/. Nothing changed." >&2
+  exit 1
+fi
+
 # ── Trust ─────────────────────────────────────────────────────────────────────
 client_fingerprint=$(openssl x509 -in "$CLIENT_CERT" -noout -fingerprint -sha256 | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f')
 if in_vm incus config trust show "$client_fingerprint" >/dev/null 2>&1; then
@@ -63,6 +76,7 @@ fi
 
 # ── Secret ────────────────────────────────────────────────────────────────────
 applied=$(k create secret generic control-plane-cluster -n titan-staging \
+    --from-literal="Clusters__0__Endpoint=$endpoint" \
     --from-literal="Clusters__0__ServerFingerprint=$server_fingerprint" \
     --from-file="ProviderClientIdentity__CertificatePem=$CLIENT_CERT" \
     --from-file="ProviderClientIdentity__KeyPem=$CLIENT_KEY" \

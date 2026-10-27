@@ -2,7 +2,7 @@
 """Move dev to what main publishes: the images other repositories last published from their main.
 
     python3 scripts/pull-images.py
-                                                            (from the repo root, on the Mac; needs `gh` logged in)
+                                                            (from the repo root, on the dev machine; needs `gh` logged in)
 
 It writes, and only writes; committing and pushing to main is the deploy (ArgoCD on dev follows main here): newTag of
 each dev overlay in IMAGES, the newest commit every workflow of that repository published from main (images of one

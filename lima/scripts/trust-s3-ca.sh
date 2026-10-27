@@ -9,7 +9,7 @@ CA_CERT="$HOME/.config/titan-local-cluster/s3-ca.crt"
 TARGET=/usr/local/share/ca-certificates/titan-local-s3.crt
 
 if [ ! -s "$CA_CERT" ]; then
-  echo "ERROR: no $CA_CERT; run mac/scripts/bootstrap-secrets.sh first." >&2
+  echo "ERROR: no $CA_CERT; run lima/scripts/bootstrap-secrets.sh first." >&2
   exit 1
 fi
 

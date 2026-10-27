@@ -10,7 +10,7 @@ resources:
   - ../../base/titan-db
 
 # Continuous backup to dev's S3 (SeaweedFS, gitops/seaweedfs), through base's component (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket):
-# the key pair is the Secret titan-db-backup-credentials and the CA the Secret s3-ca, both from mac/scripts/bootstrap-secrets.sh.
+# the key pair is the Secret titan-db-backup-credentials and the CA the Secret s3-ca, both from lima/scripts/bootstrap-secrets.sh.
 # tests/render_test.py holds the bucket and endpoint equal to the control plane's BackupTarget env.
 components:
   - ../../base/titan-db/components/backup
@@ -49,9 +49,9 @@ patches:
       - op: add
         path: /spec/plugins/0/parameters/serverName
         value: titan-db-restored
-  # Integration tests on the Mac create and drop throwaway databases here instead of in a Docker container
+  # Integration tests on the dev machine create and drop throwaway databases here instead of in a Docker container
   # (test-all.sh of OpenViCloud/titan-control-plane). Dev only: staging has no such role. Password: Secret titan-it-credentials,
-  # written by mac/scripts/bootstrap-secrets.sh.
+  # written by lima/scripts/bootstrap-secrets.sh.
   - target:
       kind: Cluster
       name: titan-db

@@ -5,7 +5,7 @@
 # the log of a running VM, or nothing at all, and nobody looks at that host. The script under test is cut out of
 # provision/incus.sh, so what passes here is what gets installed. A fake `incus` stands in for the instance list.
 #
-# Run:  bash mac/tests/incus-log-sweeper_test.sh     (from the repo root; macOS bash 3.2 is fine)
+# Run:  bash lima/tests/incus-log-sweeper_test.sh     (from the repo root; macOS bash 3.2 is fine)
 
 set -uo pipefail
 

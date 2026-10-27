@@ -1,4 +1,4 @@
-# Overrides of base/keycloak/values.yaml for the local cluster on the Mac (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# Overrides of base/keycloak/values.yaml for the local cluster (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
 # extraEnv is one string in the chart, so the whole list is repeated here; keep it in step with base/keycloak/values.yaml.
 extraEnv: |
   - name: KC_DB

@@ -1,4 +1,4 @@
-# The regression runner (staging's Application; dev applies it through mac/regression-runner). The login step of a UI/API regression runs HERE, not
+# The regression runner (staging's Application; dev applies it through lima/regression-runner). The login step of a UI/API regression runs HERE, not
 # on an agent's machine: the pod reads the test-account passwords from the secrets
 # of this namespace (secretKeyRef) and Playwright types them. The agent only
 # supplies the specs, starts a run and reads the redacted output + screenshots —

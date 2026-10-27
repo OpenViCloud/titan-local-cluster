@@ -5,20 +5,25 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(cd "$here/.." && pwd)
 kubeconfig="$HOME/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml"
-
-# Docker Desktop's VM plus both of these does not fit in 16 GB (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget).
-if docker info >/dev/null 2>&1; then
-  echo "ERROR: Docker Desktop is running; quit it first." >&2
+source "$here/scripts/host-os.sh"
+if ! vms=$(vm_dir "$(uname -s)"); then
+  echo "ERROR: no Lima VM files for $(uname -s); lima/ has macos/ and ubuntu/." >&2
   exit 1
 fi
 
-# The folder titan-k3s mounts for SeaweedFS's data (mac/titan-k3s.yaml): Lima does not make a missing one.
+# Docker (on macOS, its VM) plus both of these does not fit in 16 GB (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget).
+if docker info >/dev/null 2>&1; then
+  echo "ERROR: Docker is running; stop it first." >&2
+  exit 1
+fi
+
+# The folder titan-k3s mounts for SeaweedFS's data (titan-k3s.yaml): Lima does not make a missing one.
 mkdir -p "$HOME/.local/share/titan-local-cluster/s3"
 
 for vm in titan-incus titan-k3s; do
   status=$(limactl list --format '{{.Status}}' "$vm" 2>/dev/null || true)
   if [ -z "$status" ]; then
-    limactl create --name "$vm" --tty=false "$here/$vm.yaml"
+    limactl create --name "$vm" --tty=false "$vms/$vm.yaml"
     status="Stopped"
   fi
   if [ "$status" != "Running" ]; then

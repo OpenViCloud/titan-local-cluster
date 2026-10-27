@@ -1,6 +1,6 @@
 # titan-k3s: the k3s node of the local cluster: ArgoCD and Titan's services
 # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#layout).
-#   limactl create --name titan-k3s mac/titan-k3s.yaml
+#   limactl create --name titan-k3s lima/macos/titan-k3s.yaml
 base: template://ubuntu-24.04
 vmType: vz
 cpus: 2

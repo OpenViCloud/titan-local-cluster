@@ -8,7 +8,7 @@
 #   (SeaweedFS, gitops/seaweedfs), generated the same way.
 # - The S3 CA and SeaweedFS's server certificate (name lima-titan-k3s.internal), made once with openssl next to secrets.env:
 #   the CA's key never enters the cluster, and a rebuilt cluster trusts the same CA. Incus trusts it through titan-incus's
-#   system store (mac/scripts/trust-s3-ca.sh); barman, the control plane and the worker through Secret s3-ca.
+#   system store (lima/scripts/trust-s3-ca.sh); barman, the control plane and the worker through Secret s3-ca.
 # - Those Secrets are applied only when the cluster has none yet: a running cluster keeps its own values, and the script
 #   never reads a Secret back.
 # - The S3 key pair as SeaweedFS's identity and as three Secrets with the same pair (CNPG reads one, the control plane one,
@@ -27,8 +27,8 @@ CA_CERT="$SECRETS_DIR/s3-ca.crt"
 CA_KEY="$SECRETS_DIR/s3-ca.key"
 S3_CERT="$SECRETS_DIR/s3.crt"
 S3_KEY="$SECRETS_DIR/s3.key"
-# The name every S3 client uses: it resolves to titan-k3s on Lima's user-v2 network, from titan-incus and from pods alike,
-# whatever address DHCP gives the VM.
+# The name every S3 client uses, from titan-incus and from pods alike: on macOS Lima's user-v2 network resolves it, whatever
+# address DHCP gives the VM; on Ubuntu the hostResolver of lima/ubuntu/*.yaml maps it to Lima's fixed addresses.
 S3_HOST="lima-titan-k3s.internal"
 
 k() {

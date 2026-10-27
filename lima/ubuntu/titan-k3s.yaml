@@ -1,0 +1,42 @@
+# titan-k3s: the k3s node of the local cluster on Ubuntu: ArgoCD and Titan's services
+# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#layout).
+#   limactl create --name titan-k3s lima/ubuntu/titan-k3s.yaml
+# template:_images/, not template:ubuntu-24.04: the latter also mounts the user's home into the VM.
+base: template:_images/ubuntu-24.04
+vmType: qemu
+cpus: 2
+memory: 4GiB
+disk: 30GiB
+# SeaweedFS's data (gitops/seaweedfs) lives on the host, so it outlives `limactl delete titan-k3s`; up.sh makes the folder.
+# A fixed mountPoint, because the manifest's hostPath cannot name the user's home.
+mounts:
+- location: "~/.local/share/titan-local-cluster/s3"
+  mountPoint: /mnt/titan-s3
+  writable: true
+containerd:
+  system: false
+  user: false
+# No user-v2 (lima/ubuntu/titan-incus.yaml says why): dev's S3 name answers with this VM's own address here, and
+# titan-incus reaches the NodePort through the host (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#vm-to-vm).
+hostResolver:
+  hosts:
+    lima-titan-k3s.internal: 192.168.5.15
+# The ingress, the Kubernetes API and SeaweedFS's NodePort reach the host, on 127.0.0.1 only.
+portForwards:
+- guestPort: 80
+  hostPort: 8080
+- guestPort: 6443
+- guestPort: 30833
+  hostIP: 127.0.0.1
+  hostPort: 30833
+- guestPortRange: [1, 65535]
+  proto: any
+  ignore: true
+provision:
+- mode: system
+  file:
+    url: provision/k3s.sh
+copyToHost:
+- guest: /etc/rancher/k3s/k3s.yaml
+  host: "{{.Dir}}/copied-from-guest/kubeconfig.yaml"
+  deleteOnStop: true
