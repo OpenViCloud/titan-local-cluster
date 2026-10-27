@@ -8,6 +8,7 @@ staging's alone), the control plane lists zone local-mac only, and no Applicatio
 Run:  python3 tests/render_test.py     (needs kubectl for `kubectl kustomize` and ruby; the overlays build on base/ here,
       so nothing private is read)
 """
+import hashlib
 import json
 import pathlib
 import re
@@ -133,6 +134,12 @@ class DevBackup(unittest.TestCase):
         self.assertIn("targetRevision: v1.18.2", (GITOPS / "apps" / found["cert-manager"][0]).read_text())
         self.assertEqual(found.get("plugin-barman-cloud", ("", ""))[1], "base/barman-cloud-plugin")
 
+    def test_the_plugin_manifest_is_the_release_bytes(self):
+        # The release's own sha256: an edit by hand, or a fetch of another version under this name, turns this red.
+        manifest = GITOPS.parent / "base" / "barman-cloud-plugin" / "manifest-v0.15.1.yaml"
+        self.assertEqual(hashlib.sha256(manifest.read_bytes()).hexdigest(),
+                         "8f377ff4a7d0d3f74fc64b0f7ac4f449fc38ca9e83a40107cca2f9315a9bd920")
+
 
 class DevStartsEmpty(unittest.TestCase):
     """Anyone's first up.sh has an empty bucket, so main creates an empty database: a restore there finds no backup and
@@ -233,6 +240,27 @@ class DevS3(unittest.TestCase):
         self.assertEqual(found.get("seaweedfs", ("", ""))[1], "gitops/seaweedfs")
         wave = lambda name: int(re.search(r'sync-wave:\s*"(-?\d+)"', (GITOPS / "apps" / found[name][0]).read_text()).group(1))
         self.assertLess(wave("seaweedfs"), wave("titan-db-local-mac"))
+
+
+class DevDatabases(unittest.TestCase):
+    """Keycloak's database is a Database object, not initdb's postInitSQL: a restored cluster runs no initdb."""
+
+    def test_keycloak_database_is_declared_on_titan_db_and_never_dropped(self):
+        objects = render("titan-db")
+        spec = first(objects, "Database", "keycloak-staging")["spec"]
+        self.assertEqual((spec["name"], spec["owner"], spec["cluster"]["name"]), ("keycloak_staging", "titan", "titan-db"))
+        self.assertEqual((spec["ensure"], spec["databaseReclaimPolicy"]), ("present", "retain"))
+        self.assertNotIn("postInitSQL", first(objects, "Cluster", "titan-db")["spec"]["bootstrap"].get("initdb", {}))
+
+
+class DevWaves(unittest.TestCase):
+    """Root's sync waves order the apps only when ArgoCD can read an Application's health: without the check, each wave
+    is applied as soon as the one before it is created, Healthy or not."""
+
+    def test_argocd_reads_the_health_of_an_application(self):
+        script = (MAC / "provision" / "k3s.sh").read_text()
+        self.assertIn("resource.customizations.health.argoproj.io_Application: |", script)
+        self.assertIn("hs.status = obj.status.health.status", script)
 
 
 def overlay_image(app):

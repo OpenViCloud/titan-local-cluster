@@ -5,7 +5,7 @@ metadata:
   name: keycloak-local-mac
   namespace: argocd
   annotations:
-    # wave 1, after titan-db (wave 0): the keycloak_staging database must exist first
+    # wave 1, after titan-db (wave 0): the keycloak_staging database (Database keycloak-staging) must exist first
     argocd.argoproj.io/sync-wave: "1"
 spec:
   project: default
