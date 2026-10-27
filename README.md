@@ -30,7 +30,7 @@ The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/` 
 
 ```sh
 bash mac/scripts/up.sh      # creates the VMs on first run, then starts them, applies secrets and root-local-mac
-bash mac/scripts/down.sh    # stops both VMs; disks and data stay
+bash mac/scripts/down.sh    # stops both VMs; disks stay (guest VMs in titan-incus stop too, see below)
 ```
 
 `memory` in `mac/titan-k3s.yaml` applies when the VM is created. To resize a running one: `limactl stop titan-k3s && limactl edit --memory 4 titan-k3s && limactl start titan-k3s` (about 15 seconds of downtime; the pods come back by themselves).
@@ -41,10 +41,22 @@ After `up.sh`, ArgoCD keeps installing for a while; the cluster is ready when ev
 (`kubectl --kubeconfig ~/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml get applications -n argocd`).
 Sign in to the portal as `beta-user`, with the password `BETA_USER_PASSWORD` in `~/.config/titan-local-cluster/secrets.env`
 (`grep BETA_USER_PASSWORD ~/.config/titan-local-cluster/secrets.env`), and to the admin console (http://admin.localhost:8080)
-as `admin-test`, whose fixed test password is in `mac/scripts/bootstrap-secrets.sh`.
+as `admin-test`, whose fixed test password is in `mac/scripts/bootstrap-secrets.sh`. On a new cluster the very first
+sign-in can fail once with an error (two requests race to create the tenant); sign in again.
 
 Zone `local-mac` is not yet connected to titan-incus after `up.sh`: that step is not automated, so the portal cannot
 create a VM until it is.
+
+`down.sh` stops the guest VMs in titan-incus with it, and `up.sh` does not start them again: start them again through Titan (the VM's start).
+Once, after `down.sh` with a guest VM running, Incus's LVM pool failed its check at boot ("Manual repair required!") and
+no guest VM could start. The repair that brought it back, inside titan-incus:
+
+```sh
+limactl shell titan-incus -- sudo systemctl stop incus.service incus.socket
+limactl shell titan-incus -- sudo lvconvert --repair -y default/IncusThinPool
+limactl shell titan-incus -- sudo vgchange -ay default
+limactl shell titan-incus -- sudo systemctl start incus.socket incus.service
+```
 
 The database starts empty and archives to SeaweedFS. To rebuild titan-k3s, delete `~/.local/share/titan-local-cluster/s3`
 along with the VM, and the database starts empty again: a plain `up.sh` over a folder that still holds the archive gives a
