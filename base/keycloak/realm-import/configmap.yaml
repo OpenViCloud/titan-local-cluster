@@ -20,7 +20,8 @@ data:
       "accessTokenLifespan": 300,
       "roles": {
         "realm": [
-          { "name": "platform-admin", "description": "Full admin access across all tenants" }
+          { "name": "platform-admin", "description": "Full admin access across all tenants" },
+          { "name": "auto-approve", "description": "Tenant approved on sign-in while pending approval; every other signup waits for an admin" }
         ]
       },
       "users": [
@@ -29,7 +30,7 @@ data:
           "email": "admin-test@openvicloud.com",
           "emailVerified": true,
           "enabled": true,
-          "realmRoles": ["platform-admin", "default-roles-titan"],
+          "realmRoles": ["platform-admin", "auto-approve", "default-roles-titan"],
           "credentials": [
             {
               "type": "password",
@@ -43,7 +44,7 @@ data:
           "email": "beta-user@openvicloud.com",
           "emailVerified": true,
           "enabled": true,
-          "realmRoles": ["default-roles-titan"],
+          "realmRoles": ["auto-approve", "default-roles-titan"],
           "credentials": [
             {
               "type": "password",
