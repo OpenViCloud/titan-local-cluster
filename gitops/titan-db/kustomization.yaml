@@ -14,11 +14,6 @@ resources:
 # tests/render_test.py holds the bucket and endpoint equal to the control plane's BackupTarget env.
 components:
   - ../../base/titan-db/components/backup
-  # titan-k3s was rebuilt on a bucket that holds titan-db's archive (the data outlives the VM on the Mac), so the cluster is
-  # created from it and archives under titan-db-restored, the component's names. It stays: without it the cluster would
-  # archive under titan-db again, and barman refuses that non-empty archive. The next rebuild moves both names
-  # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook).
-  - ../../base/titan-db/components/restore
 
 patches:
   - target:
@@ -43,6 +38,17 @@ patches:
       - op: replace
         path: /spec/resources/requests/memory
         value: 256Mi
+  # A new cluster starts empty (initdb), so anyone's first up.sh works on an empty bucket. It archives under
+  # titan-db-restored, the name the maintainers' dev cluster writes since its restore: barman refuses a non-empty archive, and an
+  # empty bucket takes any name. Rebuilding on a bucket that holds an archive is a restore, added for that rebuild only
+  # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook).
+  - target:
+      kind: Cluster
+      name: titan-db
+    patch: |-
+      - op: add
+        path: /spec/plugins/0/parameters/serverName
+        value: titan-db-restored
   # Integration tests on the Mac create and drop throwaway databases here instead of in a Docker container
   # (test-all.sh of OpenViCloud/titan-control-plane). Dev only: staging has no such role. Password: Secret titan-it-credentials,
   # written by mac/scripts/bootstrap-secrets.sh.

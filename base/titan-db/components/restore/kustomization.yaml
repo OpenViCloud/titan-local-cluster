@@ -6,8 +6,9 @@ kind: Component
 # being rebuilt (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/runbook.md#disaster-recovery). The bootstrap of a Cluster is read once, at creation.
 #
 # The restored cluster must not write into the old cluster's archive: the bucket already holds timeline 1 of "titan-db",
-# and barman refuses a non-empty archive. It archives under serverName titan-db-restored instead. The component must STAY
-# in the overlay afterwards: without it the cluster would go back to archiving under "titan-db" and fail.
+# and barman refuses a non-empty archive. It archives under serverName titan-db-restored instead. That write name must
+# stay afterwards: keep the component in the overlay, or remove it and patch the write name there (a cluster reads its
+# bootstrap only at creation); going back to archiving under "titan-db" fails.
 #
 # Two names, and they move on each restore: the one read (serverName in externalClusters) is the name the previous
 # cluster archived under, the one written (in plugins) is new. First restore: read "titan-db", write "titan-db-restored".

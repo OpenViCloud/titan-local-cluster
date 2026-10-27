@@ -134,22 +134,20 @@ class DevBackup(unittest.TestCase):
         self.assertEqual(found.get("plugin-barman-cloud", ("", ""))[1], "base/barman-cloud-plugin")
 
 
-class DevRestore(unittest.TestCase):
-    """titan-k3s was rebuilt on a bucket that already held titan-db's archive, so the cluster restores from it and archives
-    under a new name, or barman refuses the non-empty archive (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook)."""
+class DevStartsEmpty(unittest.TestCase):
+    """Anyone's first up.sh has an empty bucket, so main creates an empty database: a restore there finds no backup and
+    the database never starts. It archives under the name the maintainers' dev cluster writes since its restore, or barman refuses that
+    non-empty archive (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook)."""
 
-    def test_the_cluster_recovers_from_the_last_archive_and_archives_under_a_new_name(self):
+    def test_a_new_cluster_starts_empty_and_restores_nothing(self):
         spec = first(render("titan-db"), "Cluster", "titan-db")["spec"]
-        self.assertNotIn("initdb", spec["bootstrap"])
-        self.assertEqual(spec["bootstrap"]["recovery"]["source"], "titan-db-source")
-        read = {c["name"]: c["plugin"]["parameters"]["serverName"] for c in spec["externalClusters"]}
-        self.assertEqual(read, {"titan-db-source": "titan-db"})
-        self.assertEqual(spec["plugins"][0]["parameters"]["serverName"], "titan-db-restored")
+        self.assertEqual(list(spec["bootstrap"]), ["initdb"])
+        self.assertNotIn("externalClusters", spec)
 
-    def test_the_restore_reads_the_same_object_store(self):
-        # The same ObjectStore, so the same endpoint and CA (DevS3.test_cnpg_reaches_s3_at_the_shared_endpoint_and_trusts_the_ca).
+    def test_it_archives_under_the_name_dev_writes(self):
         spec = first(render("titan-db"), "Cluster", "titan-db")["spec"]
-        self.assertEqual([c["plugin"]["parameters"]["barmanObjectName"] for c in spec["externalClusters"]], ["titan-db-backup"])
+        self.assertEqual(spec["plugins"][0]["parameters"],
+                         {"barmanObjectName": "titan-db-backup", "serverName": "titan-db-restored"})
 
 
 def yaml_file(path):
