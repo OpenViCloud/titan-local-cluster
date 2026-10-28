@@ -110,7 +110,7 @@ grep -q "^Clusters__0__ServerFingerprint=$SERVER_FP$" "$WORK/k8s/secret" && ok "
 grep -q '^Clusters__0__Endpoint=https://192.168.104.1:8443$' "$WORK/k8s/secret" && ok "on macOS the endpoint is titan-incus's user-v2 address, in the Secret" || bad "endpoint: $(grep Endpoint "$WORK/k8s/secret")"
 grep -q '^ProviderClientIdentity__CertificatePem=-----BEGIN CERTIFICATE-----' "$WORK/k8s/secret" && ok "the certificate goes in the Secret" || bad "certificate missing"
 grep -q '^ProviderClientIdentity__KeyPem=-----BEGIN PRIVATE KEY-----' "$WORK/k8s/secret" && ok "the key goes in the Secret, as PKCS#8" || bad "key missing or not PKCS#8"
-grep -q 'create secret generic control-plane-cluster -n titan-staging' "$WORK/k8s.log" && ok "Secret titan-staging/control-plane-cluster" || bad "wrong Secret name or namespace"
+grep -q 'create secret generic control-plane-cluster -n titan-dev' "$WORK/k8s.log" && ok "Secret titan-dev/control-plane-cluster" || bad "wrong Secret name or namespace"
 printf '%s' "$OUT" | grep -q 'PRIVATE KEY' && bad "the key was printed" || ok "the key is never printed"
 grep -q 'rollout' "$WORK/k8s.log" && bad "restarted a control plane that does not exist yet" || ok "no control plane yet, so no restart"
 
@@ -131,7 +131,7 @@ run
 [ "$RC" -eq 0 ] && ok "exit 0" || bad "exit $RC: $OUT"
 grep -q "^Clusters__0__ServerFingerprint=${SERVER_FP%1234}9999$" "$WORK/k8s/secret" && ok "the new fingerprint replaces the old" || bad "old fingerprint kept"
 grep -qx "$(client_fp)" "$WORK/vm/trusted" && ok "the same identity is trusted again" || bad "not trusted after the rebuild"
-grep -q 'rollout restart deployment/control-plane -n titan-staging' "$WORK/k8s.log" && ok "the control plane restarts to read the new fingerprint" || bad "no restart"
+grep -q 'rollout restart deployment/control-plane -n titan-dev' "$WORK/k8s.log" && ok "the control plane restarts to read the new fingerprint" || bad "no restart"
 
 echo "incus info without a fingerprint"
 printf 'garbage' > "$WORK/vm/server-fp"
@@ -150,7 +150,7 @@ rm -f "$WORK/k8s.log"
 run
 [ "$RC" -eq 0 ] && ok "exit 0" || bad "exit $RC: $OUT"
 grep -q '^Clusters__0__Endpoint=https://192.168.5.2:8443$' "$WORK/k8s/secret" && ok "the endpoint is the host's forward, 192.168.5.2" || bad "endpoint: $(grep Endpoint "$WORK/k8s/secret")"
-grep -q 'rollout restart deployment/control-plane -n titan-staging' "$WORK/k8s.log" && ok "a changed endpoint restarts the control plane" || bad "no restart after the endpoint changed"
+grep -q 'rollout restart deployment/control-plane -n titan-dev' "$WORK/k8s.log" && ok "a changed endpoint restarts the control plane" || bad "no restart after the endpoint changed"
 
 echo "titan-incus reports no API address"
 FAKE_UNAME=Linux

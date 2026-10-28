@@ -24,7 +24,7 @@ spec:
             # The browser's issuer, auth.localhost, does not resolve inside the cluster: the bearer handler reads
             # the metadata from Keycloak's service instead, over http (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#host-access).
             - name: Authentication__Schemes__Bearer__MetadataAddress
-              value: http://keycloak-http.titan-auth-staging.svc.cluster.local/auth/realms/titan/.well-known/openid-configuration
+              value: http://keycloak-http.titan-auth-dev.svc.cluster.local/auth/realms/titan/.well-known/openid-configuration
             - name: Authentication__Schemes__Bearer__RequireHttpsMetadata
               value: "false"
             - name: Authentication__Schemes__Bearer__ValidIssuers__0

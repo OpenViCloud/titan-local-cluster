@@ -36,7 +36,7 @@ spec:
       path: gitops/keycloak/ingress
   destination:
     server: https://kubernetes.default.svc
-    namespace: titan-auth-staging
+    namespace: titan-auth-dev
   syncPolicy:
     automated:
       prune: true

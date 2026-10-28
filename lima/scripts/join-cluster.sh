@@ -6,7 +6,7 @@
 #   cannot live in git. The endpoint is where titan-k3s reaches the Incus API, which differs by host OS
 #   (lima/scripts/host-os.sh): git holds macOS's (gitops/control-plane), and this host's in the Secret overrides it.
 # - titan-incus trusts Titan's certificate under the name titan-local, added only when it does not yet.
-# - Secret titan-staging/control-plane-cluster holds the endpoint, the fingerprint and the identity; the control plane restarts only
+# - Secret titan-dev/control-plane-cluster holds the endpoint, the fingerprint and the identity; the control plane restarts only
 #   when the Secret changed, since it reads them once at start.
 # Values go through files and the Secret only: nothing printed.
 # Needs: titan-incus and titan-k3s running.
@@ -75,7 +75,7 @@ else
 fi
 
 # ── Secret ────────────────────────────────────────────────────────────────────
-applied=$(k create secret generic control-plane-cluster -n titan-staging \
+applied=$(k create secret generic control-plane-cluster -n titan-dev \
     --from-literal="Clusters__0__Endpoint=$endpoint" \
     --from-literal="Clusters__0__ServerFingerprint=$server_fingerprint" \
     --from-file="ProviderClientIdentity__CertificatePem=$CLIENT_CERT" \
@@ -84,8 +84,8 @@ applied=$(k create secret generic control-plane-cluster -n titan-staging \
 echo "$applied"
 case "$applied" in
   *configured*)
-    if k get deployment control-plane -n titan-staging >/dev/null 2>&1; then
-      k rollout restart deployment/control-plane -n titan-staging >/dev/null
+    if k get deployment control-plane -n titan-dev >/dev/null 2>&1; then
+      k rollout restart deployment/control-plane -n titan-dev >/dev/null
       echo "control plane restarted to read the new values"
     fi ;;
 esac

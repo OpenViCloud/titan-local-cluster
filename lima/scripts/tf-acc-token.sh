@@ -12,17 +12,17 @@ ENV_FILE="${OPENVICLOUD_TF_ACC_ENV:-$HOME/.config/openvicloud/tf-acc.env}"
 API_URL="http://api.localhost:8080"
 EMAIL="beta-user@openvicloud.com"
 
-# The dev and staging clusters share namespace names; only the dev cluster answers on this address.
+# Only the dev cluster answers on this address; the kubeconfig must point at it.
 server=$(kubectl --kubeconfig "$KC" config view --minify -o 'jsonpath={.clusters[0].cluster.server}')
 if [ "$server" != "https://127.0.0.1:6443" ]; then
   echo "refusing: kubeconfig points at $server, not the dev cluster" >&2
   exit 1
 fi
 
-pod=$(kubectl --kubeconfig "$KC" --request-timeout=10s -n titan-db-staging get pods \
+pod=$(kubectl --kubeconfig "$KC" --request-timeout=10s -n titan-db-dev get pods \
   -l cnpg.io/instanceRole=primary -o name)
 if [ -z "$pod" ]; then
-  echo "no primary Postgres pod in titan-db-staging" >&2
+  echo "no primary Postgres pod in titan-db-dev" >&2
   exit 1
 fi
 
@@ -31,7 +31,7 @@ hash=$(printf '%s' "$token" | shasum -a 256 | cut -d' ' -f1)
 prefix=${token:0:8}
 
 # The SQL goes in on stdin: no kubectl command line carries the column names.
-if ! result=$(kubectl --kubeconfig "$KC" -n titan-db-staging exec -i "$pod" -c postgres -- \
+if ! result=$(kubectl --kubeconfig "$KC" -n titan-db-dev exec -i "$pod" -c postgres -- \
   psql -U postgres -d titan -v ON_ERROR_STOP=1 -At 2>&1 <<SQL
 BEGIN;
 DELETE FROM core.api_tokens

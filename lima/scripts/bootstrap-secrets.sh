@@ -122,36 +122,36 @@ if [ ! -s "$S3_CERT" ] || [ ! -s "$S3_KEY" ]; then
 fi
 chmod 600 "$CA_KEY" "$S3_KEY"
 
-for namespace in argocd titan-staging titan-db-staging titan-auth-staging seaweedfs; do
+for namespace in argocd titan-dev titan-db-dev titan-auth-dev seaweedfs; do
   k create namespace "$namespace" --dry-run=client -o yaml | k apply -f - >/dev/null
 done
 
 # ── Pull Secret ───────────────────────────────────────────────────────────────
 printf '{"auths": {}}\n' |
-  k create secret generic ghcr-credentials -n titan-staging --type=kubernetes.io/dockerconfigjson \
+  k create secret generic ghcr-credentials -n titan-dev --type=kubernetes.io/dockerconfigjson \
     --from-file=.dockerconfigjson=/dev/stdin --dry-run=client -o yaml |
   k apply -f - >/dev/null
-echo "secret titan-staging/ghcr-credentials applied"
+echo "secret titan-dev/ghcr-credentials applied"
 
 # ── Test values, re-applied every run ─────────────────────────────────────────
 # Role titan_it of the dev database (base/titan-db): integration tests create and drop
 # their own databases with it. A fixed test value, not a secret: the cluster only listens on 127.0.0.1, and
 # test-all.sh of OpenViCloud/titan-control-plane needs the same value.
 printf 'username=titan_it\npassword=titan-it-local-only\n' |
-  k create secret generic titan-it-credentials -n titan-db-staging --type=kubernetes.io/basic-auth \
+  k create secret generic titan-it-credentials -n titan-db-dev --type=kubernetes.io/basic-auth \
     --from-env-file=/dev/stdin --dry-run=client -o yaml | k apply -f - >/dev/null
-echo "secret titan-db-staging/titan-it-credentials applied"
+echo "secret titan-db-dev/titan-it-credentials applied"
 
 # User admin-test (platform-admin) of the dev realm: a fixed test password, so an agent can sign in to the admin console on dev
 # without reading a Secret. Not a secret for the same reason as titan_it: dev's hosts are *.localhost. Keycloak takes a changed
 # value at the next run of keycloak-config-cli, a PostSync hook: sync keycloak-local once after this
 # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets).
-printf 'password=admin-test-local-only\n' | apply_secret titan-auth-staging admin-test-credentials
+printf 'password=admin-test-local-only\n' | apply_secret titan-auth-dev admin-test-credentials
 
 # ── S3 of dev (SeaweedFS), re-applied every run ───────────────────────────────
 k create secret tls seaweedfs-tls -n seaweedfs --cert="$S3_CERT" --key="$S3_KEY" --dry-run=client -o yaml | k apply -f - >/dev/null
 echo "secret seaweedfs/seaweedfs-tls applied"
-for namespace in titan-db-staging titan-staging; do
+for namespace in titan-db-dev titan-dev; do
   k create secret generic s3-ca -n "$namespace" --from-file=ca.crt="$CA_CERT" --dry-run=client -o yaml | k apply -f - >/dev/null
   echo "secret $namespace/s3-ca applied"
 done
@@ -168,21 +168,21 @@ echo "secret seaweedfs/seaweedfs-s3-config applied"
 # incus-worker-backup-credentials: the worker's BACKUP_S3_* names; the worker hands the pair to Incus, which uploads VM and
 # volume backups itself (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/backup/design.md#incus-backup).
 printf 'ACCESS_KEY_ID=%s\nACCESS_SECRET_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
-  apply_secret titan-db-staging titan-db-backup-credentials
+  apply_secret titan-db-dev titan-db-backup-credentials
 printf 'BackupTarget__AccessKeyId=%s\nBackupTarget__SecretAccessKey=%s\n' "$backup_key_id" "$backup_secret_key" |
-  apply_secret titan-staging control-plane-backup-credentials
+  apply_secret titan-dev control-plane-backup-credentials
 printf 'BACKUP_S3_ACCESS_KEY_ID=%s\nBACKUP_S3_SECRET_ACCESS_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
-  apply_secret titan-staging incus-worker-backup-credentials
+  apply_secret titan-dev incus-worker-backup-credentials
 unset backup_key_id backup_secret_key
 
 # ── beta-user-2 (second regression test tenant) ───────────────────────────────
 # Ahead of the early exit below: a cluster bootstrapped before this tenant existed gets its Secret on the next run.
-if secret_absent titan-auth-staging beta-user-2-credentials; then
-  printf 'password=%s\n' "$(from_file BETA_USER_2_PASSWORD)" | apply_secret titan-auth-staging beta-user-2-credentials
+if secret_absent titan-auth-dev beta-user-2-credentials; then
+  printf 'password=%s\n' "$(from_file BETA_USER_2_PASSWORD)" | apply_secret titan-auth-dev beta-user-2-credentials
 fi
 
 # ── Generated once, applied when the cluster has none ─────────────────────────
-if ! secret_absent titan-staging control-plane-secrets; then
+if ! secret_absent titan-dev control-plane-secrets; then
   echo "internal secrets already exist; kept"
   exit 0
 fi
@@ -190,15 +190,15 @@ fi
 db_password=$(from_file TITAN_DB_PASSWORD)
 internal_token=$(from_file INTERNAL_TOKEN)
 
-printf 'username=titan\npassword=%s\n' "$db_password" | apply_secret titan-db-staging titan-db-credentials
-printf 'username=titan\npassword=%s\n' "$db_password" | apply_secret titan-auth-staging titan-db-credentials
-printf 'ConnectionStrings__Titan=Host=titan-db-rw.titan-db-staging.svc.cluster.local;Port=5432;Database=titan;Username=titan;Password=%s\n' "$db_password" |
-  apply_secret titan-staging control-plane-db
+printf 'username=titan\npassword=%s\n' "$db_password" | apply_secret titan-db-dev titan-db-credentials
+printf 'username=titan\npassword=%s\n' "$db_password" | apply_secret titan-auth-dev titan-db-credentials
+printf 'ConnectionStrings__Titan=Host=titan-db-rw.titan-db-dev.svc.cluster.local;Port=5432;Database=titan;Username=titan;Password=%s\n' "$db_password" |
+  apply_secret titan-dev control-plane-db
 printf 'Internal__Token=%s\n' "$internal_token" |
-  apply_secret titan-staging control-plane-secrets
-printf 'CP_INTERNAL_TOKEN=%s\n' "$internal_token" | apply_secret titan-staging worker-secrets
-printf 'admin-password=%s\n' "$(from_file KEYCLOAK_ADMIN_PASSWORD)" | apply_secret titan-auth-staging keycloak-admin-secret
-printf 'password=%s\n' "$(from_file BETA_USER_PASSWORD)" | apply_secret titan-auth-staging beta-user-credentials
+  apply_secret titan-dev control-plane-secrets
+printf 'CP_INTERNAL_TOKEN=%s\n' "$internal_token" | apply_secret titan-dev worker-secrets
+printf 'admin-password=%s\n' "$(from_file KEYCLOAK_ADMIN_PASSWORD)" | apply_secret titan-auth-dev keycloak-admin-secret
+printf 'password=%s\n' "$(from_file BETA_USER_PASSWORD)" | apply_secret titan-auth-dev beta-user-credentials
 # GitHub login has no OAuth app for localhost: the realm import needs the keys, the provider just never works.
-printf 'github-client-id=local-disabled\ngithub-client-secret=local-disabled\n' | apply_secret titan-auth-staging social-login-credentials
+printf 'github-client-id=local-disabled\ngithub-client-secret=local-disabled\n' | apply_secret titan-auth-dev social-login-credentials
 unset db_password internal_token

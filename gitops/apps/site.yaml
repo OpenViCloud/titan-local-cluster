@@ -15,7 +15,7 @@ spec:
     path: gitops/site
   destination:
     server: https://kubernetes.default.svc
-    namespace: titan-staging
+    namespace: titan-dev
   syncPolicy:
     automated:
       prune: true
