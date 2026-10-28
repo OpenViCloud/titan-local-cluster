@@ -14,10 +14,6 @@ resources:
 # tests/render_test.py holds the bucket and endpoint equal to the control plane's BackupTarget env.
 components:
   - ../../base/titan-db/components/backup
-  # The move to namespace titan-db-dev (2026-10-28) is a restore from the archive the cluster in titan-db-staging wrote
-  # under titan-db-restored; the restored cluster archives under titan-db-dev. Once it is healthy the restore component
-  # goes and the write name stays (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook).
-  - ../../base/titan-db/components/restore
 
 patches:
   - target:
@@ -42,15 +38,14 @@ patches:
       - op: replace
         path: /spec/resources/requests/memory
         value: 256Mi
-  # The two names of the restore: read titan-db-restored, the archive of the cluster before the move; write titan-db-dev, a
-  # new one, since barman refuses a non-empty archive (base/titan-db/components/restore).
+  # A new cluster starts empty (initdb), so anyone's first up.sh works on an empty bucket. It archives under
+  # titan-db-dev, the name the maintainers' dev cluster writes since its move to this namespace: barman refuses a non-empty
+  # archive, and an empty bucket takes any name. Rebuilding on a bucket that holds an archive is a restore, added for that
+  # rebuild only (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook).
   - target:
       kind: Cluster
       name: titan-db
     patch: |-
-      - op: replace
-        path: /spec/externalClusters/0/plugin/parameters/serverName
-        value: titan-db-restored
       - op: add
         path: /spec/plugins/0/parameters/serverName
         value: titan-db-dev

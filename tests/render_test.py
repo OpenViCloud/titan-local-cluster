@@ -189,19 +189,17 @@ class DevBackup(unittest.TestCase):
                          "8f377ff4a7d0d3f74fc64b0f7ac4f449fc38ca9e83a40107cca2f9315a9bd920")
 
 
-class DevMovesByRestore(unittest.TestCase):
-    """For the move to namespace titan-db-dev only (2026-10-28), main restores: the new cluster reads the archive the cluster
-    in titan-db-staging wrote under titan-db-restored and writes a new one, titan-db-dev. Anyone's first up.sh on an empty
-    bucket fails meanwhile; the next commit takes the restore out again and main starts empty
-    (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook)."""
+class DevStartsEmpty(unittest.TestCase):
+    """Anyone's first up.sh has an empty bucket, so main creates an empty database: a restore there finds no backup and
+    the database never starts. It archives under the name the maintainers' dev cluster writes since its move to titan-db-dev,
+    or barman refuses that non-empty archive (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook)."""
 
-    def test_the_new_cluster_restores_from_the_archive_before_the_move(self):
+    def test_a_new_cluster_starts_empty_and_restores_nothing(self):
         spec = first(render("titan-db"), "Cluster", "titan-db")["spec"]
-        self.assertEqual(list(spec["bootstrap"]), ["recovery"])
-        self.assertEqual(spec["externalClusters"][0]["plugin"]["parameters"],
-                         {"barmanObjectName": "titan-db-backup", "serverName": "titan-db-restored"})
+        self.assertEqual(list(spec["bootstrap"]), ["initdb"])
+        self.assertNotIn("externalClusters", spec)
 
-    def test_it_archives_under_a_new_name(self):
+    def test_it_archives_under_the_name_dev_writes(self):
         spec = first(render("titan-db"), "Cluster", "titan-db")["spec"]
         self.assertEqual(spec["plugins"][0]["parameters"],
                          {"barmanObjectName": "titan-db-backup", "serverName": "titan-db-dev"})
