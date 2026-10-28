@@ -54,7 +54,8 @@ role `auto-approve` and are approved on their first sign-in; any other account w
 
 On a cluster that was up before the rename of 2026-10-27 (cluster `local-mac`, Applications `*-local-mac`), run
 `bash lima/scripts/drop-old-applications.sh` right after the merge reaches it (or `up.sh`, which runs it): the old root lists
-itself and does not prune itself, and two roots would keep relabelling the same children. The database's rows move by
+itself and may not prune itself (on the Ubuntu cluster on 2026-10-27 it pruned every old Application, itself
+included), and two roots would keep relabelling the same children. The database's rows move by
 themselves, in a hook of the control plane's sync (`gitops/control-plane/rename-cluster-id-job.yaml`).
 
 `up.sh` joins cluster `local` to titan-incus (`lima/scripts/join-cluster.sh`): it makes Titan's client identity once
