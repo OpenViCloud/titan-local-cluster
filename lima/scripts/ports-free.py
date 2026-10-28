@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Stops when a host port of a Lima VM is already held.
 
-Reads `limactl list --json VM` on stdin, whose config.portForwards Lima has already filled in (hostIP, and a missing
-hostPort means the guest port). When another cluster holds one of those ports, Lima only warns it cannot listen and starts
+Reads `limactl list --json VM` on stdin, whose config.portForwards Lima has already filled in (hostIP; a rule without
+hostPort keeps the guest port as its host port). When another cluster holds one of those ports, Lima only warns it cannot listen and starts
 the VM anyway; up.sh would then talk to the other cluster. Exits 1 naming every held port, 0 (silent) when all are free.
 Standard library only: python3 is all up.sh asks of the host.
 """
@@ -15,12 +15,11 @@ import sys
 def held(rules):
     out = []
     for rule in rules:
-        if rule.get("ignore") or "guestPortRange" in rule and "guestPort" not in rule:
+        # A rule without a single guestPort is a range (Lima's catch-all is one, and is ignore: true).
+        if rule.get("ignore") or not rule.get("guestPort"):
             continue
         host_ip = rule.get("hostIP") or "127.0.0.1"
-        port = rule.get("hostPort") or rule.get("guestPort")
-        if not port:
-            continue
+        port = rule.get("hostPort") or rule["guestPort"]
         with socket.socket(socket.AF_INET6 if ":" in host_ip else socket.AF_INET) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:

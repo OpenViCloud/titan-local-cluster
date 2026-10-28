@@ -35,11 +35,16 @@ for _ in $(seq 1 50); do [ -s "$WORK/held" ] && break; sleep 0.1; done
 HELD=$(cat "$WORK/held")
 FREE=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 
-# The JSON `limactl list --json NAME` prints, with only the fields the script reads.
+# The JSON `limactl list --json NAME` prints. Lima adds guestPortRange (and hostPortRange) to every rule, as it does here.
 instance() {  # instance RULE_JSON ...
   python3 -c '
 import json, sys
-print(json.dumps({"name": "titan-k3s", "status": "Stopped", "config": {"portForwards": [json.loads(r) for r in sys.argv[1:]]}}))
+rules = [json.loads(r) for r in sys.argv[1:]]
+for r in rules:
+    if "guestPort" in r:
+        r.setdefault("guestPortRange", [r["guestPort"], r["guestPort"]])
+        h = r.get("hostPort", r["guestPort"]); r.setdefault("hostPortRange", [h, h])
+print(json.dumps({"name": "titan-k3s", "status": "Stopped", "config": {"portForwards": rules}}))
 ' "$@"
 }
 

@@ -30,14 +30,15 @@ for vm in titan-incus titan-k3s; do
   if [ "$status" != "Running" ]; then
     limactl list --json "$vm" | python3 "$here/scripts/ports-free.py"
     # Lima stops waiting for a first boot's provision after about 10 minutes, whatever --timeout says, and exits 1 with the
-    # VM Running; the first provision of titan-incus (apt installs Incus and OVN) measured 689 s. Wait for cloud-init in the
-    # VM itself; the provision check below says whether it finished.
+    # VM Running; the first provision of titan-incus (apt installs Incus and OVN) measured 689 s.
     if ! limactl start "$vm" --tty=false; then
       [ "$(limactl list --format '{{.Status}}' "$vm")" = "Running" ] || exit 1
       echo "$vm is still provisioning; waiting for it (up to 30 minutes)."
-      limactl shell "$vm" -- sudo timeout 30m cloud-init status --wait >/dev/null || true
     fi
   fi
+  # Wait for cloud-init in the VM itself, also when up.sh runs again on a VM still provisioning; it returns at once on a
+  # provisioned VM. The provision check below says whether it finished.
+  limactl shell "$vm" -- sudo timeout 30m cloud-init status --wait >/dev/null || true
   # Lima says READY even when the provision script failed (acceptance S-0, K-1): read the script's own last word.
   last=$(limactl shell "$vm" -- sudo grep -E "^$vm: |Failed to execute /mnt/lima-cidata/provision" /var/log/cloud-init-output.log | tail -n 1)
   case "$last" in
