@@ -36,6 +36,29 @@ repositories and the images (linux/arm64 and linux/amd64) are public. titan-incu
 - Ubuntu: x86_64 with KVM (`/dev/kvm` writable by your user) and nesting on (`cat /sys/module/kvm_intel/parameters/nested` says `Y`,
   or `kvm_amd`'s says `1`), and QEMU (`qemu-system-x86` and `qemu-utils`). The two VMs talk through the host's 127.0.0.1, not Lima's user-v2 network,
   which made QEMU 10.2.1 abort under load.
+
+On Ubuntu, apt has no Lima package. This installs QEMU, then Lima 2.2.1 and kubectl into `~/.local` with their checksums checked
+(root only for the two `sudo` lines; `~/.local/bin` is on Ubuntu's `PATH` after you log in again, or `export PATH="$HOME/.local/bin:$PATH"` now):
+
+```sh
+sudo apt-get install -y qemu-system-x86 qemu-utils curl openssl python3
+sudo usermod -aG kvm "$USER"     # then log in again, so /dev/kvm is writable by you
+mkdir -p ~/.local/bin && cd "$(mktemp -d)"
+curl -fsSLO https://github.com/lima-vm/lima/releases/download/v2.2.1/lima-2.2.1-Linux-x86_64.tar.gz
+curl -fsSLO https://github.com/lima-vm/lima/releases/download/v2.2.1/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS && tar -C ~/.local -xzf lima-2.2.1-Linux-x86_64.tar.gz
+v=$(curl -fsSL https://dl.k8s.io/release/stable.txt)
+curl -fsSLO "https://dl.k8s.io/release/$v/bin/linux/amd64/kubectl" -O "https://dl.k8s.io/release/$v/bin/linux/amd64/kubectl.sha256"
+echo "$(cat kubectl.sha256)  kubectl" | sha256sum -c && install -m 0755 kubectl ~/.local/bin/kubectl
+limactl --version && kubectl version --client
+```
+
+The first `up.sh` downloads the two OS images (about 0.35 and 0.6 GB; how long depends on the link). titan-incus's first
+provision then installs Incus and OVN: 689 s measured on an Ubuntu machine with the images already cached, more on a slow link. Lima stops waiting after about 10 minutes and leaves the VM
+running; `up.sh` then waits up to 30 more minutes for the install to finish. If it still stops, run it again: it waits for the
+install again and goes on from where it stopped. It stops before starting a VM whose host ports (`127.0.0.1` 6443 and 8080; on
+Ubuntu also 8443 and 30833) another cluster or program already holds, and names the port.
+
 The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/` (`secrets.env`, the S3 CA and SeaweedFS's certificate; keys mode 600), so a rebuilt cluster gets them again; keep that folder. Backups go to SeaweedFS in titan-k3s (`gitops/seaweedfs`), over TLS at `https://lima-titan-k3s.internal:30833`, with its data in `~/.local/share/titan-local-cluster/s3` on the host, which outlives the VM. Docker must not be running.
 
 ```sh
@@ -120,6 +143,8 @@ bash lima/tests/bootstrap-secrets_test.sh   # macOS only (stat -f)
 bash lima/tests/trust-s3-ca_test.sh
 bash lima/tests/join-cluster_test.sh
 bash lima/tests/drop-old-applications_test.sh
+bash lima/tests/ports-free_test.sh
+bash lima/tests/first-start_test.sh
 ```
 
 CI runs all of these but `sweeper_test.sh` and `bootstrap-secrets_test.sh` on every push to `main` and every pull request into it.

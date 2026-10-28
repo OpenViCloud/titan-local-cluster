@@ -1,6 +1,6 @@
 name: CI
 
-# The Lima VM files of both OSes with host-os.sh, the cluster join, the pull script, the render of dev's overlays, the Keycloak theme and the provisioning tests of the Incus VM. The
+# The Lima VM files of both OSes with host-os.sh, the cluster join, the host-port check and the first-start wait of up.sh, the pull script, the render of dev's overlays, the Keycloak theme and the provisioning tests of the Incus VM. The
 # sweeper comparison reads OpenViCloud/titan-ops, which is private and which CI does not read; it runs before every push
 # on a machine that can read it (README, Tests).
 on:
@@ -46,3 +46,9 @@ jobs:
 
       - name: Old Applications dropped
         run: bash lima/tests/drop-old-applications_test.sh
+
+      - name: Host ports free before a VM starts
+        run: bash lima/tests/ports-free_test.sh
+
+      - name: First start outlasts Lima's wait
+        run: bash lima/tests/first-start_test.sh
