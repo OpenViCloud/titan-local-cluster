@@ -189,20 +189,22 @@ class DevBackup(unittest.TestCase):
                          "8f377ff4a7d0d3f74fc64b0f7ac4f449fc38ca9e83a40107cca2f9315a9bd920")
 
 
-class DevStartsEmpty(unittest.TestCase):
-    """Anyone's first up.sh has an empty bucket, so main creates an empty database: a restore there finds no backup and
-    the database never starts. It archives under the name the maintainers' dev cluster writes since its restore, or barman refuses that
-    non-empty archive (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook)."""
+class DevMovesByRestore(unittest.TestCase):
+    """For the move to namespace titan-db-dev only (2026-10-28), main restores: the new cluster reads the archive the cluster
+    in titan-db-staging wrote under titan-db-restored and writes a new one, titan-db-dev. Anyone's first up.sh on an empty
+    bucket fails meanwhile; the next commit takes the restore out again and main starts empty
+    (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook)."""
 
-    def test_a_new_cluster_starts_empty_and_restores_nothing(self):
+    def test_the_new_cluster_restores_from_the_archive_before_the_move(self):
         spec = first(render("titan-db"), "Cluster", "titan-db")["spec"]
-        self.assertEqual(list(spec["bootstrap"]), ["initdb"])
-        self.assertNotIn("externalClusters", spec)
+        self.assertEqual(list(spec["bootstrap"]), ["recovery"])
+        self.assertEqual(spec["externalClusters"][0]["plugin"]["parameters"],
+                         {"barmanObjectName": "titan-db-backup", "serverName": "titan-db-restored"})
 
-    def test_it_archives_under_the_name_dev_writes(self):
+    def test_it_archives_under_a_new_name(self):
         spec = first(render("titan-db"), "Cluster", "titan-db")["spec"]
         self.assertEqual(spec["plugins"][0]["parameters"],
-                         {"barmanObjectName": "titan-db-backup", "serverName": "titan-db-restored"})
+                         {"barmanObjectName": "titan-db-backup", "serverName": "titan-db-dev"})
 
 
 def yaml_text(text):
@@ -308,7 +310,7 @@ class DevDatabases(unittest.TestCase):
     def test_only_the_owner_creates_objects_in_public(self):
         # PostgreSQL 15 lets only the database owner (titan) and superusers create in schema public; a grant TO PUBLIC, in
         # any of initdb's SQL lists, would let every role that can connect in.
-        initdb = first(render("titan-db"), "Cluster", "titan-db")["spec"]["bootstrap"]["initdb"]
+        initdb = first(render("titan-db", root=BASE), "Cluster", "titan-db")["spec"]["bootstrap"]["initdb"]
         lists = ("postInitSQL", "postInitTemplateSQL", "postInitApplicationSQL")
         # SQL from a ConfigMap or Secret (the *Refs lists) is not in the render, so none may hide a grant there.
         self.assertEqual([key + "Refs" for key in lists if key + "Refs" in initdb], [])

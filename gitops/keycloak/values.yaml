@@ -4,7 +4,7 @@ extraEnv: |
   - name: KC_DB
     value: "postgres"
   - name: KC_DB_URL_HOST
-    value: "titan-db-rw.titan-db-staging.svc.cluster.local"
+    value: "titan-db-rw.titan-db-dev.svc.cluster.local"
   - name: KC_DB_URL_PORT
     value: "5432"
   - name: KC_DB_URL_DATABASE

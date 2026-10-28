@@ -15,7 +15,7 @@ spec:
     path: gitops/titan-db
   destination:
     server: https://kubernetes.default.svc
-    namespace: titan-db-staging
+    namespace: titan-db-dev
   # Both fields restart the single PostgreSQL instance when they change. Ignored in the diff only (no
   # RespectIgnoreDifferences): a change of them in git does not make the app OutOfSync, so it starts no sync by itself; it
   # is applied, and restarts the database, by the next sync of this app for any reason, manual or another object's change.

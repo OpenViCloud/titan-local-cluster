@@ -125,8 +125,8 @@ grep -q 'github-creds' "$WORK/fresh.kubectl" && bad "a GitHub repository credent
 printf '{"auths": {}}\n' | cmp -s - "$WORK/fresh.stdin.ghcr-credentials" \
   && ok "ghcr-credentials has no auth: images are pulled anonymously" \
   || bad "stdin of ghcr-credentials was: $(cat "$WORK/fresh.stdin.ghcr-credentials" 2>&1)"
-grep -q 'create secret generic ghcr-credentials -n titan-staging --type=kubernetes.io/dockerconfigjson' "$WORK/fresh.kubectl" \
-  && ok "as a dockerconfigjson Secret in titan-staging" || bad "wrong type, name or namespace for ghcr-credentials"
+grep -q 'create secret generic ghcr-credentials -n titan-dev --type=kubernetes.io/dockerconfigjson' "$WORK/fresh.kubectl" \
+  && ok "as a dockerconfigjson Secret in titan-dev" || bad "wrong type, name or namespace for ghcr-credentials"
 leaked=""
 for key in $KEYS; do
   v=$(value "$FILE" "$key")
@@ -190,8 +190,8 @@ grep -q 'get secret.*-o \|get secret.*jsonpath\|get secret.*yaml\|get secret.*js
   && bad "the script reads a Secret's content" || ok "the script never reads a Secret's content"
 printf 'password=admin-test-local-only\n' | cmp -s - "$WORK/running.stdin.admin-test-credentials" \
   && ok "admin-test gets its fixed test password" || bad "stdin of admin-test-credentials was: $(cat "$WORK/running.stdin.admin-test-credentials" 2>&1)"
-grep -q 'create secret generic admin-test-credentials -n titan-auth-staging' "$WORK/running.kubectl" \
-  && ok "in titan-auth-staging, where Keycloak's realm import reads it" || bad "wrong namespace or name for admin-test-credentials"
+grep -q 'create secret generic admin-test-credentials -n titan-auth-dev' "$WORK/running.kubectl" \
+  && ok "in titan-auth-dev, where Keycloak's realm import reads it" || bad "wrong namespace or name for admin-test-credentials"
 
 echo "the S3 key pair, generated once"
 kid=$(value "$FILE" BACKUP_S3_ACCESS_KEY_ID)
@@ -199,17 +199,17 @@ sec=$(value "$FILE" BACKUP_S3_SECRET_ACCESS_KEY)
 printf 'ACCESS_KEY_ID=%s\nACCESS_SECRET_KEY=%s\n' "$kid" "$sec" | cmp -s - "$WORK/fresh.stdin.titan-db-backup-credentials" \
   && ok "CNPG's Secret has ACCESS_KEY_ID and ACCESS_SECRET_KEY, the names the ObjectStore reads" \
   || bad "stdin of titan-db-backup-credentials was: $(sed 's/=.*/=<value>/' "$WORK/fresh.stdin.titan-db-backup-credentials" 2>&1)"
-grep -q 'create secret generic titan-db-backup-credentials -n titan-db-staging' "$WORK/fresh.kubectl" \
-  && ok "in titan-db-staging" || bad "wrong namespace or name for titan-db-backup-credentials"
+grep -q 'create secret generic titan-db-backup-credentials -n titan-db-dev' "$WORK/fresh.kubectl" \
+  && ok "in titan-db-dev" || bad "wrong namespace or name for titan-db-backup-credentials"
 printf 'BackupTarget__AccessKeyId=%s\nBackupTarget__SecretAccessKey=%s\n' "$kid" "$sec" | cmp -s - "$WORK/fresh.stdin.control-plane-backup-credentials" \
   && ok "the control plane's Secret has the same pair under its setting names" \
   || bad "stdin of control-plane-backup-credentials was: $(sed 's/=.*/=<value>/' "$WORK/fresh.stdin.control-plane-backup-credentials" 2>&1)"
 printf 'BACKUP_S3_ACCESS_KEY_ID=%s\nBACKUP_S3_SECRET_ACCESS_KEY=%s\n' "$kid" "$sec" | cmp -s - "$WORK/fresh.stdin.incus-worker-backup-credentials" \
   && ok "the worker's Secret has the same pair under the names the worker reads" \
   || bad "stdin of incus-worker-backup-credentials was: $(sed 's/=.*/=<value>/' "$WORK/fresh.stdin.incus-worker-backup-credentials" 2>&1)"
-grep -q 'create secret generic control-plane-backup-credentials -n titan-staging' "$WORK/fresh.kubectl" \
-  && grep -q 'create secret generic incus-worker-backup-credentials -n titan-staging' "$WORK/fresh.kubectl" \
-  && ok "both in titan-staging" || bad "wrong namespace or name for the control plane's or the worker's backup Secret"
+grep -q 'create secret generic control-plane-backup-credentials -n titan-dev' "$WORK/fresh.kubectl" \
+  && grep -q 'create secret generic incus-worker-backup-credentials -n titan-dev' "$WORK/fresh.kubectl" \
+  && ok "both in titan-dev" || bad "wrong namespace or name for the control plane's or the worker's backup Secret"
 python3 - "$WORK/fresh.stdin.seaweedfs-s3-config" "$kid" "$sec" <<'PY' && ok "SeaweedFS's S3 identity has the same pair" || bad "seaweedfs-s3-config does not carry the pair"
 import json, sys
 config = json.load(open(sys.argv[1]))
@@ -235,10 +235,10 @@ done
   && ok "both private keys are mode 600" || bad "key modes $(stat -f '%Lp' "$DIR/s3-ca.key" "$DIR/s3.key" 2>&1)"
 grep -q "create secret tls seaweedfs-tls -n seaweedfs --cert=$DIR/s3.crt --key=$DIR/s3.key" "$WORK/fresh.kubectl" \
   && ok "SeaweedFS gets its certificate and key as seaweedfs/seaweedfs-tls" || bad "no seaweedfs-tls from the two files"
-grep -q "create secret generic s3-ca -n titan-db-staging --from-file=ca.crt=$DIR/s3-ca.crt" "$WORK/fresh.kubectl" \
-  && grep -q "create secret generic s3-ca -n titan-staging --from-file=ca.crt=$DIR/s3-ca.crt" "$WORK/fresh.kubectl" \
-  && ok "the CA certificate goes to titan-db-staging (barman) and titan-staging (control plane, worker)" \
-  || bad "s3-ca missing in titan-db-staging or titan-staging"
+grep -q "create secret generic s3-ca -n titan-db-dev --from-file=ca.crt=$DIR/s3-ca.crt" "$WORK/fresh.kubectl" \
+  && grep -q "create secret generic s3-ca -n titan-dev --from-file=ca.crt=$DIR/s3-ca.crt" "$WORK/fresh.kubectl" \
+  && ok "the CA certificate goes to titan-db-dev (barman) and titan-dev (control plane, worker)" \
+  || bad "s3-ca missing in titan-db-dev or titan-dev"
 grep -q "s3-ca.key" "$WORK/fresh.kubectl" && bad "the CA's private key reached kubectl" || ok "the CA's private key never reaches the cluster"
 for name in s3-ca.crt s3-ca.key s3.crt s3.key; do cp "$DIR/$name" "$WORK/first-$name"; done
 run certs-again "$WORK/fresh"

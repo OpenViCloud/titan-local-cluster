@@ -7,7 +7,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 # The runner lives beside Keycloak, where the two test-account secrets are.
-namespace: titan-auth-staging
+namespace: titan-auth-dev
 
 resources:
   - ../../base/regression-runner
