@@ -1,4 +1,4 @@
-# The staging regression runner, pointed at the local cluster (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets):
+# The regression runner of base/, pointed at the local cluster (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets):
 # the pod reads the generated test-account passwords through secretKeyRef, the agent never sees them.
 #   kubectl --kubeconfig ~/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml apply -k lima/regression-runner
 # The browser in the pod must reach *.localhost:8080 like the host does, because Keycloak's issuer carries that
@@ -6,8 +6,19 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# The runner lives beside Keycloak, where the two test-account secrets are.
+namespace: titan-auth-staging
+
 resources:
   - ../../base/regression-runner
+
+# The addresses the specs use: the host's (the pod reaches them through the loopback proxy of the header above).
+configMapGenerator:
+  - name: regression-runner-urls
+    literals:
+      - PORTAL_BASE_URL=http://portal.localhost:8080
+      - ADMIN_BASE_URL=http://admin.localhost:8080
+      - API_BASE_URL=http://api.localhost:8080
 
 # One patch for both lanes: the CronJob of lane b (titan-regression-b) differs only in user and password.
 patches:
@@ -15,16 +26,7 @@ patches:
       kind: CronJob
       name: titan-regression(-b)?
     patch: |-
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/1/value
-        value: http://portal.localhost:8080
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/value
-        value: http://admin.localhost:8080
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/3/value
-        value: http://api.localhost:8080
-      # titan-k3s had 3 GiB when this was measured (4 now); the staging request of 1 GiB leaves the cluster no headroom.
+      # titan-k3s had 3 GiB when this was measured (4 now); base's request of 1 GiB leaves the cluster no headroom.
       - op: replace
         path: /spec/jobTemplate/spec/template/spec/containers/0/resources
         value:

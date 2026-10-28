@@ -63,10 +63,10 @@ data:
           "standardFlowEnabled": true,
           "attributes": {
             "pkce.code.challenge.method": "S256",
-            "post.logout.redirect.uris": "https://portal-titan-staging.openvicloud.com##http://localhost:5173##http://portal.localhost:8080"
+            "post.logout.redirect.uris": "$(env:PORTAL_ORIGIN)##$(env:PORTAL_SECOND_ORIGIN)"
           },
-          "redirectUris": ["https://portal-titan-staging.openvicloud.com/*", "http://localhost:5173/*", "http://portal.localhost:8080/*"],
-          "webOrigins": ["https://portal-titan-staging.openvicloud.com", "http://localhost:5173", "http://portal.localhost:8080"],
+          "redirectUris": ["$(env:PORTAL_ORIGIN)/*", "$(env:PORTAL_SECOND_ORIGIN)/*"],
+          "webOrigins": ["$(env:PORTAL_ORIGIN)", "$(env:PORTAL_SECOND_ORIGIN)"],
           "protocolMappers": [
             {
               "name": "titan-api-audience",
@@ -89,10 +89,10 @@ data:
           "standardFlowEnabled": true,
           "attributes": {
             "pkce.code.challenge.method": "S256",
-            "post.logout.redirect.uris": "https://admin-titan-staging.openvicloud.com##http://localhost:5173##http://admin.localhost:8080"
+            "post.logout.redirect.uris": "$(env:ADMIN_ORIGIN)##$(env:ADMIN_SECOND_ORIGIN)"
           },
-          "redirectUris": ["https://admin-titan-staging.openvicloud.com/*", "http://localhost:5173/*", "http://admin.localhost:8080/*"],
-          "webOrigins": ["https://admin-titan-staging.openvicloud.com", "http://localhost:5173", "http://admin.localhost:8080"],
+          "redirectUris": ["$(env:ADMIN_ORIGIN)/*", "$(env:ADMIN_SECOND_ORIGIN)/*"],
+          "webOrigins": ["$(env:ADMIN_ORIGIN)", "$(env:ADMIN_SECOND_ORIGIN)"],
           "protocolMappers": [
             {
               "name": "titan-api-audience",

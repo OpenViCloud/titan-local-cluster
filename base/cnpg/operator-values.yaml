@@ -8,7 +8,7 @@
 #
 # CNPG publishes multi-arch images (linux/amd64 + linux/arm64).
 # Operator is cluster-scoped — one install manages all Cluster CRs
-# across namespaces (titan-db-staging, titan-db-prod).
+# across namespaces (the environment's titan-db namespace).
 
 resources:
   requests:

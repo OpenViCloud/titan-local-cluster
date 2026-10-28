@@ -1,11 +1,11 @@
-# Local cluster: copy of titan-ops's gitops/apps-staging/keycloak.yaml with dev's values and ingress from this repository, and one source more: the second regression test user, realm-import-beta-user-2 (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# Local cluster: copy of titan-ops's gitops/apps-staging/keycloak.yaml with dev's values, realm origins (gitops/keycloak/realm-import) and ingress from this repository, and one source more: the second regression test user, realm-import-beta-user-2 (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: keycloak-local
   namespace: argocd
   annotations:
-    # wave 1, after titan-db (wave 0): titan-db is Healthy once Database keycloak-staging is applied (its health check in
+    # wave 1, after titan-db (wave 0): titan-db is Healthy once Database keycloak is applied (its health check in
     # lima/provision/k3s.sh), so the database exists before Keycloak starts
     argocd.argoproj.io/sync-wave: "1"
 spec:
@@ -24,7 +24,7 @@ spec:
       ref: local
     - repoURL: https://github.com/OpenViCloud/titan-local-cluster
       targetRevision: main
-      path: base/keycloak/realm-import
+      path: gitops/keycloak/realm-import
     # Not in staging's app until release:infra has made its Secret: the hook of this directory reads Secret
     # beta-user-2-credentials, which lima/scripts/bootstrap-secrets.sh makes here. Run that script (up.sh does) before the
     # push that adds this source reaches a cluster that has no such Secret, or the hook pod never starts.

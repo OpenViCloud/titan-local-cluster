@@ -1,4 +1,4 @@
-# The regression runner (staging's Application; dev applies it through lima/regression-runner). The login step of a UI/API regression runs HERE, not
+# The regression runner (an Application in titan-ops; dev applies it through lima/regression-runner). The login step of a UI/API regression runs HERE, not
 # on an agent's machine: the pod reads the test-account passwords from the secrets
 # of this namespace (secretKeyRef) and Playwright types them. The agent only
 # supplies the specs, starts a run and reads the redacted output + screenshots —
@@ -7,14 +7,15 @@
 #
 # One run is `bash run-module.sh` of OpenViCloud/titan-regression: it loads the specs into a ConfigMap of the job's own,
 # creates the job from this CronJob (env REGRESSION_CRONJOB names it; lane b has cronjob-lane-b.yaml), waits for
-# /work/results/.done, copies the results and deletes the job and its ConfigMap. The same steps by hand:
-#   kubectl -n titan-auth-staging create configmap titan-regression-specs-<job> \
+# /work/results/.done, copies the results and deletes the job and its ConfigMap. The same steps by hand, <ns> being
+# Keycloak's namespace where the runner lives:
+#   kubectl -n <ns> create configmap titan-regression-specs-<job> \
 #     --from-file=<dir with *.spec.ts> --dry-run=client -o yaml | kubectl apply -f -
-#   kubectl -n titan-auth-staging create job <job> --from=cronjob/titan-regression --dry-run=client -o json \
+#   kubectl -n <ns> create job <job> --from=cronjob/titan-regression --dry-run=client -o json \
 #     | python3 patch-job.py titan-regression-specs-<job> | kubectl create -f -    # patch-job.py is in titan-regression
-#   kubectl -n titan-auth-staging exec <pod> -- test -f /work/results/.done   # repeat until true or the pod has ended
-#   kubectl -n titan-auth-staging logs <pod>                           # not -f: the pod sleeps after RESULTS_READY
-#   kubectl -n titan-auth-staging cp <pod>:/work/results <work dir>      # while the pod holds; not committed
+#   kubectl -n <ns> exec <pod> -- test -f /work/results/.done   # repeat until true or the pod has ended
+#   kubectl -n <ns> logs <pod>                           # not -f: the pod sleeps after RESULTS_READY
+#   kubectl -n <ns> cp <pod>:/work/results <work dir>      # while the pod holds; not committed
 #
 # suspend: true — it never runs on a schedule; the schedule field is required only.
 apiVersion: batch/v1
@@ -58,11 +59,20 @@ spec:
                 - name: HOME
                   value: /work
                 - name: PORTAL_BASE_URL
-                  value: https://portal-titan-staging.openvicloud.com
+                  valueFrom:
+                    configMapKeyRef:
+                      name: regression-runner-urls
+                      key: PORTAL_BASE_URL
                 - name: ADMIN_BASE_URL
-                  value: https://admin-titan-staging.openvicloud.com
+                  valueFrom:
+                    configMapKeyRef:
+                      name: regression-runner-urls
+                      key: ADMIN_BASE_URL
                 - name: API_BASE_URL
-                  value: https://api-titan-staging.openvicloud.com
+                  valueFrom:
+                    configMapKeyRef:
+                      name: regression-runner-urls
+                      key: API_BASE_URL
                 - name: RESULTS_DIR
                   value: /work/results
                 - name: HOLD_SECONDS

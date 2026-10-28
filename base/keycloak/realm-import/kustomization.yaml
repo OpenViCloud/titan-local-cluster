@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: titan-auth-staging
+# No namespace: the Application's destination gives it (Keycloak's namespace of each environment).
 
 resources:
   - configmap.yaml

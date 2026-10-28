@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The realm of base/ with this cluster's portal addresses: titan.json reads them from ConfigMap keycloak-realm-origins.
+# The second origin of each portal is the Vite dev server (npm run dev of titan-cloud-console and titan-admin-console).
+resources:
+  - ../../../base/keycloak/realm-import
+
+configMapGenerator:
+  - name: keycloak-realm-origins
+    literals:
+      - PORTAL_ORIGIN=http://portal.localhost:8080
+      - PORTAL_SECOND_ORIGIN=http://localhost:5173
+      - ADMIN_ORIGIN=http://admin.localhost:8080
+      - ADMIN_SECOND_ORIGIN=http://localhost:5173

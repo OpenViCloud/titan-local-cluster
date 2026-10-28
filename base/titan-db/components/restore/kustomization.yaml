@@ -13,7 +13,7 @@ kind: Component
 # Two names, and they move on each restore: the one read (serverName in externalClusters) is the name the previous
 # cluster archived under, the one written (in plugins) is new. First restore: read "titan-db", write "titan-db-restored".
 # A second restore reads "titan-db-restored" and writes a new name (e.g. "titan-db-restored-2"): patch both names in
-# the overlay of that environment, not here (dev and staging share this component), or it restores from the stale
+# the overlay of that environment, not here (every environment shares this component), or it restores from the stale
 # archive without an error.
 patches:
   - target:

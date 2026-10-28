@@ -1,11 +1,13 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
-  name: keycloak-staging
+  name: keycloak
 spec:
   # CNPG adopts the database when it already exists (a cluster made by initdb before this object, or one restored from a
-  # backup), and makes it otherwise.
-  name: keycloak_staging
+  # backup), and makes it otherwise. A cluster whose Keycloak database has another name (one named after its
+  # environment, before 2026-10-28) gets an empty one here, and Keycloak starts on it: rename the old one first, with Keycloak stopped
+  # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#keycloak-db-rename).
+  name: keycloak
   owner: titan
   cluster:
     name: titan-db

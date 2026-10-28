@@ -6,8 +6,11 @@ spec:
   # Seven days. No bucket lock: barman rewrites backup.info, which a lock refuses (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#no-bucket-lock).
   retentionPolicy: "7d"
   configuration:
-    destinationPath: s3://titan-backup-staging/postgres/
-    endpointURL: https://f74ed847b6f7b77c81ba88208a275338.r2.cloudflarestorage.com
+    # The bucket and its endpoint belong to the environment: every overlay that adds this component patches both. The
+    # endpoint here is under .invalid (RFC 6761), so an overlay that forgets fails to archive (ContinuousArchiving=False,
+    # WAL piling up on the PVC) rather than writing into another environment's bucket.
+    destinationPath: s3://set-by-the-overlay/postgres/
+    endpointURL: https://set-by-the-overlay.invalid
     s3Credentials:
       accessKeyId:
         name: titan-db-backup-credentials

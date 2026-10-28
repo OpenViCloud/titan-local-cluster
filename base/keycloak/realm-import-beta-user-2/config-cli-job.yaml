@@ -5,7 +5,6 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: keycloak-config-cli-beta-user-2
-  namespace: titan-auth-staging
   annotations:
     argocd.argoproj.io/hook: PostSync
     argocd.argoproj.io/sync-wave: "1"
@@ -32,8 +31,9 @@ spec:
               mountPath: /config
               readOnly: true
           env:
+            # The Job runs in Keycloak's namespace, so the Service's short name reaches it.
             - name: KEYCLOAK_URL
-              value: "http://keycloak-http.titan-auth-staging.svc.cluster.local:80/auth"
+              value: "http://keycloak-http:80/auth"
             - name: KEYCLOAK_USER
               value: "admin"
             - name: KEYCLOAK_PASSWORD

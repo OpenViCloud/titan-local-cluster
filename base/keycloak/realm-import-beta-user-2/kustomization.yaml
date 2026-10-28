@@ -1,14 +1,14 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: titan-auth-staging
+# No namespace: the Application's destination gives it.
 
 # The second regression test tenant, kept apart from realm-import/ on purpose: its hook reads Secret
 # beta-user-2-credentials, which release:infra creates. A hook pod whose secretKeyRef points at a Secret that
 # does not exist never starts, so no app that syncs realm-import/ may read this directory before that apply.
 # An app reads this directory only where that Secret exists: the dev cluster's keycloak app (OpenViCloud/titan-local-cluster)
-# reads it, with a Secret made by its bootstrap-secrets.sh; staging's keycloak app (titan-ops gitops/apps-staging/keycloak.yaml) adds
-# it as a source in the release that applies the Secret (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/testing.md#regression-lanes).
+# reads it, with a Secret made by its bootstrap-secrets.sh; another environment's keycloak app adds it as a source in
+# the release that applies the Secret (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/testing.md#regression-lanes).
 resources:
   - configmap.yaml
   - config-cli-job.yaml
