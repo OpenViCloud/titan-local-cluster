@@ -120,7 +120,14 @@ class DevRender(unittest.TestCase):
             "Clusters__0__Endpoint": "https://192.168.104.1:8443",
             "Clusters__0__OvnUplinkNetwork": "ovnup",
             "Clusters__0__StoragePool": "default",
+            "Clusters__0__Ipv6Block": "2001:db8:0:d400::/56",
         })
+
+    # Without the block, a network that asks for public IPv6 (and so every load balancer) answers 422 IPV6_NOT_AVAILABLE.
+    # The block is the one lima/provision/incus.sh routes on ovnup: the control plane hands out /64s that titan-incus routes.
+    def test_the_clusters_ipv6_block_is_the_one_titan_incus_routes(self):
+        prefix = re.search(r"^IPV6_BLOCK_PREFIX=(\S+)$", (LIMA / "provision/incus.sh").read_text(), re.M).group(1)
+        self.assertEqual(zones(render("control-plane"))["Clusters__0__Ipv6Block"], prefix + "00::/56")
 
     # A key in two envFrom sources takes the value of the later one: Secret control-plane-cluster must come after the
     # ConfigMap, or Ubuntu's endpoint loses to macOS's.

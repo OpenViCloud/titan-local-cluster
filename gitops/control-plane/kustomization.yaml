@@ -21,6 +21,9 @@ configMapGenerator:
       - Clusters__0__Endpoint=https://192.168.104.1:8443
       - Clusters__0__OvnUplinkNetwork=ovnup
       - Clusters__0__StoragePool=default
+      # The /56 that lima/provision/incus.sh routes on ovnup. Without it a network that asks for public IPv6 answers 422,
+      # so no load balancer can be made.
+      - Clusters__0__Ipv6Block=2001:db8:0:d400::/56
 
 patches:
   - path: patch-env.yaml
