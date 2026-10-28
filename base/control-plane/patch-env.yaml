@@ -16,7 +16,7 @@ spec:
             - secretRef:
                 name: control-plane-secrets
             - configMapRef:
-                name: control-plane-zones
+                name: control-plane-clusters
             # Titan's client identity toward every cluster, and what of a cluster the environment cannot commit
             # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/cluster/design.md#provider-client-identity). Optional so
             # an image that does not read it starts without it; a control plane with a cluster configured does not start
@@ -32,10 +32,9 @@ spec:
           env:
             - name: Keycloak__Audience
               value: titan-api
-            # Discovery and JWKS in-cluster, the token's issuer stays public
-            # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#keycloak-metadata).
-            - name: Authentication__Schemes__Bearer__MetadataAddress
-              value: http://keycloak-http.titan-auth-staging.svc.cluster.local/auth/realms/titan/.well-known/openid-configuration
+            # Authentication__Schemes__Bearer__MetadataAddress (discovery and JWKS in-cluster, the token's issuer stays
+            # public: https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#keycloak-metadata)
+            # names Keycloak's namespace, so each environment's overlay sets it.
             - name: Authentication__Schemes__Bearer__RequireHttpsMetadata
               value: "false"
             - name: Logging__LogLevel__Microsoft.AspNetCore

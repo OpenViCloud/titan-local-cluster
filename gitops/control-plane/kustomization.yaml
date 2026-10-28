@@ -11,7 +11,7 @@ resources:
   - rename-cluster-id-job.yaml
 
 configMapGenerator:
-  - name: control-plane-zones
+  - name: control-plane-clusters
     literals:
       # Cluster local is titan-incus. Its server fingerprint changes when the VM is rebuilt, so it comes with Titan's
       # client identity from Secret control-plane-cluster (lima/scripts/join-cluster.sh). The endpoint here is macOS's:

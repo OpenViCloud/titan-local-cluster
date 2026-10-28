@@ -14,15 +14,15 @@ command:
   - "start"
   - "--import-realm"
 
+# KC_DB_URL_HOST names the database's namespace, so it is not here: each environment's values (dev:
+# gitops/keycloak/values.yaml) repeat this whole list (extraEnv is one string in the chart) with the host added.
 extraEnv: |
   - name: KC_DB
     value: "postgres"
-  - name: KC_DB_URL_HOST
-    value: "titan-db-rw.titan-db-staging.svc.cluster.local"
   - name: KC_DB_URL_PORT
     value: "5432"
   - name: KC_DB_URL_DATABASE
-    value: "keycloak_staging"
+    value: "keycloak"
   - name: KC_DB_USERNAME
     value: "titan"
   - name: KC_DB_PASSWORD

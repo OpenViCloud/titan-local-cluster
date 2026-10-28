@@ -7,8 +7,10 @@ deployments share everything; what differs is the two VM files (`lima/macos/`, `
 
 `base/` holds the manifests every environment shares: the apps, the database with its backup and restore components, the
 Keycloak realm import and values, and the values of NATS, CloudNativePG and the Barman Cloud plugin's manifest. Every overlay here
-(`gitops/<app>/`) builds on `../../base/<app>` and adds only what the local cluster needs: hostnames, the cluster list, the token issuer,
-the backup bucket and endpoint, smaller requests, dev's own image tags. Staging's overlays live in titan-ops and build on `base/` here at a pinned commit;
+(`gitops/<app>/`) builds on `../../base/<app>` and adds only what the local cluster needs: hostnames, the cluster list, the token issuer and Keycloak's metadata
+address, Keycloak's database host, the realm's portal origins (a ConfigMap the overlay generates), the
+backup bucket and endpoint, smaller requests, dev's own image tags. `base/` names no environment (`tests/render_test.py`,
+`BaseNamesNoEnvironment`). The runner, applied by hand from `lima/regression-runner`, generates its URLs the same way. Staging's overlays live in titan-ops and build on `base/` here at a pinned commit;
 this repository never reaches staging. Nothing ArgoCD renders here reads titan-ops (`tests/render_test.py` checks it).
 
 Design, rules and runbook live in titan-ops:

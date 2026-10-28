@@ -1,9 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Staging's Application is titan-ops gitops/apps-staging/regression-runner.yaml. Namespace = titan-auth-staging, where the two
-# test-account secrets live.
-namespace: titan-auth-staging
+# No namespace: each environment puts the runner in its Keycloak namespace, where the two test-account secrets live, and
+# generates ConfigMap regression-runner-urls (PORTAL_BASE_URL, ADMIN_BASE_URL, API_BASE_URL) with its public addresses.
 
 resources:
   - runner-configmap.yaml

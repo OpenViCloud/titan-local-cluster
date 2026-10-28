@@ -4,7 +4,7 @@
 # 30s later included — deletes the failed Job with its pods. generateName would let a failed Job survive, but
 # kustomize refuses a resource without metadata.name. So a SyncFail hook, which Argo runs when the sync fails and
 # before the next attempt, copies the pod logs into a ConfigMap:
-#   kubectl -n titan-staging get configmap control-plane-deploy-hook-logs -o yaml
+#   kubectl -n <the control plane's namespace> get configmap control-plane-deploy-hook-logs -o yaml
 #
 # The RBAC is a PreSync hook in wave -1 so it exists before the migration Job, the first thing that can fail.
 apiVersion: v1

@@ -24,7 +24,7 @@ spec:
           ports:
             - containerPort: 80
           volumeMounts:
-            # Runtime config, not baked: one image serves dev and staging (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/public-site/design.md#runtime-config).
+            # Runtime config, not baked: one image serves every environment (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/public-site/design.md#runtime-config).
             - name: site-config
               mountPath: /usr/share/nginx/html/config.json
               subPath: config.json

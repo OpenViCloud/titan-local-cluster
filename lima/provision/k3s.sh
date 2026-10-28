@@ -80,7 +80,7 @@ spec:
             end
           end
           return hs
-        # ArgoCD has no health for CNPG's Database either: without it titan-db is Healthy before keycloak_staging exists,
+        # ArgoCD has no health for CNPG's Database either: without it titan-db is Healthy before Keycloak's database exists,
         # and keycloak's wave starts on a missing database. Not applied yet is Progressing, not Degraded: CNPG retries
         # while the cluster comes up.
         resource.customizations.health.postgresql.cnpg.io_Database: |

@@ -44,11 +44,20 @@ spec:
                 - name: HOME
                   value: /work
                 - name: PORTAL_BASE_URL
-                  value: https://portal-titan-staging.openvicloud.com
+                  valueFrom:
+                    configMapKeyRef:
+                      name: regression-runner-urls
+                      key: PORTAL_BASE_URL
                 - name: ADMIN_BASE_URL
-                  value: https://admin-titan-staging.openvicloud.com
+                  valueFrom:
+                    configMapKeyRef:
+                      name: regression-runner-urls
+                      key: ADMIN_BASE_URL
                 - name: API_BASE_URL
-                  value: https://api-titan-staging.openvicloud.com
+                  valueFrom:
+                    configMapKeyRef:
+                      name: regression-runner-urls
+                      key: API_BASE_URL
                 - name: RESULTS_DIR
                   value: /work/results
                 - name: HOLD_SECONDS

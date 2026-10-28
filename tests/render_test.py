@@ -17,7 +17,9 @@ import subprocess
 import tempfile
 import unittest
 
-GITOPS = pathlib.Path(__file__).resolve().parent.parent / "gitops"
+REPO = pathlib.Path(__file__).resolve().parent.parent
+GITOPS = REPO / "gitops"
+BASE = REPO / "base"
 TESTS = pathlib.Path(__file__).resolve().parent
 LIMA = GITOPS.parent / "lima"
 # Dev's S3 (SeaweedFS): one name for pods and titan-incus alike (macOS: Lima's user-v2 network; Ubuntu: Lima's host
@@ -43,11 +45,11 @@ def containers(objects, deployment):
     raise AssertionError("no Deployment " + deployment)
 
 
-def zones(objects):
+def cluster_list(objects):
     for obj in objects:
-        if obj["kind"] == "ConfigMap" and obj["metadata"]["name"].startswith("control-plane-zones"):
+        if obj["kind"] == "ConfigMap" and obj["metadata"]["name"].startswith("control-plane-clusters"):
             return obj["data"]
-    raise AssertionError("no ConfigMap control-plane-zones")
+    raise AssertionError("no ConfigMap control-plane-clusters")
 
 
 def portal_config(objects):
@@ -113,7 +115,7 @@ class DevRender(unittest.TestCase):
     # The fingerprint is not in git: it changes with titan-incus and comes from Secret control-plane-cluster. The endpoint in
     # git is macOS's; lima/scripts/join-cluster.sh writes this host's into the same Secret, which overrides it (next test).
     def test_the_cluster_list_is_local_on_titan_incus(self):
-        listed = zones(render("control-plane"))
+        listed = cluster_list(render("control-plane"))
         self.assertEqual({k: v for k, v in listed.items() if k.startswith("Clusters__")}, {
             "Clusters__0__Id": "local",
             "Clusters__0__Name": "Local",
@@ -127,16 +129,16 @@ class DevRender(unittest.TestCase):
     # The block is the one lima/provision/incus.sh routes on ovnup: the control plane hands out /64s that titan-incus routes.
     def test_the_clusters_ipv6_block_is_the_one_titan_incus_routes(self):
         prefix = re.search(r"^IPV6_BLOCK_PREFIX=(\S+)$", (LIMA / "provision/incus.sh").read_text(), re.M).group(1)
-        self.assertEqual(zones(render("control-plane"))["Clusters__0__Ipv6Block"], prefix + "00::/56")
+        self.assertEqual(cluster_list(render("control-plane"))["Clusters__0__Ipv6Block"], prefix + "00::/56")
 
     # A key in two envFrom sources takes the value of the later one: Secret control-plane-cluster must come after the
     # ConfigMap, or Ubuntu's endpoint loses to macOS's.
     def test_the_cluster_secret_overrides_the_cluster_list(self):
         sources = [r.get("secretRef", r.get("configMapRef"))["name"] for c in containers(render("control-plane"), "control-plane")
                    for r in c.get("envFrom", [])]
-        zones_cm = [n for n in sources if n.startswith("control-plane-zones")]
-        self.assertEqual(len(zones_cm), 1, sources)
-        self.assertGreater(sources.index("control-plane-cluster"), sources.index(zones_cm[0]), sources)
+        clusters_cm = [n for n in sources if n.startswith("control-plane-clusters")]
+        self.assertEqual(len(clusters_cm), 1, sources)
+        self.assertGreater(sources.index("control-plane-cluster"), sources.index(clusters_cm[0]), sources)
 
     def test_the_cluster_secret_is_optional_so_the_pod_starts_before_it(self):
         refs = [r["secretRef"] for c in containers(render("control-plane"), "control-plane") for r in c.get("envFrom", []) if "secretRef" in r]
@@ -298,8 +300,8 @@ class DevDatabases(unittest.TestCase):
 
     def test_keycloak_database_is_declared_on_titan_db_and_never_dropped(self):
         objects = render("titan-db")
-        spec = first(objects, "Database", "keycloak-staging")["spec"]
-        self.assertEqual((spec["name"], spec["owner"], spec["cluster"]["name"]), ("keycloak_staging", "titan", "titan-db"))
+        spec = first(objects, "Database", "keycloak")["spec"]
+        self.assertEqual((spec["name"], spec["owner"], spec["cluster"]["name"]), ("keycloak", "titan", "titan-db"))
         self.assertEqual((spec["ensure"], spec["databaseReclaimPolicy"]), ("present", "retain"))
         self.assertNotIn("postInitSQL", first(objects, "Cluster", "titan-db")["spec"]["bootstrap"].get("initdb", {}))
 
@@ -504,6 +506,76 @@ class NoFakeService(unittest.TestCase):
         directories = [d.name for d in GITOPS.iterdir() if d.is_dir()]
         self.assertIn("control-plane", directories)
         self.assertEqual([d for d in directories if FAKE.search(d)], [])
+
+
+# Names that belong to one environment: the environments' own words and namespaces, local and public addresses, and a
+# storage account. Test accounts' e-mail addresses are the same everywhere. A value of another shape (an IP, an endpoint
+# of another provider) is not seen.
+ENVIRONMENT_WORD = re.compile(
+    r"staging|\bprd\b|titan(-auth|-db)?-dev\b|localhost|\.internal\b|cloudflarestorage\.com|(?<!@)\b[a-z0-9.-]+\.openvicloud\.com",
+    re.IGNORECASE)
+
+
+def environment_words(root):
+    """Every line of a file under root that names one environment, as (path, line number, line)."""
+    hits = []
+    for path in sorted(pathlib.Path(root).rglob("*")):
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text()
+        except UnicodeDecodeError:
+            continue
+        for number, line in enumerate(text.splitlines(), 1):
+            if ENVIRONMENT_WORD.search(line.replace("github.com/OpenViCloud", "")):
+                hits.append((str(path.relative_to(root)), number, line.strip()))
+    return hits
+
+
+class BaseNamesNoEnvironment(unittest.TestCase):
+    """base/ is shared by every environment, which sets what is its own in its overlay
+    (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#gitops-flow)."""
+
+    def test_no_file_of_base_names_an_environment(self):
+        self.assertEqual(environment_words(BASE), [])
+
+    def test_the_check_sees_a_name_of_each_kind(self):
+        with tempfile.TemporaryDirectory() as root:
+            lines = ["ns: titan-auth-staging", "env: prd", "url: http://localhost:5173",
+                     "url: https://portal.openvicloud.com", "ns: titan-db-dev", "host: lima-titan-k3s.internal",
+                     "endpoint: https://f74ed847.r2.cloudflarestorage.com",
+                     "email: beta-user@openvicloud.com", "doc: https://github.com/OpenViCloud/titan-ops/blob/main/x.md",
+                     "log: /dev/null", "dir: devices"]
+            pathlib.Path(root, "a.yaml").write_text("\n".join(lines) + "\n")
+            self.assertEqual([number for _, number, _ in environment_words(root)], [1, 2, 3, 4, 5, 6, 7])
+
+
+class EnvironmentValuesReachTheirReaders(unittest.TestCase):
+    """What base reads from a ConfigMap the overlay generates is there on dev: the realm's portal addresses and the
+    runner's URLs. A missing key fails at run time: keycloak-config-cli stops on an undefined $(env:...) (and a missing
+    ConfigMap keeps its hook pod from starting); the runner pod does not start (configMapKeyRef is not optional)."""
+
+    def test_every_variable_of_the_realm_has_a_source(self):
+        objects = render("keycloak/realm-import")
+        job = first(objects, "Job", "keycloak-config-cli")
+        container = job["spec"]["template"]["spec"]["containers"][0]
+        provided = {entry["name"] for entry in container["env"]}
+        for source in container["envFrom"]:
+            config_map = first(objects, "ConfigMap", source["configMapRef"]["name"])
+            provided |= set(config_map["data"])
+        realm = next(obj for obj in objects if obj["kind"] == "ConfigMap" and obj["metadata"]["name"] == "keycloak-realm-import")
+        wanted = set(re.findall(r"\$\(env:([A-Z0-9_]+)\)", json.dumps(realm["data"])))
+        self.assertIn("PORTAL_ORIGIN", wanted)
+        self.assertEqual(sorted(wanted - provided), [])
+
+    def test_the_runner_reads_its_urls_from_a_generated_config_map(self):
+        objects = render("regression-runner", root=REPO / "lima")
+        for name in ("titan-regression", "titan-regression-b"):
+            env = first(objects, "CronJob", name)["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]["env"]
+            refs = [entry["valueFrom"]["configMapKeyRef"] for entry in env if "configMapKeyRef" in entry.get("valueFrom", {})]
+            self.assertEqual(sorted(ref["key"] for ref in refs), ["ADMIN_BASE_URL", "API_BASE_URL", "PORTAL_BASE_URL"])
+            for ref in refs:
+                self.assertTrue(first(objects, "ConfigMap", ref["name"])["data"][ref["key"]].startswith("http://"))
 
 
 if __name__ == "__main__":

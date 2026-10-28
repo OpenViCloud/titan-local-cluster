@@ -12,7 +12,6 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: keycloak-config-cli
-  namespace: titan-auth-staging
   annotations:
     argocd.argoproj.io/hook: PostSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
@@ -34,6 +33,12 @@ spec:
             name: keycloak-realm-user-profile
       containers:
         - name: keycloak-config-cli
+          # PORTAL_ORIGIN, PORTAL_SECOND_ORIGIN, ADMIN_ORIGIN, ADMIN_SECOND_ORIGIN for the clients' redirect URIs in
+          # titan.json: the portals' public addresses belong to the environment, whose overlay generates this ConfigMap.
+          # An environment with one address per portal gives it twice. Not optional: without it the hook pod never starts.
+          envFrom:
+            - configMapRef:
+                name: keycloak-realm-origins
           # Tag = <config-cli version>-<keycloak version>; keep the KC suffix in
           # lockstep with image.tag in base/keycloak/values.yaml (currently 26.5.5).
           image: adorsys/keycloak-config-cli:6.5.1-26.5.5
@@ -45,8 +50,9 @@ spec:
               mountPath: /config-user-profile
               readOnly: true
           env:
+            # The Job runs in Keycloak's namespace, so the Service's short name reaches it.
             - name: KEYCLOAK_URL
-              value: "http://keycloak-http.titan-auth-staging.svc.cluster.local:80/auth"
+              value: "http://keycloak-http:80/auth"
             - name: KEYCLOAK_USER
               value: "admin"
             - name: KEYCLOAK_PASSWORD

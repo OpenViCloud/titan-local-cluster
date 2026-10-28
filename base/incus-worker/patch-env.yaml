@@ -18,5 +18,6 @@ spec:
                 name: incus-worker-backup-credentials
                 optional: true
           env:
+            # The worker runs in the control plane's namespace, so the Service's short name reaches it.
             - name: CP_BASE_URL
-              value: http://control-plane.titan-staging.svc.cluster.local:80
+              value: http://control-plane:80
