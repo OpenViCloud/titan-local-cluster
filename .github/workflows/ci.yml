@@ -46,3 +46,9 @@ jobs:
 
       - name: Old Applications dropped
         run: bash lima/tests/drop-old-applications_test.sh
+
+      - name: Host ports free before a VM starts
+        run: bash lima/tests/ports-free_test.sh
+
+      - name: First start outlasts Lima's wait
+        run: bash lima/tests/first-start_test.sh
