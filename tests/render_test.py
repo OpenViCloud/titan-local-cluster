@@ -83,7 +83,7 @@ class DevRender(unittest.TestCase):
     def test_the_customer_portal_offers_buying_credit_on_dev(self):
         # The portal shows Buy credit and receipts only when config.json holds the boolean true; without it the
         # regression cases that read them in the portal fail on dev
-        # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/billing/topup/design.md#topup-portal).
+        # (titan-ops features/billing/topup/design.md#topup-portal).
         self.assertIs(portal_config(render("cloud-console")).get("topUpEnabled"), True)
 
     def test_backup_target_is_the_dev_bucket_not_stagings(self):
@@ -157,7 +157,7 @@ def control_plane_env():
 
 
 class DevBackup(unittest.TestCase):
-    """Dev backs titan-db up through git, with base's backup component (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket).
+    """Dev backs titan-db up through git, with base's backup component (titan-ops infra/oci/architecture.md#backup-bucket).
     CNPG writes the bucket the control plane reads: declared in two Applications, so held equal here."""
 
     def test_cnpg_writes_the_bucket_and_endpoint_the_control_plane_reads(self):
@@ -192,7 +192,7 @@ class DevBackup(unittest.TestCase):
 class DevStartsEmpty(unittest.TestCase):
     """Anyone's first up.sh has an empty bucket, so main creates an empty database: a restore there finds no backup and
     the database never starts. It archives under the name the maintainers' dev cluster writes since its move to titan-db-dev,
-    or barman refuses that non-empty archive (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook)."""
+    or barman refuses that non-empty archive (docs/topology.md#runbook)."""
 
     def test_a_new_cluster_starts_empty_and_restores_nothing(self):
         spec = first(render("titan-db"), "Cluster", "titan-db")["spec"]
@@ -223,7 +223,7 @@ def mounts_of(objects, deployment, container):
 
 
 class DevS3(unittest.TestCase):
-    """SeaweedFS in titan-k3s over TLS, with its data on a folder of the host machine (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#s3)."""
+    """SeaweedFS in titan-k3s over TLS, with its data on a folder of the host machine (docs/topology.md#s3)."""
 
     def test_cnpg_reaches_s3_at_the_shared_endpoint_and_trusts_the_ca(self):
         configuration = first(render("titan-db"), "ObjectStore", "titan-db-backup")["spec"]["configuration"]
@@ -368,7 +368,7 @@ def realm_users(base_dir):
 class TestAccounts(unittest.TestCase):
     """The control plane approves on sign-in only accounts with the realm role auto-approve; every other signup waits
     for an admin. The test accounts carry it, or on an empty database nobody could approve anybody
-    (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/tenancy-and-admin.md#approval-is-activation)."""
+    (titan-ops architecture/tenancy-and-admin.md#approval-is-activation)."""
 
     def test_the_realm_declares_the_role(self):
         roles, _ = realm_users("realm-import")
@@ -404,6 +404,8 @@ class DevImages(unittest.TestCase):
 
 
 TITAN_REMOTE_BASE = re.compile(r"OpenViCloud/titan-ops(?:\.git)?//")
+# Split, so the CI step "No URL into private titan-ops" does not read these fixtures as links.
+TITAN_OPS_URL = "https://github.com/OpenViCloud/" + "titan-ops"
 TITAN_SOURCE = re.compile(r"""repoURL:\s*["']?https://github\.com/OpenViCloud/titan-ops(?:\.git)?["']?\s*$""", re.MULTILINE)
 
 
@@ -414,14 +416,14 @@ def titan_reads(text):
 
 class NoTitanRead(unittest.TestCase):
     """The local cluster builds without OpenViCloud/titan-ops, which is private: everything ArgoCD renders here comes
-    from base/ and gitops/ of this repository (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
-    Links to titan-ops in comments stay; they are read by people, not by a render."""
+    from base/ and gitops/ of this repository (docs/topology.md#titan-integration).
+    A keyword naming a titan-ops doc in a comment stays; people read it, not a render."""
 
     def test_the_check_sees_both_kinds_of_read(self):
-        self.assertEqual(titan_reads("  - https://github.com/OpenViCloud/titan-ops//gitops/x/overlays/staging?ref=" + "1" * 40), 1)
-        self.assertEqual(titan_reads("    - repoURL: https://github.com/OpenViCloud/titan-ops\n      targetRevision: main"), 1)
-        self.assertEqual(titan_reads("    repoURL: 'https://github.com/OpenViCloud/titan-ops.git'"), 1)
-        self.assertEqual(titan_reads("# https://github.com/OpenViCloud/titan-ops/blob/main/docs/x.md"), 0)
+        self.assertEqual(titan_reads("  - " + TITAN_OPS_URL + "//gitops/x/overlays/staging?ref=" + "1" * 40), 1)
+        self.assertEqual(titan_reads("    - repoURL: " + TITAN_OPS_URL + "\n      targetRevision: main"), 1)
+        self.assertEqual(titan_reads("    repoURL: '" + TITAN_OPS_URL + ".git'"), 1)
+        self.assertEqual(titan_reads("# titan-ops architecture/platform-infra.md#gitops-flow"), 0)
 
     def test_no_manifest_reads_titan_ops(self):
         manifests = [path for path in sorted(list(GITOPS.parent.rglob("*.yaml")) + list(GITOPS.parent.rglob("*.yml")))
@@ -487,6 +489,23 @@ class DevClusterIdRename(unittest.TestCase):
         self.assertNotIn("rename-cluster-id", base)
 
 
+class RunnerIsAnApplication(unittest.TestCase):
+    """Root syncs the regression runner like any app, so a rebuilt cluster has its CronJobs with no step by hand
+    (docs/topology.md#titan-integration)."""
+
+    def test_root_deploys_the_runner_beside_the_test_accounts(self):
+        app = yaml_file(GITOPS / "apps" / "regression-runner.yaml")
+        self.assertEqual(app["metadata"]["name"], "regression-runner-local")
+        self.assertEqual(app["spec"]["source"]["path"], "gitops/regression-runner")
+        # The pod reads the test-account passwords by secretKeyRef: they are in Keycloak's namespace.
+        self.assertEqual(app["spec"]["destination"]["namespace"], "titan-auth-dev")
+
+    def test_both_lanes_never_run_on_a_schedule(self):
+        objects = render("regression-runner")
+        for name in ("titan-regression", "titan-regression-b"):
+            self.assertIs(first(objects, "CronJob", name)["spec"]["suspend"], True)
+
+
 class NoFakeService(unittest.TestCase):
     def test_reads_the_applications(self):
         names = [name for _, name, _ in applications()]
@@ -534,7 +553,7 @@ def environment_words(root):
 
 class BaseNamesNoEnvironment(unittest.TestCase):
     """base/ is shared by every environment, which sets what is its own in its overlay
-    (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#gitops-flow)."""
+    (titan-ops architecture/platform-infra.md#gitops-flow)."""
 
     def test_no_file_of_base_names_an_environment(self):
         self.assertEqual(environment_words(BASE), [])
@@ -544,7 +563,7 @@ class BaseNamesNoEnvironment(unittest.TestCase):
             lines = ["ns: titan-auth-staging", "env: prd", "url: http://localhost:5173",
                      "url: https://portal.openvicloud.com", "ns: titan-db-dev", "host: lima-titan-k3s.internal",
                      "endpoint: https://f74ed847.r2.cloudflarestorage.com",
-                     "email: beta-user@openvicloud.com", "doc: https://github.com/OpenViCloud/titan-ops/blob/main/x.md",
+                     "email: beta-user@openvicloud.com", "doc: " + TITAN_OPS_URL + "/blob/main/x.md",
                      "log: /dev/null", "dir: devices"]
             pathlib.Path(root, "a.yaml").write_text("\n".join(lines) + "\n")
             self.assertEqual([number for _, number, _ in environment_words(root)], [1, 2, 3, 4, 5, 6, 7])
@@ -569,7 +588,7 @@ class EnvironmentValuesReachTheirReaders(unittest.TestCase):
         self.assertEqual(sorted(wanted - provided), [])
 
     def test_the_runner_reads_its_urls_from_a_generated_config_map(self):
-        objects = render("regression-runner", root=REPO / "lima")
+        objects = render("regression-runner")
         for name in ("titan-regression", "titan-regression-b"):
             env = first(objects, "CronJob", name)["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]["env"]
             refs = [entry["valueFrom"]["configMapKeyRef"] for entry in env if "configMapKeyRef" in entry.get("valueFrom", {})]
@@ -590,7 +609,7 @@ def keycloak_values():
 
 class KeycloakRealm(unittest.TestCase):
     """Keycloak itself creates and changes no realm; the keycloak-config-cli hooks do
-    (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#keycloak-realm-as-code):
+    (titan-ops architecture/platform-infra.md#keycloak-realm-as-code):
     Keycloak's own --import-realm does not resolve $(env:...), so on an empty database it stopped on the realm's
     redirect URIs and never started."""
 

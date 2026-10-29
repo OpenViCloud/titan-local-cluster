@@ -2,7 +2,7 @@
 # beta-user-2-credentials). Only the name, BETA_USER_USERNAME and the secretKeyRef differ;
 # titan-ops scripts/test_regression_runner_manifests.py keeps it so (copy cronjob.yaml's manifest, change those three lines).
 # Suspended like lane a. Jobs come from run-lanes.py (OpenViCloud/titan-regression), which sets REGRESSION_CRONJOB to this name
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/testing.md#regression-lanes).
+# (titan-ops architecture/testing.md#regression-lanes).
 apiVersion: batch/v1
 kind: CronJob
 metadata:

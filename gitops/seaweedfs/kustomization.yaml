@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Dev's S3 (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#s3): SeaweedFS
+# Dev's S3 (docs/topology.md#s3): SeaweedFS
 # over TLS, its data on a folder of the host machine. Dev only, so not in base/: staging writes to R2. The Secrets it reads
 # (seaweedfs-tls, seaweedfs-s3-config) come from lima/scripts/bootstrap-secrets.sh.
 namespace: seaweedfs

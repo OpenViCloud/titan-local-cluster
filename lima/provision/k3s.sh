@@ -1,16 +1,16 @@
 #!/bin/bash
 # Provision of titan-k3s (titan-k3s.yaml of lima/macos/ and lima/ubuntu/): k3s at staging's version, with its own Traefik ingress
 # (staging uses cloudflared instead), and ArgoCD at staging's chart version, trimmed for RAM
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget). Lima runs it as root on every boot.
+# (docs/topology.md#ram-budget). Lima runs it as root on every boot.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-# Same as https://github.com/OpenViCloud/titan-ops/blob/main/terraform/oci-titan/1-infra/scripts/k3s-server.sh.tpl.
+# Same as terraform/oci-titan/1-infra/scripts/k3s-server.sh.tpl of titan-ops.
 K3S_VERSION="v1.32.3+k3s1"
 ARGOCD_CHART_VERSION="7.0.0"
 
 # A soft memory limit makes the Go GC give memory back instead of letting k3s grow over the day
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget). Written before the install so a new VM starts with it.
+# (docs/topology.md#ram-budget). Written before the install so a new VM starts with it.
 memory_dropin=/etc/systemd/system/k3s.service.d/memory.conf
 memory_wanted=$'[Service]\nEnvironment=GOMEMLIMIT=512MiB'
 memory_current=""
@@ -110,7 +110,7 @@ spec:
 YAML
 
 # Lima publishes every LoadBalancer port on the host, and a port below 1024 on every interface: drop Traefik's 443
-# so only the ingress on 80 (published as 127.0.0.1:8080) is left (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#host-access).
+# so only the ingress on 80 (published as 127.0.0.1:8080) is left (docs/network.md#host-access).
 cat > /var/lib/rancher/k3s/server/manifests/traefik-config.yaml <<'YAML'
 apiVersion: helm.cattle.io/v1
 kind: HelmChartConfig

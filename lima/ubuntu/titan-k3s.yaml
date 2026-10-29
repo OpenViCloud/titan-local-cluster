@@ -1,5 +1,5 @@
 # titan-k3s: the k3s node of the local cluster on Ubuntu: ArgoCD and Titan's services
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#layout).
+# (docs/topology.md#layout).
 #   limactl create --name titan-k3s lima/ubuntu/titan-k3s.yaml
 # template:_images/, not template:ubuntu-24.04: the latter also mounts the user's home into the VM.
 base: template:_images/ubuntu-24.04
@@ -17,7 +17,7 @@ containerd:
   system: false
   user: false
 # No user-v2 (lima/ubuntu/titan-incus.yaml says why): dev's S3 name answers with this VM's own address here, and
-# titan-incus reaches the NodePort through the host (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#vm-to-vm).
+# titan-incus reaches the NodePort through the host (docs/network.md#vm-to-vm).
 hostResolver:
   hosts:
     lima-titan-k3s.internal: 192.168.5.15

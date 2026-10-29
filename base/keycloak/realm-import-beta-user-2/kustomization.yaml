@@ -8,7 +8,7 @@ kind: Kustomization
 # does not exist never starts, so no app that syncs realm-import/ may read this directory before that apply.
 # An app reads this directory only where that Secret exists: the dev cluster's keycloak app (OpenViCloud/titan-local-cluster)
 # reads it, with a Secret made by its bootstrap-secrets.sh; another environment's keycloak app adds it as a source in
-# the release that applies the Secret (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/testing.md#regression-lanes).
+# the release that applies the Secret (titan-ops architecture/testing.md#regression-lanes).
 resources:
   - configmap.yaml
   - config-cli-job.yaml

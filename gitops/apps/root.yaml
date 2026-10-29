@@ -1,4 +1,4 @@
-# Local cluster: copy of titan-ops's gitops/apps-staging/root.yaml (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# Local cluster: copy of titan-ops's gitops/apps-staging/root.yaml (docs/topology.md#titan-integration).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

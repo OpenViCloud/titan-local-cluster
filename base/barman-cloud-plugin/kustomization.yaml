@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# The Barman Cloud Plugin for CloudNativePG 1.26 (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket). The project ships it as one
+# The Barman Cloud Plugin for CloudNativePG 1.26 (titan-ops infra/oci/architecture.md#backup-bucket). The project ships it as one
 # release manifest, kept here byte for byte so what was reviewed is what ArgoCD applies, and a render does not fetch from
 # GitHub: https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v0.15.1/manifest.yaml, sha256
 # 8f377ff4a7d0d3f74fc64b0f7ac4f449fc38ca9e83a40107cca2f9315a9bd920 (tests/render_test.py holds it). A new version: a new

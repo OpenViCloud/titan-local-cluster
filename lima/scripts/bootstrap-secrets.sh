@@ -1,5 +1,5 @@
 #!/bin/bash
-# Puts the local cluster's secrets into titan-k3s (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets).
+# Puts the local cluster's secrets into titan-k3s (docs/topology.md#secrets).
 # Needs no vault and no token: the repositories and the images are public.
 # - ~/.config/titan-local-cluster/secrets.env (mode 600) keeps every value generated once: the DB password, the internal
 #   token, the Keycloak admin and the two beta-user passwords. The first run writes them; later runs read
@@ -145,7 +145,7 @@ echo "secret titan-db-dev/titan-it-credentials applied"
 # User admin-test (platform-admin) of the dev realm: a fixed test password, so an agent can sign in to the admin console on dev
 # without reading a Secret. Not a secret for the same reason as titan_it: dev's hosts are *.localhost. Keycloak takes a changed
 # value at the next run of keycloak-config-cli, a PostSync hook: sync keycloak-local once after this
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#secrets).
+# (docs/topology.md#secrets).
 printf 'password=admin-test-local-only\n' | apply_secret titan-auth-dev admin-test-credentials
 
 # ── S3 of dev (SeaweedFS), re-applied every run ───────────────────────────────
@@ -166,7 +166,7 @@ echo "secret seaweedfs/seaweedfs-s3-config applied"
 # titan-db-backup-credentials: key names the Barman Cloud Plugin reads from the Secret of the ObjectStore (base/titan-db/components/backup).
 # control-plane-backup-credentials: the setting names of the control plane's BackupTarget section (gitops/control-plane/patch-env.yaml).
 # incus-worker-backup-credentials: the worker's BACKUP_S3_* names; the worker hands the pair to Incus, which uploads VM and
-# volume backups itself (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/backup/design.md#incus-backup).
+# volume backups itself (titan-ops features/backup/design.md#incus-backup).
 printf 'ACCESS_KEY_ID=%s\nACCESS_SECRET_KEY=%s\n' "$backup_key_id" "$backup_secret_key" |
   apply_secret titan-db-dev titan-db-backup-credentials
 printf 'BackupTarget__AccessKeyId=%s\nBackupTarget__SecretAccessKey=%s\n' "$backup_key_id" "$backup_secret_key" |

@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: incus-worker
 spec:
-  # One replica: two would each lease commands, which is safe (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/provider-and-worker.md#provider-command-lease)
+  # One replica: two would each lease commands, which is safe (titan-ops architecture/provider-and-worker.md#provider-command-lease)
   # but runs every reconciler twice.
   replicas: 1
   selector:
@@ -44,7 +44,7 @@ spec:
               cpu: 500m
               memory: 256Mi
           # template.sync streams the distro's image (~700 MB) to a temporary file before the upload, never into
-          # memory (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/catalog/design.md#template-is-an-image-alias).
+          # memory (titan-ops features/catalog/design.md#template-is-an-image-alias).
           volumeMounts:
             - name: tmp
               mountPath: /tmp

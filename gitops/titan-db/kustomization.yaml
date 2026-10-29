@@ -2,14 +2,14 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 # The shared database of base/ with a smaller memory request: on titan-k3s (measured at 3 GiB, now 4) PostgreSQL uses about 100 MiB, and a
-# 512 MiB request only blocks scheduling (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget). The limit stays.
+# 512 MiB request only blocks scheduling (docs/topology.md#ram-budget). The limit stays.
 # The Application ignores /spec/resources in its diff, so a running cluster takes this with the app's next sync; a new one at creation.
 namespace: titan-db-dev
 
 resources:
   - ../../base/titan-db
 
-# Continuous backup to dev's S3 (SeaweedFS, gitops/seaweedfs), through base's component (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket):
+# Continuous backup to dev's S3 (SeaweedFS, gitops/seaweedfs), through base's component (titan-ops infra/oci/architecture.md#backup-bucket):
 # the key pair is the Secret titan-db-backup-credentials and the CA the Secret s3-ca, both from lima/scripts/bootstrap-secrets.sh.
 # tests/render_test.py holds the bucket and endpoint equal to the control plane's BackupTarget env.
 components:
@@ -41,7 +41,7 @@ patches:
   # A new cluster starts empty (initdb), so anyone's first up.sh works on an empty bucket. It archives under
   # titan-db-dev, the name the maintainers' dev cluster writes since its move to this namespace: barman refuses a non-empty
   # archive, and an empty bucket takes any name. Rebuilding on a bucket that holds an archive is a restore, added for that
-  # rebuild only (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#runbook).
+  # rebuild only (docs/topology.md#runbook).
   - target:
       kind: Cluster
       name: titan-db

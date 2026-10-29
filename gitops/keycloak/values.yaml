@@ -1,4 +1,4 @@
-# Overrides of base/keycloak/values.yaml for the local cluster (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# Overrides of base/keycloak/values.yaml for the local cluster (docs/topology.md#titan-integration).
 # extraEnv is one string in the chart, so the whole list is repeated here; keep it in step with base/keycloak/values.yaml.
 extraEnv: |
   - name: KC_DB
@@ -34,12 +34,12 @@ extraEnv: |
   - name: KC_HEALTH_ENABLED
     value: "true"
   # Local cluster: the issuer is fixed to the browser's URL; the back channel answers on whatever host asks
-  # (control-plane reads metadata from the service), https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#host-access.
+  # (control-plane reads metadata from the service), docs/network.md#host-access.
   - name: KC_HOSTNAME
     value: "http://auth.localhost:8080/auth"
   - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
     value: "true"
-  # RAM budget of titan-k3s (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget).
+  # RAM budget of titan-k3s (docs/topology.md#ram-budget).
   - name: JAVA_OPTS_KC_HEAP
     value: "-Xms64m -Xmx320m"
 

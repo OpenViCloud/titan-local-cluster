@@ -10,7 +10,7 @@ image:
   tag: "26.5.5"
 
 # No --import-realm: the keycloak-config-cli hook creates realm titan
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#keycloak-realm-as-code).
+# (titan-ops architecture/platform-infra.md#keycloak-realm-as-code).
 command:
   - "/opt/keycloak/bin/kc.sh"
   - "start"
@@ -50,9 +50,9 @@ extraEnv: |
     value: "true"
 
 # Restarts Keycloak when the login theme changes: production mode caches themes
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#keycloak-theme). Value: python3 scripts/keycloak-theme.py --print
+# (titan-ops architecture/platform-infra.md#keycloak-theme). Value: python3 scripts/keycloak-theme.py --print
 podAnnotations:
-  checksum/openvicloud-theme: "2ea45c5326abfcf5df61e15eb3c0fff3a2c8541361f72a8287ea3db6b05791a2"
+  checksum/openvicloud-theme: "6a3887c01af1b8fefa33face1ba1e0e4ca7c9c780dabec82380f6c7848fce72d"
 
 extraVolumes: |
   - name: theme-openvicloud
