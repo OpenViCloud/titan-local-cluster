@@ -1,8 +1,7 @@
 # keycloak-config-cli applies the realm config declaratively to a RUNNING Keycloak
-# via the admin API — incremental and idempotent. This is what makes client/realm
-# changes GitOps-managed: `--import-realm` (startup) only creates realms that don't
-# exist, so edits to the already-existing `titan` realm (e.g. adding the
-# titan-admin-portal client) never reach the running server without this.
+# via the admin API — incremental and idempotent. It creates realm titan on an
+# empty database and applies every later edit of these files; Keycloak itself imports nothing
+# (no --import-realm, base/keycloak/values.yaml).
 #
 # Runs as an ArgoCD PostSync hook on each environment's keycloak app, so every sync
 # re-applies the realm files. import.managed.*=no-delete → only creates/updates the

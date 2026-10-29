@@ -578,5 +578,25 @@ class EnvironmentValuesReachTheirReaders(unittest.TestCase):
                 self.assertTrue(first(objects, "ConfigMap", ref["name"])["data"][ref["key"]].startswith("http://"))
 
 
+class KeycloakRealm(unittest.TestCase):
+    """Keycloak itself creates and changes no realm; the keycloak-config-cli hooks do
+    (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#keycloak-realm-as-code):
+    Keycloak's own --import-realm does not resolve $(env:...), so on an empty database it stopped on the realm's
+    redirect URIs and never started."""
+
+    def test_keycloak_creates_no_realm_itself(self):
+        app = yaml_file(GITOPS / "apps" / "keycloak.yaml")
+        chart = next(source for source in app["spec"]["sources"] if source.get("chart") == "keycloakx")
+        values = {}
+        for value_file in chart["helm"]["valueFiles"]:
+            values.update(yaml_file(REPO / value_file.removeprefix("$local/")))
+        self.assertIn("start", values["command"])
+        self.assertNotIn("--import-realm", values["command"])
+        volumes = yaml_text(values["extraVolumes"])
+        self.assertIn("keycloak-theme-openvicloud", [v.get("configMap", {}).get("name") for v in volumes])
+        self.assertNotIn("keycloak-realm-import", [v.get("configMap", {}).get("name") for v in volumes])
+        self.assertNotIn("/opt/keycloak/data/import", [m["mountPath"] for m in yaml_text(values["extraVolumeMounts"])])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
