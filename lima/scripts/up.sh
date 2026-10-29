@@ -1,6 +1,7 @@
 #!/bin/bash
 # Starts the local cluster (docs/topology.md#layout): both Lima VMs, created on first use,
-# then the secrets, cluster local joined to titan-incus, and ArgoCD's root application (and the Applications of the names
+# then an extra CA of the host if it has one (docs/topology.md#extra-ca; the VMs first, ArgoCD once it is up), the secrets,
+# the S3 CA, cluster local joined to titan-incus, and ArgoCD's root application (and the Applications of the names
 # before 2026-10-27 dropped). Safe to run again.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
@@ -50,6 +51,8 @@ for vm in titan-incus titan-k3s; do
   esac
 done
 
+# Behind a TLS-inspecting proxy the VMs reach no https site until they trust its CA (docs/topology.md#extra-ca).
+bash "$here/scripts/trust-extra-ca.sh"
 bash "$here/scripts/bootstrap-secrets.sh"
 bash "$here/scripts/trust-s3-ca.sh"
 bash "$here/scripts/join-cluster.sh"
@@ -68,6 +71,8 @@ for attempt in $(seq 1 60); do
   sleep 10
 done
 kubectl --kubeconfig "$kubeconfig" --request-timeout=30s wait --for=condition=Established "$crd" --timeout=120s >/dev/null
+# ArgoCD exists now: on a new titan-k3s the first run above could give the extra CA only to the VMs.
+bash "$here/scripts/trust-extra-ca.sh"
 kubectl --kubeconfig "$kubeconfig" --request-timeout=30s apply -f "$repo/gitops/apps/root.yaml"
 bash "$here/scripts/drop-old-applications.sh"
 

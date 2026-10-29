@@ -58,10 +58,10 @@ running; `up.sh` then waits up to 30 more minutes for the install to finish. If 
 install again and goes on from where it stopped. It stops before starting a VM whose host ports (`127.0.0.1` 6443 and 8080; on
 Ubuntu also 8443 and 30833) another cluster or program already holds, and names the port.
 
-The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/` (`secrets.env`, the S3 CA and SeaweedFS's certificate; keys mode 600), so a rebuilt cluster gets them again; keep that folder. Backups go to SeaweedFS in titan-k3s (`gitops/seaweedfs`), over TLS at `https://lima-titan-k3s.internal:30833`, with its data in `~/.local/share/titan-local-cluster/s3` on the host, which outlives the VM. Docker must not be running.
+The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/` (`secrets.env`, the S3 CA and SeaweedFS's certificate; keys mode 600; and, on a host behind a TLS-inspecting proxy, its CA as `extra-ca.crt`, [docs/topology.md#extra-ca](docs/topology.md#extra-ca)), so a rebuilt cluster gets them again; keep that folder. Behind a TLS-inspecting proxy a new titan-k3s gets no ArgoCD: build or rebuild it off the proxy ([docs/topology.md#extra-ca](docs/topology.md#extra-ca)). Backups go to SeaweedFS in titan-k3s (`gitops/seaweedfs`), over TLS at `https://lima-titan-k3s.internal:30833`, with its data in `~/.local/share/titan-local-cluster/s3` on the host, which outlives the VM. Docker must not be running.
 
 ```sh
-bash lima/scripts/up.sh      # creates the VMs on first run, then starts them, applies secrets, trusts the S3 CA, joins cluster local to titan-incus, applies root-local, drops the Applications of the old names
+bash lima/scripts/up.sh      # creates the VMs on first run, then starts them, trusts an extra CA if present (the VMs first, ArgoCD once it is up), applies secrets, trusts the S3 CA, joins cluster local to titan-incus, applies root-local, drops the Applications of the old names
 bash lima/scripts/down.sh    # stops both VMs; disks stay (guest VMs in titan-incus stop too, see below)
 ```
 
@@ -99,7 +99,7 @@ limactl shell titan-incus -- sudo vgchange -ay default
 limactl shell titan-incus -- sudo systemctl start incus.socket incus.service
 ```
 
-The database starts empty and archives to SeaweedFS. To rebuild titan-k3s, delete `~/.local/share/titan-local-cluster/s3`
+The database starts empty and archives to SeaweedFS. To rebuild titan-k3s (off any TLS-inspecting proxy, [docs/topology.md#extra-ca](docs/topology.md#extra-ca)), delete `~/.local/share/titan-local-cluster/s3`
 along with the VM, and the database starts empty again: a plain `up.sh` over a folder that still holds the archive gives a
 database whose backups fail, because barman refuses to archive into a store that is not empty. Rebuilding from that archive
 is a restore, which the maintainers do through titan-ops's runbook; its steps are not public yet.
@@ -140,6 +140,7 @@ bash lima/tests/incus-log-sweeper_test.sh
 bash lima/tests/incus-uplink_test.sh
 bash lima/tests/bootstrap-secrets_test.sh   # macOS only (stat -f)
 bash lima/tests/trust-s3-ca_test.sh
+bash lima/tests/trust-extra-ca_test.sh
 bash lima/tests/join-cluster_test.sh
 bash lima/tests/drop-old-applications_test.sh
 bash lima/tests/ports-free_test.sh
