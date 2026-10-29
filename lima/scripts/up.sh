@@ -1,5 +1,5 @@
 #!/bin/bash
-# Starts the local cluster (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#layout): both Lima VMs, created on first use,
+# Starts the local cluster (docs/topology.md#layout): both Lima VMs, created on first use,
 # then the secrets, cluster local joined to titan-incus, and ArgoCD's root application (and the Applications of the names
 # before 2026-10-27 dropped). Safe to run again.
 set -euo pipefail
@@ -12,7 +12,7 @@ if ! vms=$(vm_dir "$(uname -s)"); then
   exit 1
 fi
 
-# Docker (on macOS, its VM) plus both of these does not fit in 16 GB (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#ram-budget).
+# Docker (on macOS, its VM) plus both of these does not fit in 16 GB (docs/topology.md#ram-budget).
 if docker info >/dev/null 2>&1; then
   echo "ERROR: Docker is running; stop it first." >&2
   exit 1

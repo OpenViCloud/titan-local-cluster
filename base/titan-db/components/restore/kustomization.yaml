@@ -3,7 +3,7 @@ kind: Component
 
 # Brings titan-db up from the newest backup in the bucket instead of an empty database: add it, AFTER ../backup (it edits
 # the plugin entry that component adds, and fails the render when that is missing), to the overlay of the environment
-# being rebuilt (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/runbook.md#disaster-recovery). The bootstrap of a Cluster is read once, at creation.
+# being rebuilt (titan-ops infra/oci/runbook.md#disaster-recovery). The bootstrap of a Cluster is read once, at creation.
 #
 # The restored cluster must not write into the old cluster's archive: the bucket already holds timeline 1 of "titan-db",
 # and barman refuses a non-empty archive. It archives under serverName titan-db-restored instead. That write name must

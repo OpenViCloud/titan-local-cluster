@@ -10,11 +10,10 @@ Keycloak realm import and values, and the values of NATS, CloudNativePG and the 
 (`gitops/<app>/`) builds on `../../base/<app>` and adds only what the local cluster needs: hostnames, the cluster list, the token issuer and Keycloak's metadata
 address, Keycloak's database host, the realm's portal origins (a ConfigMap the overlay generates), the
 backup bucket and endpoint, smaller requests, dev's own image tags. `base/` names no environment (`tests/render_test.py`,
-`BaseNamesNoEnvironment`). The runner, applied by hand from `lima/regression-runner`, generates its URLs the same way. Staging's overlays live in titan-ops and build on `base/` here at a pinned commit;
+`BaseNamesNoEnvironment`). The regression runner (`gitops/regression-runner/`, Application `regression-runner-local`) generates its URLs the same way. Staging's overlays live in titan-ops and build on `base/` here at a pinned commit;
 this repository never reaches staging. Nothing ArgoCD renders here reads titan-ops (`tests/render_test.py` checks it).
 
-Design, rules and runbook live in titan-ops:
-[docs/infra/environments/local-cluster/](https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md).
+Design, rules and runbook of the dev cluster: [docs/topology.md](docs/topology.md) and [docs/network.md](docs/network.md).
 
 ## Layout
 
@@ -148,7 +147,7 @@ bash lima/tests/first-start_test.sh
 ```
 
 CI runs all of these but `sweeper_test.sh` and `bootstrap-secrets_test.sh` on every push to `main` and every pull request into it.
-`sweeper_test.sh` reads [OpenViCloud/titan-ops](https://github.com/OpenViCloud/titan-ops), which is private, so it runs
+`sweeper_test.sh` reads titan-ops (`OpenViCloud/titan-ops`), which is private, so it runs
 before every push on a machine with `gh` signed in as an org member, not in CI.
 `bootstrap-secrets_test.sh` uses macOS's `stat -f`, so it runs only on a Mac, before every push that changes `lima/`.
 

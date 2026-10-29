@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check that the Keycloak login theme files, the ConfigMap generator, the volume items,
 the restart checksum and the stylesheet version agree
-(https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#keycloak-theme).
+(titan-ops architecture/platform-infra.md#keycloak-theme).
 
   python3 scripts/keycloak-theme.py --check    # exit 1 and list each problem
   python3 scripts/keycloak-theme.py --print    # the checksum and the lines to paste

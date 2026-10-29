@@ -3,7 +3,7 @@ kind: Kustomization
 
 namespace: titan-dev
 
-# The shared manifests of base/ with dev's own image tag (below) and local hostnames (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#host-access).
+# The shared manifests of base/ with dev's own image tag (below) and local hostnames (docs/network.md#host-access).
 resources:
   - ../../base/admin-portal
   - ingress.yaml
@@ -12,7 +12,7 @@ patches:
   - path: configmap-patch.yaml
 
 # Dev's own image: a commit OpenViCloud/titan-admin-console published from main. Staging's name and tag move only
-# by promotion in titan-ops (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#gitops-flow).
+# by promotion in titan-ops (titan-ops architecture/platform-infra.md#gitops-flow).
 images:
   # Matched by the name base/admin-portal gives the image (scripts/pull-images.py stops on any other).
   - name: admin-portal

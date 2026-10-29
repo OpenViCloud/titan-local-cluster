@@ -1,7 +1,7 @@
-# titan-incus: the Incus node of the local cluster on Ubuntu (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#layout).
+# titan-incus: the Incus node of the local cluster on Ubuntu (docs/topology.md#layout).
 # Guest VMs run as KVM inside this VM, so the host's KVM must allow nesting (kvm_intel nested=Y, kvm_amd nested=1).
 #   limactl create --name titan-incus lima/ubuntu/titan-incus.yaml
-# Debian 13, the OS of the staging machine singapore01 (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/incus/user-stories.md#us-incus-singapore01-01).
+# Debian 13, the OS of the staging machine singapore01 (titan-ops infra/incus/user-stories.md#us-incus-singapore01-01).
 # template:_images/, not template:debian-13: the latter also mounts the user's home into the VM.
 base: template:_images/debian-13
 vmType: qemu
@@ -13,7 +13,7 @@ containerd:
   system: false
   user: false
 # No user-v2: QEMU aborts under load on its socket NIC. titan-k3s reaches the Incus API, and this VM reaches
-# SeaweedFS, through the host's 127.0.0.1 (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#vm-to-vm).
+# SeaweedFS, through the host's 127.0.0.1 (docs/network.md#vm-to-vm).
 hostResolver:
   hosts:
     lima-titan-k3s.internal: 192.168.5.2

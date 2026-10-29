@@ -2,9 +2,9 @@ apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
 # Continuous backup of titan-db to R2 through the Barman Cloud Plugin: WAL archiving, a daily base backup, 7 days kept
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#backup-bucket). The bucket here is a placeholder: every overlay that
+# (titan-ops infra/oci/architecture.md#backup-bucket). The bucket here is a placeholder: every overlay that
 # adds this component patches the bucket and its endpoint (dev: gitops/titan-db/). An overlay adds it only once the Secret
-# titan-db-backup-credentials exists, or WAL cannot leave the node and piles up on the PVC (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/runbook.md#backup-enable).
+# titan-db-backup-credentials exists, or WAL cannot leave the node and piles up on the PVC (titan-ops infra/oci/runbook.md#backup-enable).
 resources:
   - objectstore.yaml
   - scheduled-backup.yaml

@@ -1,4 +1,4 @@
-# https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/money-and-wallet.md#single-writer-outbox S3 — NATS core for the wallet-mutation notify bus.
+# titan-ops architecture/money-and-wallet.md#single-writer-outbox S3 — NATS core for the wallet-mutation notify bus.
 #
 # NATS CORE, not JetStream: the bus is a NOTIFY layer only. The durable queue is the DB
 # (wallet_mutations); a message lost while the subscriber is down is a delayed apply, never lost

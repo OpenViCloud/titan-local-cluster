@@ -3,7 +3,7 @@
 #
 # WHY this file exists: a network asking for public IPv6 goes on the uplink ovnup, and Incus refuses its IPv4 CIDR when
 # the uplink does not route it. Nothing on the host runs this script before a boot of titan-incus, and a wrong uplink only
-# shows when a network create gives up (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#uplink). The checks read the
+# shows when a network create gives up (docs/network.md#uplink). The checks read the
 # section cut out of provision/incus.sh: its shape (singapore01's, written out in the checks), then the section itself
 # run against a fake `incus`, `ip` and `sysctl` for a fresh machine, an old bridge ovnup with and without networks on
 # it, a second run, and a failed read.

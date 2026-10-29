@@ -1,7 +1,7 @@
 #!/bin/bash
 # Provision of titan-incus (titan-incus.yaml of lima/macos/ and lima/ubuntu/): Incus 7.0 LTS with an LVM thin pool and
 # a single-node OVN, the same shape as the labs recorded in OpenViCloud/titan-incus-worker:incus/provider/testdata/
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#replaces-incus-lab). Lima runs it as root on every boot,
+# (docs/topology.md#replaces-incus-lab). Lima runs it as root on every boot,
 # so every step checks before it creates.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -104,7 +104,7 @@ PRESEED
 fi
 
 # ── OVN uplink for public IPv6 ────────────────────────────────────────────────
-# ovnup is the cluster's OVN uplink, in the shape of singapore01's (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#uplink):
+# ovnup is the cluster's OVN uplink, in the shape of singapore01's (docs/network.md#uplink):
 # physical on ovnbr, a bridge with no address of Incus's. Only a network with public IPv6 goes on it; every other
 # tenant network keeps network=none (OpenViCloud/titan-incus-worker:resource/network/create.go). Incus refuses a network whose
 # IPv4 CIDR the uplink does not route: the private ranges are listed, anycast because two tenants may pick the same
@@ -129,7 +129,7 @@ if incus network show ovnup >/dev/null 2>&1; then
   fi
 fi
 # The first /64 of the /56 holds the gateway and the routers (::100-::1ff), every other /64 is a network's, routed to
-# its router below the way OVH routes it there (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#ipv6).
+# its router below the way OVH routes it there (docs/network.md#ipv6).
 if ! incus network show ovnup >/dev/null 2>&1; then
   incus network create ovnup --type=physical parent=ovnbr \
     ipv6.gateway=${IPV6_BLOCK_PREFIX}00::1/64 \
@@ -143,7 +143,7 @@ fi
 # (ipv6.address=none), so it is turned on before the address goes on.
 sysctl -qw net.ipv6.conf.ovnbr.disable_ipv6=0
 ip -6 addr replace ${IPV6_BLOCK_PREFIX}00::1/64 dev ovnbr
-# /64 number n goes to router ::(0x100 + n) of the first /64 (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/incus/design.md#ipv6-address-plan): the
+# /64 number n goes to router ::(0x100 + n) of the first /64 (titan-ops infra/incus/design.md#ipv6-address-plan): the
 # static route OVH holds for singapore01, held here by the host.
 for n in $(seq 1 255); do
   hex=$(printf '%02x' "$n")
@@ -153,7 +153,7 @@ done
 # ── ipv4.address=auto on this VM ──────────────────────────────────────────────
 # Incus also skips a 10.x subnet whose .1 or .254 address answers ping or TCP 22. Every 10.x address tried got a ping
 # reply through eth0, so without this table ipv4.address=auto finds no subnet. The table also drops ping and TCP 22
-# from this VM to any real 10.x host behind the host machine (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#uplink).
+# from this VM to any real 10.x host behind the host machine (docs/network.md#uplink).
 if nft list table inet titan-auto-subnet >/dev/null 2>&1; then
   nft delete table inet titan-auto-subnet
 fi
@@ -170,7 +170,7 @@ NFT
 # ── Guest logs ────────────────────────────────────────────────────────────────
 # Incus 7.0.1 keeps /var/log/incus/<project>_<instance>/ after the instance is deleted, and its API refuses to delete
 # qemu.log: a timer removes the directory of an instance that no longer exists
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/vm/design.md#vm-design-debts). lima/tests/incus-log-sweeper_test.sh tests this text.
+# (titan-ops features/vm/design.md#vm-design-debts). lima/tests/incus-log-sweeper_test.sh tests this text.
 cat > /usr/local/sbin/incus-log-sweeper <<'SWEEPER'
 #!/bin/bash
 # Removes the log directory of an Incus instance that no longer exists.

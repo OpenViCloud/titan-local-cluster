@@ -1,13 +1,13 @@
 # CLAUDE.md
 
-OpenViCloud's dev environment: Lima VMs on a Mac or an Ubuntu machine (`lima/macos/`, `lima/ubuntu/`) and the GitOps that ArgoCD on them follows. Rules and design live in
-titan-ops (`../titan-ops`): https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md and
-https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#gitops-flow. Change a rule there, not here.
+OpenViCloud's dev environment: Lima VMs on a Mac or an Ubuntu machine (`lima/macos/`, `lima/ubuntu/`) and the GitOps that ArgoCD on them follows. The design and runbook of the dev
+cluster are in `docs/` here (`docs/topology.md`, `docs/network.md`). The rules every environment shares are in titan-ops (`../titan-ops`,
+private), such as `titan-ops architecture/platform-infra.md#gitops-flow`. Change a shared rule there, not here.
 
 - `base/` holds the manifests every environment shares; staging's overlays in titan-ops build on it by remote base, pinned
   to one commit of this repository. Overlays here (`gitops/<app>/`) build on `../../base/<app>` and patch only what the local
   cluster needs. A change that staging needs too belongs in `base/`. Nothing ArgoCD renders here reads titan-ops, which is private
-  (`tests/render_test.py`, `NoTitanRead`); links to titan-ops's docs in comments and the sweeper check do.
+  (`tests/render_test.py`, `NoTitanRead`); the sweeper check does.
 - Application names are `*-local` (and `cnpg-operator`, `cert-manager`, `plugin-barman-cloud`, `seaweedfs`), cluster id `local`, the
   same on macOS and Ubuntu (`tests/render_test.py`). Renaming an Application: root prunes the old one, which has no finalizer, so its
   resources stay and the new Application adopts them; `lima/scripts/drop-old-applications.sh` (run by `up.sh`) deletes an old one
@@ -16,7 +16,8 @@ https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-in
   An app renamed on purpose (as the customer portal's app when titan-ops renamed its folder to `cloud-console`): root
   prunes the old Application, which has no finalizer, so every object it rendered stays behind (for the customer
   portal: Deployment, Service, ConfigMap and Ingress) and is deleted by hand on dev right after the merge.
-- Names, comments, README: English. A link to titan-ops's docs is a full `https://github.com/OpenViCloud/titan-ops/blob/main/…` URL.
+- Names, comments, README, `docs/`: English. titan-ops is private, so a titan-ops doc is named by its path under titan-ops's `docs/`,
+  `titan-ops <path>#<anchor>`, never by URL (CI step "No URL into private titan-ops").
 - Commits and PRs name the human author only: no AI attribution lines.
 - No `git worktree`: one checkout, isolate with branches.
 - Image tags move with `python3 scripts/pull-images.py` (images main published; an `images` entry is the name `base/<app>` gives;

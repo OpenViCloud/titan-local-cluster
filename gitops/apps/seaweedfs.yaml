@@ -1,4 +1,4 @@
-# Dev's S3 (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#s3). No staging copy:
+# Dev's S3 (docs/topology.md#s3). No staging copy:
 # staging writes to R2.
 apiVersion: argoproj.io/v1alpha1
 kind: Application

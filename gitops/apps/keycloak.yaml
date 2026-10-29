@@ -1,4 +1,4 @@
-# Local cluster: copy of titan-ops's gitops/apps-staging/keycloak.yaml with dev's values, realm origins (gitops/keycloak/realm-import) and ingress from this repository, and one source more: the second regression test user, realm-import-beta-user-2 (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# Local cluster: copy of titan-ops's gitops/apps-staging/keycloak.yaml with dev's values, realm origins (gitops/keycloak/realm-import) and ingress from this repository, and one source more: the second regression test user, realm-import-beta-user-2 (docs/topology.md#titan-integration).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

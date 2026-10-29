@@ -11,7 +11,7 @@ patches:
   - path: patch-backup-bucket.yaml
 
 # Dev's own image: a commit OpenViCloud/titan-incus-worker published from main. Staging's name and tag move only by promotion in
-# titan-ops (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#gitops-flow).
+# titan-ops (titan-ops architecture/platform-infra.md#gitops-flow).
 images:
   # Matched by the name base/incus-worker gives the image (scripts/pull-images.py stops on any other).
   - name: incus-worker

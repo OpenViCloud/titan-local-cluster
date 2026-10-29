@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: titan-dev
 
 # The local cluster runs the shared manifests of base/ with its own image (below), hostnames, cluster list
-# and token issuer (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# and token issuer (docs/topology.md#titan-integration).
 resources:
   - ../../base/control-plane
   - ingress.yaml
@@ -30,7 +30,7 @@ patches:
   - path: patch-s3-ca.yaml
 
 # Dev's own image: a commit OpenViCloud/titan-control-plane published from main. Staging's name and tag move only by promotion in
-# titan-ops (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#gitops-flow).
+# titan-ops (titan-ops architecture/platform-infra.md#gitops-flow).
 images:
   # Matched by the name base/control-plane gives the image (scripts/pull-images.py stops on any other).
   - name: control-plane

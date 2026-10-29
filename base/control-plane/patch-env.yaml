@@ -1,6 +1,6 @@
 # What every environment's control plane runs with. Each environment's overlay adds only its own values: hostnames,
 # the cluster list, the backup endpoint and bucket, ASPNETCORE_ENVIRONMENT
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/topology.md#titan-integration).
+# (docs/topology.md#titan-integration).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,14 +18,14 @@ spec:
             - configMapRef:
                 name: control-plane-clusters
             # Titan's client identity toward every cluster, and what of a cluster the environment cannot commit
-            # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/cluster/design.md#provider-client-identity). Optional so
+            # (titan-ops features/cluster/design.md#provider-client-identity). Optional so
             # an image that does not read it starts without it; a control plane with a cluster configured does not start
             # until it exists.
             - secretRef:
                 name: control-plane-cluster
                 optional: true
             # The key pair of the backup bucket; optional so the pod starts before the Secret exists
-            # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/backup/design.md#backup-target).
+            # (titan-ops features/backup/design.md#backup-target).
             - secretRef:
                 name: control-plane-backup-credentials
                 optional: true
@@ -33,13 +33,13 @@ spec:
             - name: Keycloak__Audience
               value: titan-api
             # Authentication__Schemes__Bearer__MetadataAddress (discovery and JWKS in-cluster, the token's issuer stays
-            # public: https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#keycloak-metadata)
+            # public: titan-ops architecture/platform-infra.md#keycloak-metadata)
             # names Keycloak's namespace, so each environment's overlay sets it.
             - name: Authentication__Schemes__Bearer__RequireHttpsMetadata
               value: "false"
             - name: Logging__LogLevel__Microsoft.AspNetCore
               value: Information
-            # The wallet-mutation notify bus (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/money-and-wallet.md#single-writer-outbox).
+            # The wallet-mutation notify bus (titan-ops architecture/money-and-wallet.md#single-writer-outbox).
             - name: Nats__Enabled
               value: "true"
             - name: Nats__Url

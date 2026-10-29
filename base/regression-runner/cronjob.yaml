@@ -1,9 +1,9 @@
-# The regression runner (an Application in titan-ops; dev applies it through lima/regression-runner). The login step of a UI/API regression runs HERE, not
+# The regression runner (an Application on each cluster; dev's is regression-runner-local). The login step of a UI/API regression runs HERE, not
 # on an agent's machine: the pod reads the test-account passwords from the secrets
 # of this namespace (secretKeyRef) and Playwright types them. The agent only
 # supplies the specs, starts a run and reads the redacted output + screenshots —
 # the credential never passes through it
-# (https://github.com/OpenViCloud/titan-ops/blob/main/.claude/commands/release/regression.md, "Runner").
+# (titan-ops's release:regression skill, "Runner").
 #
 # One run is `bash run-module.sh` of OpenViCloud/titan-regression: it loads the specs into a ConfigMap of the job's own,
 # creates the job from this CronJob (env REGRESSION_CRONJOB names it; lane b has cronjob-lane-b.yaml), waits for

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Gives the Terraform provider's acceptance tests (TF_ACC) an API token of beta-user on the dev cluster
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/terraform-provider/design.md#acceptance-on-dev). The row goes straight into the dev
+# (titan-ops features/terraform-provider/design.md#acceptance-on-dev). The row goes straight into the dev
 # database: beta-user's password stays in the cluster, and the script works again after the database is
 # rebuilt, once beta-user has logged in to the portal (that first login creates the tenant). Each run
 # replaces the one token named tf-acc, so runs never pile up against the 20-token cap.

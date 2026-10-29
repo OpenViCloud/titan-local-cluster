@@ -3,7 +3,7 @@
 the shared lima/provision; everything else under lima/ is shared, and what differs by OS beyond the VM files is in the
 branches of lima/scripts/host-os.sh, which lima/scripts/up.sh asks with `uname -s`.
 
-What differs on Ubuntu (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/environments/local-cluster/network.md#vm-to-vm):
+What differs on Ubuntu (docs/network.md#vm-to-vm):
 no user-v2 network, so the Incus API and SeaweedFS's NodePort reach titan-k3s and titan-incus through the host's
 127.0.0.1, and Lima's host resolver answers dev's S3 name.
 

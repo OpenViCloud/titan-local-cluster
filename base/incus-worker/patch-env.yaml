@@ -13,7 +13,7 @@ spec:
             - secretRef:
                 name: worker-secrets
             # BACKUP_S3_ACCESS_KEY_ID and BACKUP_S3_SECRET_ACCESS_KEY; optional so the worker starts before the Secret exists
-            # (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/backup/design.md#incus-backup).
+            # (titan-ops features/backup/design.md#incus-backup).
             - secretRef:
                 name: incus-worker-backup-credentials
                 optional: true

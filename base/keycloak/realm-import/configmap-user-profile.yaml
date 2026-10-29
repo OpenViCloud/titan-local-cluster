@@ -1,5 +1,5 @@
 # The realm's user profile and its labels, applied by keycloak-config-cli only
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#keycloak-user-profile).
+# (titan-ops architecture/platform-infra.md#keycloak-user-profile).
 # A file of its own, imported before titan.json (IMPORT_FILES_LOCATIONS of config-cli-job.yaml); merging the two is unmeasured.
 # config-cli replaces the whole profile with this one, so username and email must stay listed.
 # The label is a realm text, so it does not depend on the login theme.

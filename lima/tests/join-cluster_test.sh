@@ -2,7 +2,7 @@
 # join-cluster_test.sh — lima/scripts/join-cluster.sh joins cluster local to titan-incus with no step by hand.
 #
 # WHY this file exists: the control plane reads its cluster from config and its client identity from a Secret
-# (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/cluster/design.md#cluster-from-config). titan-incus
+# (titan-ops features/cluster/design.md#cluster-from-config). titan-incus
 # gets a new server certificate each time it is rebuilt, so the fingerprint cannot live in git; the endpoint differs by
 # host OS, so git holds only macOS's and the Secret carries this host's; and Incus must trust Titan's certificate before
 # any VM can be made. The script reads the fingerprint and the endpoint, makes the certificate trusted, and must not

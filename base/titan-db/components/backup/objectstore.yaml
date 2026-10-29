@@ -3,7 +3,7 @@ kind: ObjectStore
 metadata:
   name: titan-db-backup
 spec:
-  # Seven days. No bucket lock: barman rewrites backup.info, which a lock refuses (https://github.com/OpenViCloud/titan-ops/blob/main/docs/infra/oci/architecture.md#no-bucket-lock).
+  # Seven days. No bucket lock: barman rewrites backup.info, which a lock refuses (titan-ops infra/oci/architecture.md#no-bucket-lock).
   retentionPolicy: "7d"
   configuration:
     # The bucket and its endpoint belong to the environment: every overlay that adds this component patches both. The

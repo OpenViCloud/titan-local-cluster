@@ -1,0 +1,20 @@
+# The regression runner (docs/topology.md#titan-integration): two suspended CronJobs that a run copies into a Job
+# (run-module.sh of OpenViCloud/titan-regression). Root syncs it, so a rebuilt cluster has them with no step by hand.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: regression-runner-local
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/OpenViCloud/titan-local-cluster
+    targetRevision: main
+    path: gitops/regression-runner
+  destination:
+    server: https://kubernetes.default.svc
+    # Keycloak's namespace, where the test-account Secrets are; lima/scripts/bootstrap-secrets.sh makes it.
+    namespace: titan-auth-dev
+  syncPolicy:
+    automated:
+      prune: true

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Joins cluster local to titan-incus (https://github.com/OpenViCloud/titan-ops/blob/main/docs/features/cluster/design.md#cluster-from-config):
+# Joins cluster local to titan-incus (titan-ops features/cluster/design.md#cluster-from-config):
 # - Titan's client identity (ECDSA P-384, client auth) is made once on the host next to secrets.env and kept, so a rebuilt
 #   VM trusts the same certificate again.
 # - The server fingerprint is read from `incus info` each run: a rebuilt titan-incus has a new server certificate, so it
