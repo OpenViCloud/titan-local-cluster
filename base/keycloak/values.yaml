@@ -91,9 +91,17 @@ extraVolumeMounts: |
     mountPath: /opt/keycloak/themes/openvicloud
     readOnly: true
 
+# Readiness only, so a Keycloak that crashes or has not started is not Ready and its app not Healthy. Keycloak 26
+# answers health on the management port under KC_HTTP_RELATIVE_PATH, not on port 8080. Startup and liveness stay off:
+# they restart the pod.
 startupProbe: ""
 livenessProbe: ""
-readinessProbe: ""
+readinessProbe: |
+  httpGet:
+    path: /auth/health/ready
+    port: http-internal
+  periodSeconds: 10
+  failureThreshold: 3
 
 service:
   httpPort: 80

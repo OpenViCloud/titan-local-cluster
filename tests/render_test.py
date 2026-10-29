@@ -578,6 +578,16 @@ class EnvironmentValuesReachTheirReaders(unittest.TestCase):
                 self.assertTrue(first(objects, "ConfigMap", ref["name"])["data"][ref["key"]].startswith("http://"))
 
 
+def keycloak_values():
+    """The chart values dev's Keycloak app reads: its value files in order, a later file replacing a top-level key."""
+    app = yaml_file(GITOPS / "apps" / "keycloak.yaml")
+    chart = next(source for source in app["spec"]["sources"] if source.get("chart") == "keycloakx")
+    values = {}
+    for value_file in chart["helm"]["valueFiles"]:
+        values.update(yaml_file(REPO / value_file.removeprefix("$local/")))
+    return values
+
+
 class KeycloakRealm(unittest.TestCase):
     """Keycloak itself creates and changes no realm; the keycloak-config-cli hooks do
     (https://github.com/OpenViCloud/titan-ops/blob/main/docs/architecture/platform-infra.md#keycloak-realm-as-code):
@@ -585,17 +595,30 @@ class KeycloakRealm(unittest.TestCase):
     redirect URIs and never started."""
 
     def test_keycloak_creates_no_realm_itself(self):
-        app = yaml_file(GITOPS / "apps" / "keycloak.yaml")
-        chart = next(source for source in app["spec"]["sources"] if source.get("chart") == "keycloakx")
-        values = {}
-        for value_file in chart["helm"]["valueFiles"]:
-            values.update(yaml_file(REPO / value_file.removeprefix("$local/")))
+        values = keycloak_values()
         self.assertIn("start", values["command"])
         self.assertNotIn("--import-realm", values["command"])
         volumes = yaml_text(values["extraVolumes"])
         self.assertIn("keycloak-theme-openvicloud", [v.get("configMap", {}).get("name") for v in volumes])
         self.assertNotIn("keycloak-realm-import", [v.get("configMap", {}).get("name") for v in volumes])
         self.assertNotIn("/opt/keycloak/data/import", [m["mountPath"] for m in yaml_text(values["extraVolumeMounts"])])
+
+
+class KeycloakReadiness(unittest.TestCase):
+    """Keycloak is Ready only while its health check answers UP, so a Keycloak that crashes is not Healthy in ArgoCD
+    and promote-prd.py refuses to promote it. Keycloak 26 answers health on the management port (http-internal) under
+    KC_HTTP_RELATIVE_PATH."""
+
+    def test_readiness_asks_keycloaks_health(self):
+        values = keycloak_values()
+        probe = yaml_text(values["readinessProbe"])
+        self.assertIsInstance(probe, dict, "readinessProbe is empty: Keycloak is Ready as soon as its container runs")
+        env = {e["name"]: e.get("value") for e in yaml_text(values["extraEnv"])}
+        self.assertEqual(env["KC_HEALTH_ENABLED"], "true")
+        self.assertEqual(probe["httpGet"]["port"], "http-internal")
+        self.assertEqual(probe["httpGet"]["path"], env["KC_HTTP_RELATIVE_PATH"] + "/health/ready")
+        # Readiness only: startup and liveness restart the pod, which is not what this probe is for.
+        self.assertEqual((values["startupProbe"], values["livenessProbe"]), ("", ""))
 
 
 if __name__ == "__main__":
