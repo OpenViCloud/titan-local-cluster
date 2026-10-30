@@ -35,4 +35,4 @@ images:
   # Matched by the name base/control-plane gives the image (scripts/pull-images.py stops on any other).
   - name: control-plane
     newName: ghcr.io/openvicloud/titan-control-plane
-    newTag: "a69ef2a"
+    newTag: "79c6e13"
