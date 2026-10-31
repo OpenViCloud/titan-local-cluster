@@ -3,7 +3,7 @@
 # of this namespace (secretKeyRef) and Playwright types them. The agent only
 # supplies the specs, starts a run and reads the redacted output + screenshots —
 # the credential never passes through it
-# (§Runner of the regression suite shared by titan-ops release skills).
+# (OpenViCloud/titan-ops:.claude/shared/regression-suite.md §Runner).
 #
 # One run is `bash run-module.sh` of OpenViCloud/titan-regression: it loads the specs into a ConfigMap of the job's own,
 # creates the job from this CronJob (env REGRESSION_CRONJOB names it; lane b has cronjob-lane-b.yaml), waits for
