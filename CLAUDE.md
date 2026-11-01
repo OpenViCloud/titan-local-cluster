@@ -4,9 +4,9 @@ OpenViCloud's dev environment: Lima VMs on a Mac or an Ubuntu machine (`lima/mac
 cluster are in `docs/` here (`docs/topology.md`, `docs/network.md`). The rules every environment shares are in titan-ops (`../titan-ops`,
 private), such as `titan-ops architecture/platform-infra.md#gitops-flow`. Change a shared rule there, not here.
 
-- `base/` holds the manifests every environment shares; staging's overlays in titan-ops build on it by remote base, pinned
+- `base/` holds the manifests every environment shares; prd's overlays in titan-ops build on it by remote base, pinned
   to one commit of this repository. Overlays here (`gitops/<app>/`) build on `../../base/<app>` and patch only what the local
-  cluster needs. A change that staging needs too belongs in `base/`. Nothing ArgoCD renders here reads titan-ops, which is private
+  cluster needs. A change that prd needs too belongs in `base/`. Nothing ArgoCD renders here reads titan-ops, which is private
   (`tests/render_test.py`, `NoTitanRead`); the sweeper check does.
 - Application names are `*-local` (and `cnpg-operator`, `cert-manager`, `plugin-barman-cloud`, `seaweedfs`), cluster id `local`, the
   same on macOS and Ubuntu (`tests/render_test.py`). Renaming an Application: root prunes the old one, which has no finalizer, so its

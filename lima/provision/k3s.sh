@@ -1,6 +1,6 @@
 #!/bin/bash
-# Provision of titan-k3s (titan-k3s.yaml of lima/macos/ and lima/ubuntu/): k3s at staging's version, with its own Traefik ingress
-# (staging uses cloudflared instead), and ArgoCD at staging's chart version, trimmed for RAM
+# Provision of titan-k3s (titan-k3s.yaml of lima/macos/ and lima/ubuntu/): k3s at prd's version, with its own Traefik ingress
+# (prd uses cloudflared instead), and ArgoCD at prd's chart version, trimmed for RAM
 # (docs/topology.md#ram-budget). Lima runs it as root on every boot.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive

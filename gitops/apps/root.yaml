@@ -1,4 +1,4 @@
-# Local cluster: copy of titan-ops's gitops/apps-staging/root.yaml (docs/topology.md#titan-integration).
+# Local cluster: copy of titan-ops's gitops/apps-prd/root.yaml (docs/topology.md#titan-integration).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -15,7 +15,7 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
-  # Unlike staging's root, it follows main by itself (L-8): nobody syncs the local cluster by hand.
+  # Unlike prd's root, it follows main by itself (L-8): nobody syncs the local cluster by hand.
   syncPolicy:
     automated:
       prune: true

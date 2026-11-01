@@ -3,7 +3,7 @@
 Applications.
 
 What must hold on dev: the control plane and the worker run only their own container (the Incus tunnel sidecar is
-staging's alone), the control plane lists cluster local only, and no Application or app directory is a fake service
+prd's alone), the control plane lists cluster local only, and no Application or app directory is a fake service
 (Titan's rule: doubles only in unit tests).
 
 Run:  python3 tests/render_test.py     (needs kubectl for `kubectl kustomize` and ruby; the overlays build on base/ here,
@@ -86,7 +86,7 @@ class DevRender(unittest.TestCase):
         # (titan-ops features/billing/topup/design.md#topup-portal).
         self.assertIs(portal_config(render("cloud-console")).get("topUpEnabled"), True)
 
-    def test_backup_target_is_the_dev_bucket_not_stagings(self):
+    def test_backup_target_is_the_dev_bucket_not_prds(self):
         env = {e["name"]: e.get("value") for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
         self.assertEqual(env["BackupTarget__Bucket"], "titan-backup-dev")
         self.assertEqual(env["BackupTarget__Region"], "us-east-1")
@@ -420,7 +420,7 @@ class NoTitanRead(unittest.TestCase):
     A keyword naming a titan-ops doc in a comment stays; people read it, not a render."""
 
     def test_the_check_sees_both_kinds_of_read(self):
-        self.assertEqual(titan_reads("  - " + TITAN_OPS_URL + "//gitops/x/overlays/staging?ref=" + "1" * 40), 1)
+        self.assertEqual(titan_reads("  - " + TITAN_OPS_URL + "//gitops/x/overlays/prd?ref=" + "1" * 40), 1)
         self.assertEqual(titan_reads("    - repoURL: " + TITAN_OPS_URL + "\n      targetRevision: main"), 1)
         self.assertEqual(titan_reads("    repoURL: '" + TITAN_OPS_URL + ".git'"), 1)
         self.assertEqual(titan_reads("# titan-ops architecture/platform-infra.md#gitops-flow"), 0)
@@ -483,7 +483,7 @@ class DevClusterIdRename(unittest.TestCase):
         env = self.job()["spec"]["template"]["spec"]["containers"][0]["envFrom"]
         self.assertIn({"secretRef": {"name": "control-plane-db"}}, env)
 
-    def test_staging_has_no_such_job(self):
+    def test_base_has_no_such_job(self):
         base = subprocess.run(["kubectl", "kustomize", str(GITOPS.parent / "base" / "control-plane")], capture_output=True,
                               text=True, check=True).stdout
         self.assertNotIn("rename-cluster-id", base)
@@ -531,7 +531,7 @@ class NoFakeService(unittest.TestCase):
 # storage account. Test accounts' e-mail addresses are the same everywhere. A value of another shape (an IP, an endpoint
 # of another provider) is not seen.
 ENVIRONMENT_WORD = re.compile(
-    r"staging|\bprd\b|titan(-auth|-db)?-dev\b|localhost|\.internal\b|cloudflarestorage\.com|(?<!@)\b[a-z0-9.-]+\.openvicloud\.com",
+    r"\bprd\b|titan(-auth|-db)?-dev\b|localhost|\.internal\b|cloudflarestorage\.com|(?<!@)\b[a-z0-9.-]+\.openvicloud\.com",
     re.IGNORECASE)
 
 
@@ -560,7 +560,7 @@ class BaseNamesNoEnvironment(unittest.TestCase):
 
     def test_the_check_sees_a_name_of_each_kind(self):
         with tempfile.TemporaryDirectory() as root:
-            lines = ["ns: titan-auth-staging", "env: prd", "url: http://localhost:5173",
+            lines = ["ns: titan-auth-prd", "env: prd", "url: http://localhost:5173",
                      "url: https://portal.openvicloud.com", "ns: titan-db-dev", "host: lima-titan-k3s.internal",
                      "endpoint: https://f74ed847.r2.cloudflarestorage.com",
                      "email: beta-user@openvicloud.com", "doc: " + TITAN_OPS_URL + "/blob/main/x.md",
