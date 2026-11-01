@@ -26,6 +26,4 @@ private), such as `titan-ops architecture/platform-infra.md#gitops-flow`. Change
   After a push or a merge to main: hard-refresh ArgoCD's Applications (README, "Move dev to main").
 - Before a push: `python3 tests/render_test.py`, `python3 tests/test_lima_files.py`, `python3 tests/test_pull_images.py`, `python3 tests/test_keycloak_theme.py`,
   `python3 scripts/keycloak-theme.py --check`, `bash tests/sweeper_test.sh`, and
-  `for t in lima/tests/*.sh; do bash "$t" || break; done`. CI runs all of them but `lima/tests/bootstrap-secrets_test.sh` (macOS's `stat -f`)
-  and the sweeper test (reads titan-ops, private): the sweeper test runs on any machine signed in to `gh` as an org member,
-  `bootstrap-secrets_test.sh` only on a Mac.
+  `for t in lima/tests/*.sh; do bash "$t" || break; done`. CI runs all of them but the sweeper test (reads titan-ops, private), which runs on any machine signed in to `gh` as an org member.

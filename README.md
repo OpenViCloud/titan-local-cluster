@@ -138,7 +138,7 @@ python3 tests/test_keycloak_theme.py && python3 scripts/keycloak-theme.py --chec
 bash tests/sweeper_test.sh            # network and gh signed in (titan-ops's template on GitHub)
 bash lima/tests/incus-log-sweeper_test.sh
 bash lima/tests/incus-uplink_test.sh
-bash lima/tests/bootstrap-secrets_test.sh   # macOS only (stat -f)
+bash lima/tests/bootstrap-secrets_test.sh
 bash lima/tests/trust-s3-ca_test.sh
 bash lima/tests/trust-extra-ca_test.sh
 bash lima/tests/join-cluster_test.sh
@@ -147,10 +147,9 @@ bash lima/tests/ports-free_test.sh
 bash lima/tests/first-start_test.sh
 ```
 
-CI runs all of these but `sweeper_test.sh` and `bootstrap-secrets_test.sh` on every push to `main` and every pull request into it.
+CI runs all of these but `sweeper_test.sh` on every push to `main` and every pull request into it.
 `sweeper_test.sh` reads titan-ops (`OpenViCloud/titan-ops`), which is private, so it runs
 before every push on a machine with `gh` signed in as an org member, not in CI.
-`bootstrap-secrets_test.sh` uses macOS's `stat -f`, so it runs only on a Mac, before every push that changes `lima/`.
 
 ## License
 
