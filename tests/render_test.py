@@ -531,7 +531,7 @@ class NoFakeService(unittest.TestCase):
 # storage account. Test accounts' e-mail addresses are the same everywhere. A value of another shape (an IP, an endpoint
 # of another provider) is not seen.
 ENVIRONMENT_WORD = re.compile(
-    r"\bprd\b|titan(-auth|-db)?-dev\b|localhost|\.internal\b|cloudflarestorage\.com|(?<!@)\b[a-z0-9.-]+\.openvicloud\.com",
+    r"(?<![a-z])prd(?![a-z])|titan-backup-|titan(-auth|-db)?-dev\b|localhost|\.internal\b|cloudflarestorage\.com|(?<!@)\b[a-z0-9.-]+\.openvicloud\.com",
     re.IGNORECASE)
 
 
@@ -563,10 +563,11 @@ class BaseNamesNoEnvironment(unittest.TestCase):
             lines = ["ns: titan-auth-prd", "env: prd", "url: http://localhost:5173",
                      "url: https://portal.openvicloud.com", "ns: titan-db-dev", "host: lima-titan-k3s.internal",
                      "endpoint: https://f74ed847.r2.cloudflarestorage.com",
+                     "key: BACKUP_PRD_ACCESS_KEY_ID", "bucket: titan-backup-any",
                      "email: beta-user@openvicloud.com", "doc: " + TITAN_OPS_URL + "/blob/main/x.md",
                      "log: /dev/null", "dir: devices"]
             pathlib.Path(root, "a.yaml").write_text("\n".join(lines) + "\n")
-            self.assertEqual([number for _, number, _ in environment_words(root)], [1, 2, 3, 4, 5, 6, 7])
+            self.assertEqual([number for _, number, _ in environment_words(root)], [1, 2, 3, 4, 5, 6, 7, 8, 9])
 
 
 class EnvironmentValuesReachTheirReaders(unittest.TestCase):
