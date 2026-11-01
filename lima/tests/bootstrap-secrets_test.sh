@@ -8,7 +8,7 @@
 # `kubectl` and `openssl` on PATH, and an `infisical` that fails if called: the values must reach kubectl on stdin and
 # nowhere else, and the Secret key names must be the ones their readers use.
 #
-# Run:  bash lima/tests/bootstrap-secrets_test.sh     (from the repo root; macOS bash 3.2 and python3)
+# Run:  bash lima/tests/bootstrap-secrets_test.sh     (from the repo root; bash 3.2 or later and python3, on macOS or Ubuntu)
 
 set -uo pipefail
 
@@ -21,6 +21,12 @@ PASS=0
 FAIL=0
 ok()  { printf '  PASS %s\n' "$1"; PASS=$((PASS + 1)); }
 bad() { printf '  FAIL %s\n' "$1"; FAIL=$((FAIL + 1)); }
+# Permission bits of each file: GNU stat on Ubuntu, BSD stat on macOS.
+mode_of() {
+  for file in "$@"; do
+    stat -c '%a' "$file" 2>/dev/null || stat -f '%Lp' "$file"
+  done
+}
 
 mkdir -p "$WORK/bin"
 cat > "$WORK/bin/infisical" <<'FAKE'
@@ -96,9 +102,9 @@ FILE="$WORK/fresh/.config/titan-local-cluster/secrets.env"
 [ "$RC" -eq 0 ] && ok "exit 0" || bad "exit $RC: $OUT"
 [ ! -e "$WORK/fresh.infisical" ] && ok "infisical is never called" || bad "infisical was called"
 [ -f "$FILE" ] && ok "secrets.env is created" || bad "no $FILE"
-[ "$(stat -f '%Lp' "$FILE" 2>/dev/null)" = "600" ] && ok "secrets.env is mode 600" || bad "mode $(stat -f '%Lp' "$FILE" 2>&1)"
-[ "$(stat -f '%Lp' "$(dirname "$FILE")" 2>/dev/null)" = "700" ] && ok "its folder is mode 700" \
-  || bad "folder mode $(stat -f '%Lp' "$(dirname "$FILE")" 2>&1)"
+[ "$(mode_of "$FILE" 2>/dev/null)" = "600" ] && ok "secrets.env is mode 600" || bad "mode $(mode_of "$FILE" 2>&1)"
+[ "$(mode_of "$(dirname "$FILE")" 2>/dev/null)" = "700" ] && ok "its folder is mode 700" \
+  || bad "folder mode $(mode_of "$(dirname "$FILE")" 2>&1)"
 missing=""
 for key in $KEYS; do
   [ -n "$(value "$FILE" "$key")" ] || missing="$missing $key"
@@ -160,9 +166,9 @@ for key in $KEYS; do
   [ -n "$(value "$OLD" "$key")" ] || missing="$missing $key"
 done
 [ -z "$missing" ] && ok "the missing keys are added" || bad "still missing:$missing"
-[ "$(stat -f '%Lp' "$OLD")" = "600" ] && ok "the file is set back to mode 600" || bad "mode $(stat -f '%Lp' "$OLD")"
-[ "$(stat -f '%Lp' "$(dirname "$OLD")")" = "700" ] && ok "its folder is set back to mode 700" \
-  || bad "folder mode $(stat -f '%Lp' "$(dirname "$OLD")")"
+[ "$(mode_of "$OLD")" = "600" ] && ok "the file is set back to mode 600" || bad "mode $(mode_of "$OLD")"
+[ "$(mode_of "$(dirname "$OLD")")" = "700" ] && ok "its folder is set back to mode 700" \
+  || bad "folder mode $(mode_of "$(dirname "$OLD")")"
 printf 'username=titan\npassword=kept-db\n' | cmp -s - "$WORK/old.stdin.titan-db-credentials" \
   && ok "the value is read by its exact name, not by a prefix" || bad "titan-db-credentials did not get kept-db"
 grep -q 'password=kept/pw+b64=$' "$WORK/old.stdin.beta-user-credentials" \
@@ -231,8 +237,8 @@ DIR="$WORK/fresh/.config/titan-local-cluster"
 for name in s3-ca.crt s3-ca.key s3.crt s3.key; do
   [ -s "$DIR/$name" ] || bad "no $name"
 done
-[ "$(stat -f '%Lp' "$DIR/s3-ca.key")" = "600" ] && [ "$(stat -f '%Lp' "$DIR/s3.key")" = "600" ] \
-  && ok "both private keys are mode 600" || bad "key modes $(stat -f '%Lp' "$DIR/s3-ca.key" "$DIR/s3.key" 2>&1)"
+[ "$(mode_of "$DIR/s3-ca.key")" = "600" ] && [ "$(mode_of "$DIR/s3.key")" = "600" ] \
+  && ok "both private keys are mode 600" || bad "key modes $(mode_of "$DIR/s3-ca.key" "$DIR/s3.key" 2>&1)"
 grep -q "create secret tls seaweedfs-tls -n seaweedfs --cert=$DIR/s3.crt --key=$DIR/s3.key" "$WORK/fresh.kubectl" \
   && ok "SeaweedFS gets its certificate and key as seaweedfs/seaweedfs-tls" || bad "no seaweedfs-tls from the two files"
 grep -q "create secret generic s3-ca -n titan-db-dev --from-file=ca.crt=$DIR/s3-ca.crt" "$WORK/fresh.kubectl" \
@@ -256,8 +262,8 @@ run ca-missing "$WORK/fresh"
   && ok "a new CA signs a new certificate: the old one would not verify against it" || bad "the certificate outlived its CA"
 chmod 644 "$DIR/s3-ca.key" "$DIR/s3.key"
 run key-modes "$WORK/fresh"
-[ "$(stat -f '%Lp' "$DIR/s3-ca.key")" = "600" ] && [ "$(stat -f '%Lp' "$DIR/s3.key")" = "600" ] \
-  && ok "keys left readable by others are set back to mode 600" || bad "key modes $(stat -f '%Lp' "$DIR/s3-ca.key" "$DIR/s3.key")"
+[ "$(mode_of "$DIR/s3-ca.key")" = "600" ] && [ "$(mode_of "$DIR/s3.key")" = "600" ] \
+  && ok "keys left readable by others are set back to mode 600" || bad "key modes $(mode_of "$DIR/s3-ca.key" "$DIR/s3.key")"
 
 for real in /opt/homebrew/bin/openssl /usr/bin/openssl; do
   [ -x "$real" ] || continue
