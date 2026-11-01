@@ -197,7 +197,7 @@ grep -q 'get secret.*-o \|get secret.*jsonpath\|get secret.*yaml\|get secret.*js
 printf 'password=admin-test-local-only\n' | cmp -s - "$WORK/running.stdin.admin-test-credentials" \
   && ok "admin-test gets its fixed test password" || bad "stdin of admin-test-credentials was: $(cat "$WORK/running.stdin.admin-test-credentials" 2>&1)"
 grep -q 'create secret generic admin-test-credentials -n titan-auth-dev' "$WORK/running.kubectl" \
-  && ok "in titan-auth-dev, where Keycloak's realm import reads it" || bad "wrong namespace or name for admin-test-credentials"
+  && ok "in titan-auth-dev, where the keycloak-config-cli Job reads it" || bad "wrong namespace or name for admin-test-credentials"
 
 echo "the S3 key pair, generated once"
 kid=$(value "$FILE" BACKUP_S3_ACCESS_KEY_ID)
@@ -232,7 +232,7 @@ else
 fi
 printf '%s' "$OUT" | grep -q WARNING && bad "a warning on a normal run: $OUT" || ok "no warning"
 
-echo "the S3 CA and SeaweedFS's certificate, made once on the Mac"
+echo "the S3 CA and SeaweedFS's certificate, made once"
 DIR="$WORK/fresh/.config/titan-local-cluster"
 for name in s3-ca.crt s3-ca.key s3.crt s3.key; do
   [ -s "$DIR/$name" ] || bad "no $name"
