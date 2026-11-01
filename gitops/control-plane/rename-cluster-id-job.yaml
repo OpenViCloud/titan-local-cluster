@@ -1,4 +1,4 @@
-# Dev only (staging's cluster id singapore01 never changed): the local cluster's id was local-mac until 2026-10-27, and
+# Dev only (prd's cluster id singapore01 never changed): the local cluster's id was local-mac until 2026-10-27, and
 # the control plane keys resources, provider commands and template sync states by cluster id. This hook moves a dev
 # database's rows to local in the sync that rolls the control plane onto Clusters__0__Id=local: in PreSync, after the
 # migration (wave 0), before the new control plane starts; and again in PostSync, for rows the old pod (still on

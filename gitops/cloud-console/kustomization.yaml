@@ -11,7 +11,7 @@ resources:
 patches:
   - path: configmap-patch.yaml
 
-# Dev's own image: a commit OpenViCloud/titan-cloud-console published from main. Staging's name and tag move only by
+# Dev's own image: a commit OpenViCloud/titan-cloud-console published from main. Prd's name and tag move only by
 # promotion in titan-ops (titan-ops architecture/platform-infra.md#gitops-flow).
 images:
   # Matched by the name base/cloud-console gives the image (scripts/pull-images.py stops on any other).

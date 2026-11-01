@@ -1,5 +1,5 @@
-# Dev's S3 (docs/topology.md#s3). No staging copy:
-# staging writes to R2.
+# Dev's S3 (docs/topology.md#s3). No prd copy:
+# prd writes to R2.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

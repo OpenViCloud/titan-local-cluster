@@ -1,4 +1,4 @@
-# Local cluster: copy of titan-ops's gitops/apps-staging/keycloak.yaml with dev's values, realm origins (gitops/keycloak/realm-import) and ingress from this repository, and one source more: the second regression test user, realm-import-beta-user-2 (docs/topology.md#titan-integration).
+# Local cluster: copy of titan-ops's gitops/apps-prd/keycloak.yaml with dev's values, realm origins (gitops/keycloak/realm-import) and ingress from this repository, and one source more: the second regression test user, realm-import-beta-user-2 (docs/topology.md#titan-integration).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -25,7 +25,7 @@ spec:
     - repoURL: https://github.com/OpenViCloud/titan-local-cluster
       targetRevision: main
       path: gitops/keycloak/realm-import
-    # Not in staging's app until release:infra has made its Secret: the hook of this directory reads Secret
+    # Not in prd's app yet. The hook of this directory reads Secret
     # beta-user-2-credentials, which lima/scripts/bootstrap-secrets.sh makes here. Run that script (up.sh does) before the
     # push that adds this source reaches a cluster that has no such Secret, or the hook pod never starts.
     - repoURL: https://github.com/OpenViCloud/titan-local-cluster

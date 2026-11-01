@@ -10,8 +10,8 @@ Keycloak realm import and values, and the values of NATS, CloudNativePG and the 
 (`gitops/<app>/`) builds on `../../base/<app>` and adds only what the local cluster needs: hostnames, the cluster list, the token issuer and Keycloak's metadata
 address, Keycloak's database host, the realm's portal origins (a ConfigMap the overlay generates), the
 backup bucket and endpoint, smaller requests, dev's own image tags. `base/` names no environment (`tests/render_test.py`,
-`BaseNamesNoEnvironment`). The regression runner (`gitops/regression-runner/`, Application `regression-runner-local`) generates its URLs the same way. Staging's overlays live in titan-ops and build on `base/` here at a pinned commit;
-this repository never reaches staging. Nothing ArgoCD renders here reads titan-ops (`tests/render_test.py` checks it).
+`BaseNamesNoEnvironment`). The regression runner (`gitops/regression-runner/`, Application `regression-runner-local`) generates its URLs the same way. Prd's overlays live in titan-ops and build on `base/` here at a pinned commit;
+this repository never reaches prd. Nothing ArgoCD renders here reads titan-ops (`tests/render_test.py` checks it).
 
 Design, rules and runbook of the dev cluster: [docs/topology.md](docs/topology.md) and [docs/network.md](docs/network.md).
 
@@ -22,7 +22,7 @@ Design, rules and runbook of the dev cluster: [docs/topology.md](docs/topology.m
 | `lima/` | What both deployments share: `provision/` of the two VMs; `scripts/`: `up.sh` · `down.sh`, the secrets bootstrap, a Terraform acceptance token for dev; `tests/` of the provisioning; the regression runner overlay |
 | `lima/macos/` · `lima/ubuntu/` | The two Lima VM files of each OS, and a link to `lima/provision` (Lima refuses `..` in a provision path); `up.sh` picks the folder by `uname -s` |
 | `gitops/apps/` | ArgoCD app-of-apps: `root-local` and one Application per app |
-| `base/` | The manifests every environment shares; staging builds on them from titan-ops |
+| `base/` | The manifests every environment shares; prd builds on them from titan-ops |
 | `gitops/<app>/` | Dev's overlay of each app, on `../../base/<app>` |
 | `scripts/pull-images.py` | Moves dev to the images other repositories published from main |
 | `tests/` | Render checks of the overlays, the pull script, the Keycloak theme check, and the guest-log sweeper compared with titan-ops's template |
@@ -138,7 +138,7 @@ python3 tests/test_keycloak_theme.py && python3 scripts/keycloak-theme.py --chec
 bash tests/sweeper_test.sh            # network and gh signed in (titan-ops's template on GitHub)
 bash lima/tests/incus-log-sweeper_test.sh
 bash lima/tests/incus-uplink_test.sh
-bash lima/tests/bootstrap-secrets_test.sh   # macOS only (stat -f)
+bash lima/tests/bootstrap-secrets_test.sh
 bash lima/tests/trust-s3-ca_test.sh
 bash lima/tests/trust-extra-ca_test.sh
 bash lima/tests/join-cluster_test.sh
@@ -147,10 +147,9 @@ bash lima/tests/ports-free_test.sh
 bash lima/tests/first-start_test.sh
 ```
 
-CI runs all of these but `sweeper_test.sh` and `bootstrap-secrets_test.sh` on every push to `main` and every pull request into it.
+CI runs all of these but `sweeper_test.sh` on every push to `main` and every pull request into it.
 `sweeper_test.sh` reads titan-ops (`OpenViCloud/titan-ops`), which is private, so it runs
 before every push on a machine with `gh` signed in as an org member, not in CI.
-`bootstrap-secrets_test.sh` uses macOS's `stat -f`, so it runs only on a Mac, before every push that changes `lima/`.
 
 ## License
 

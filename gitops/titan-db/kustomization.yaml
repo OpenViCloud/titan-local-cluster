@@ -50,7 +50,7 @@ patches:
         path: /spec/plugins/0/parameters/serverName
         value: titan-db-dev
   # Integration tests on the dev machine create and drop throwaway databases here instead of in a Docker container
-  # (test-all.sh of OpenViCloud/titan-control-plane). Dev only: staging has no such role. Password: Secret titan-it-credentials,
+  # (test-all.sh of OpenViCloud/titan-control-plane). Dev only: prd has no such role. Password: Secret titan-it-credentials,
   # written by lima/scripts/bootstrap-secrets.sh.
   - target:
       kind: Cluster

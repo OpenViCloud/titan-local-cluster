@@ -29,7 +29,7 @@
 Measurements K-1 and B-1 below are from the Mac. On Ubuntu (2026-10-27) only the TCP sockets Lima opens are measured: `127.0.0.1` for `8080`, `6443`, `8443`, `30833`, unreachable from other machines on the LAN; other LoadBalancer ports and UDP are not measured.
 
 **Rules**
-- Turn on the ingress k3s ships (Traefik + ServiceLB). Staging turns both off because it has cloudflared; local has no cloudflared.
+- Turn on the ingress k3s ships (Traefik + ServiceLB). Prd turns both off because it has cloudflared; local has no cloudflared.
 - Lima forwards the guest's port 80 to the host's `127.0.0.1:8080`. Not the Mac's port 80: measured K-1, for a port below 1024 Lima listens on **every** interface (`*:80`, public IPv6 included), not `127.0.0.1`. At 8080 only `127.0.0.1:8080` is left; LAN and public IPv6 are refused.
 - Lima does **not** keep `ignore` rules on every forwarding path: it still opens every k3s LoadBalancer port and every UDP socket of the guest, and opens ports below 1024 on **every** interface. Measured B-1: Traefik `443` accepts TCP from the LAN and from public IPv6; UDP `67` (DHCP of `ovnup` while it was a bridge) opens `*:67`. So block at the **source**: k3s turns off Traefik's `websecure` port; `ovnup` is a `physical` uplink, so it has no dnsmasq ([§uplink](#uplink)). After that every port Lima opens on the Mac is `127.0.0.1`.
 - Hostnames end in `.localhost`. Browsers point that suffix at `127.0.0.1` on their own; no `/etc/hosts` edit.
