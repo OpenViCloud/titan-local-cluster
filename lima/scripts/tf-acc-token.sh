@@ -10,7 +10,7 @@ set -euo pipefail
 KC="$HOME/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml"
 ENV_FILE="${OPENVICLOUD_TF_ACC_ENV:-$HOME/.config/openvicloud/tf-acc.env}"
 API_URL="http://api.localhost:8080"
-EMAIL="beta-user@openvicloud.com"
+TENANT="beta-user"
 
 # Only the dev cluster answers on this address; the kubeconfig must point at it.
 server=$(kubectl --kubeconfig "$KC" config view --minify -o 'jsonpath={.clusters[0].cluster.server}')
@@ -36,12 +36,12 @@ if ! result=$(kubectl --kubeconfig "$KC" -n titan-db-dev exec -i "$pod" -c postg
 BEGIN;
 DELETE FROM core.api_tokens
  WHERE name = 'tf-acc'
-   AND tenant_id = (SELECT id FROM core.tenants WHERE email = '$EMAIL');
+   AND tenant_id = (SELECT id FROM core.tenants WHERE name = '$TENANT');
 INSERT INTO core.api_tokens (id, tenant_id, keycloak_user_id, name, prefix, secret_hash, created_at, expires_at)
 SELECT gen_random_uuid(), t.id, m.keycloak_user_id, 'tf-acc', '$prefix', '$hash', now(), now() + interval '30 days'
   FROM core.tenants t
   JOIN core.tenant_members m ON m.tenant_id = t.id
- WHERE t.email = '$EMAIL'
+ WHERE t.name = '$TENANT'
  LIMIT 1;
 COMMIT;
 SQL
