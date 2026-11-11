@@ -17,7 +17,7 @@
 # - ghcr-credentials with no auth: the shared base names it as the pull Secret, and GHCR serves the images anonymously.
 # - The fixed test passwords of the integration-test role titan_it and of the realm user admin-test, re-applied every run.
 # - The assistant's Secrets (base/chat), re-applied every run: the password of its role chat, generated once into
-#   secrets.env, and landing-chat-secrets. The OpenRouter key is never generated: whoever has one writes
+#   secrets.env (chat-db-credentials, labelled cnpg.io/reload=true so CNPG notices it), and landing-chat-secrets. The OpenRouter key is never generated: whoever has one writes
 #   OPENROUTER_API_KEY into secrets.env by hand. Until then the Secret carries NO_KEY_VALUE instead: the pod starts
 #   and is Healthy (a stranger's cluster gets ready, L-22), and every model refuses the value, so every answer is the
 #   assistant's busy text.
@@ -198,8 +198,8 @@ chat_db_password=$(from_file CHAT_DB_PASSWORD)
 printf 'username=chat\npassword=%s\n' "$chat_db_password" |
   k create secret generic chat-db-credentials -n titan-db-dev --type=kubernetes.io/basic-auth \
     --from-env-file=/dev/stdin --dry-run=client -o yaml | k apply -f - >/dev/null
-# CNPG sets a managed role's password from a Secret it watches: without this label, a role made before its Secret existed
-# (a running cluster that gets the assistant) kept no password, measured on dev 2026-11-11.
+# CNPG notices a role's Secret made or changed after the role only when it carries cnpg.io/reload: without it, a role made
+# before its Secret existed (a running cluster that gets the assistant) kept no password, measured on dev 2026-11-11.
 k label secret chat-db-credentials -n titan-db-dev cnpg.io/reload=true --overwrite >/dev/null
 echo "secret titan-db-dev/chat-db-credentials applied"
 openrouter_key=$(from_file OPENROUTER_API_KEY)
