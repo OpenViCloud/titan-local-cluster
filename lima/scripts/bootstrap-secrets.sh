@@ -206,6 +206,7 @@ if [ -z "$openrouter_key" ]; then
 fi
 printf 'OPENROUTER_API_KEY=%s\nDATABASE_URL=postgres://chat:%s@titan-db-rw.titan-db-dev.svc.cluster.local:5432/chat\n' \
   "$openrouter_key" "$chat_db_password" | apply_secret titan-dev landing-chat-secrets
+echo "a running assistant reads a changed key only after: kubectl -n titan-dev rollout restart deployment/chat"
 unset chat_db_password openrouter_key
 
 # ── Generated once, applied when the cluster has none ─────────────────────────
