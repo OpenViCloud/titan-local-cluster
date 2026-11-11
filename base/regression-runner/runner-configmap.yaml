@@ -25,6 +25,12 @@ data:
     done
     cp /runner/playwright.config.ts /work/
 
+    # Behind a TLS-inspecting proxy npm needs the proxy's CA (ConfigMap titan-extra-ca, docs/topology.md#extra-ca). Only when
+    # the file has content: node warns at every start when the variable names a missing file.
+    if [ -s /extra-ca/extra-ca.crt ]; then
+      export NODE_EXTRA_CA_CERTS=/extra-ca/extra-ca.crt
+    fi
+
     cd /work
     npm init -y >/dev/null
     # Keep the version in lockstep with the image tag in cronjob.yaml.
