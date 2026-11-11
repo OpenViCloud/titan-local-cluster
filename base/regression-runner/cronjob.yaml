@@ -50,6 +50,10 @@ spec:
                 optional: true   # created per job by the agent; absent ⇒ the runner exits 2
             - name: work
               emptyDir: {}
+            - name: extra-ca
+              configMap:
+                name: titan-extra-ca   # lima/scripts/trust-extra-ca.sh writes it on a host behind a TLS-inspecting proxy
+                optional: true   # absent (no extra-ca.crt on the host) ⇒ an empty folder; run.sh sets no CA
           containers:
             - name: playwright
               # Keep in lockstep with @playwright/test in run.sh (browsers match the npm version) and with cronjob-lane-b.yaml.
@@ -100,6 +104,9 @@ spec:
                   readOnly: true
                 - name: work
                   mountPath: /work
+                - name: extra-ca
+                  mountPath: /extra-ca
+                  readOnly: true
               resources:
                 requests:
                   cpu: 500m

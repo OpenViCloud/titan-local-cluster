@@ -506,6 +506,35 @@ class RunnerIsAnApplication(unittest.TestCase):
             self.assertIs(first(objects, "CronJob", name)["spec"]["suspend"], True)
 
 
+class RunnerTrustsExtraCa(unittest.TestCase):
+    """Behind a TLS-inspecting proxy the runner's npm needs the host's CA; without ConfigMap titan-extra-ca the runner runs as
+    before, with no variable set, since node warns at every start when NODE_EXTRA_CA_CERTS names a missing file
+    (docs/topology.md#extra-ca)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.objects = render("regression-runner")
+
+    def test_both_lanes_mount_the_ca_configmap_optional_and_read_only(self):
+        for name in ("titan-regression", "titan-regression-b"):
+            pod = first(self.objects, "CronJob", name)["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+            volumes = [v for v in pod["volumes"] if v["name"] == "extra-ca"]
+            self.assertEqual(volumes, [{"name": "extra-ca", "configMap": {"name": "titan-extra-ca", "optional": True}}], name)
+            container = pod["containers"][0]
+            mounts = [m for m in container["volumeMounts"] if m["name"] == "extra-ca"]
+            self.assertEqual(mounts, [{"name": "extra-ca", "mountPath": "/extra-ca", "readOnly": True}], name)
+            self.assertNotIn("NODE_EXTRA_CA_CERTS", [e["name"] for e in container["env"]], name)
+
+    def test_run_sh_sets_the_variable_only_when_the_file_has_content_and_before_npm(self):
+        run_sh = first(self.objects, "ConfigMap", "titan-regression-runner")["data"]["run.sh"]
+        guard = ("if [ -s /extra-ca/extra-ca.crt ]; then\n"
+                 "  export NODE_EXTRA_CA_CERTS=/extra-ca/extra-ca.crt\n"
+                 "fi\n")
+        self.assertEqual(run_sh.count(guard), 1)
+        self.assertEqual(run_sh.count("NODE_EXTRA_CA_CERTS"), 1, "set only inside the guard")
+        self.assertLess(run_sh.index(guard), run_sh.index("npm install"))
+
+
 class NoFakeService(unittest.TestCase):
     def test_reads_the_applications(self):
         names = [name for _, name, _ in applications()]
