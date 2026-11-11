@@ -18,10 +18,10 @@
 # - The fixed test passwords of the integration-test role titan_it and of the realm user admin-test, re-applied every run.
 # - The assistant's Secrets (base/chat), re-applied every run: the password of its role chat, generated once into
 #   secrets.env (chat-db-credentials, labelled cnpg.io/reload=true so CNPG notices it), and landing-chat-secrets.
-#   The OpenRouter key is never generated: whoever has one writes
-#   OPENROUTER_API_KEY into secrets.env by hand. Until then the Secret carries NO_KEY_VALUE instead: the pod starts
-#   and is Healthy (a stranger's cluster gets ready, L-22), and every model refuses the value, so every answer is the
-#   assistant's busy text.
+#   Dev has no OpenRouter key (Tôn Chủ decided 2026-11-11; the assistant's real answers are measured on prd): the
+#   Secret carries NO_KEY_VALUE, the pod starts and is Healthy (a stranger's cluster gets ready, L-22), every model
+#   refuses the value, so every answer is the assistant's busy text. The script never generates a key; one written into
+#   secrets.env by hand as OPENROUTER_API_KEY is used instead.
 # Values go through pipes and the file only: no command-line argument, nothing printed.
 # Needs: titan-k3s running.
 set -euo pipefail
@@ -192,9 +192,8 @@ fi
 
 # ── The assistant of the landing pages (base/chat), re-applied every run ──────
 # Ahead of the early exit below: a cluster bootstrapped before the assistant gets its Secrets on the next run, and a key
-# written into secrets.env later reaches the cluster on the next run. The key belongs to the OpenRouter account prd uses
-# (Tôn Chủ decided 2026-11-11), so dev's turns count against the same daily quota of the free models
-# (titan-ops features/public-site/design.md#chat-assistant). Restart Deployment chat after a new key: env is read at start.
+# written into secrets.env by hand reaches the cluster on the next run (titan-ops features/public-site/design.md#chat-assistant).
+# Restart Deployment chat after a new key: env is read at start.
 chat_db_password=$(from_file CHAT_DB_PASSWORD)
 printf 'username=chat\npassword=%s\n' "$chat_db_password" |
   k create secret generic chat-db-credentials -n titan-db-dev --type=kubernetes.io/basic-auth \
