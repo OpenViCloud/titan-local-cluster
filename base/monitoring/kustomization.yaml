@@ -1,0 +1,15 @@
+# Scrape config of the operator metrics tier, shared by every environment. The four charts take their values from
+# this folder (gitops/apps/monitoring.yaml); what differs per environment comes from the overlay (the ingress host) or
+# from a Secret (the Incus address, server name, cluster id and certificates).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+configMapGenerator:
+  - name: monitoring-scrape
+    files:
+      - scrape.yml
+
+# The chart's values name this ConfigMap literally (server.scrape.configMap), which kustomize cannot rewrite to a
+# hashed name; VictoriaMetrics re-reads the file every minute (promscrape.configCheckInterval) instead of restarting.
+generatorOptions:
+  disableNameSuffixHash: true

@@ -1,0 +1,61 @@
+# Operator metrics tier: VictoriaMetrics scrapes the cluster, the control plane, Postgres, Traefik and Incus; vmalert
+# evaluates the alerts and Alertmanager routes them. Charts pinned, values and the scrape config in base/monitoring.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-local
+  namespace: argocd
+  annotations:
+    # wave 3, the highest (shared with incus-worker): no wave waits on it.
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  project: default
+  sources:
+    - repoURL: https://victoriametrics.github.io/helm-charts/
+      chart: victoria-metrics-single
+      targetRevision: "0.49.1"  # pin — update intentionally
+      helm:
+        releaseName: victoria-metrics
+        valueFiles:
+          - $local/base/monitoring/victoria-metrics-values.yaml
+    - repoURL: https://victoriametrics.github.io/helm-charts/
+      chart: victoria-metrics-alert
+      targetRevision: "0.51.1"  # pin — update intentionally
+      helm:
+        releaseName: vmalert
+        valueFiles:
+          - $local/base/monitoring/vmalert-values.yaml
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: prometheus-node-exporter
+      targetRevision: "4.60.1"  # pin — update intentionally
+      helm:
+        releaseName: prometheus-node-exporter
+        valueFiles:
+          - $local/base/monitoring/node-exporter-values.yaml
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-state-metrics
+      targetRevision: "8.7.1"  # pin — update intentionally
+      helm:
+        releaseName: kube-state-metrics
+        valueFiles:
+          - $local/base/monitoring/kube-state-metrics-values.yaml
+    - repoURL: https://github.com/OpenViCloud/titan-local-cluster
+      targetRevision: main
+      ref: local
+    - repoURL: https://github.com/OpenViCloud/titan-local-cluster
+      targetRevision: main
+      path: gitops/monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 3m

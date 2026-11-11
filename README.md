@@ -6,7 +6,8 @@ deployments share everything; what differs is the two VM files (`lima/macos/`, `
 `lima/scripts/host-os.sh`.
 
 `base/` holds the manifests every environment shares: the apps, the database with its backup and restore components, the
-Keycloak realm import and values, and the values of NATS, CloudNativePG and the Barman Cloud plugin's manifest. Every overlay here
+Keycloak realm import and values, the values of NATS, CloudNativePG and the Barman Cloud plugin's manifest, and the
+operator metrics tier (`base/monitoring/`: chart values and the scrape config). Every overlay here
 (`gitops/<app>/`) builds on `../../base/<app>` and adds only what the local cluster needs: hostnames, the cluster list, the token issuer and Keycloak's metadata
 address, Keycloak's database host, the realm's portal origins (a ConfigMap the overlay generates), the
 backup bucket and endpoint, smaller requests, dev's own image tags. `base/` names no environment (`tests/render_test.py`,
@@ -58,16 +59,16 @@ running; `up.sh` then waits up to 30 more minutes for the install to finish. If 
 install again and goes on from where it stopped. It stops before starting a VM whose host ports (`127.0.0.1` 6443 and 8080; on
 Ubuntu also 8443 and 30833) another cluster or program already holds, and names the port.
 
-The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/` (`secrets.env`, the S3 CA and SeaweedFS's certificate; keys mode 600; and, on a host behind a TLS-inspecting proxy, its CA as `extra-ca.crt`, [docs/topology.md#extra-ca](docs/topology.md#extra-ca)), so a rebuilt cluster gets them again; keep that folder. Behind a TLS-inspecting proxy a new titan-k3s gets no ArgoCD: build or rebuild it off the proxy ([docs/topology.md#extra-ca](docs/topology.md#extra-ca)). Backups go to SeaweedFS in titan-k3s (`gitops/seaweedfs`), over TLS at `https://lima-titan-k3s.internal:30833`, with its data in `~/.local/share/titan-local-cluster/s3` on the host, which outlives the VM. Docker must not be running.
+The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/` (`secrets.env`, the S3 CA and SeaweedFS's certificate, Titan's client identity `titan-client.crt`/`.key`, the metrics certificate `incus-metrics.crt`/`.key`; keys mode 600; and, on a host behind a TLS-inspecting proxy, its CA as `extra-ca.crt`, [docs/topology.md#extra-ca](docs/topology.md#extra-ca)), so a rebuilt cluster gets them again; keep that folder. Behind a TLS-inspecting proxy a new titan-k3s gets no ArgoCD: build or rebuild it off the proxy ([docs/topology.md#extra-ca](docs/topology.md#extra-ca)). Backups go to SeaweedFS in titan-k3s (`gitops/seaweedfs`), over TLS at `https://lima-titan-k3s.internal:30833`, with its data in `~/.local/share/titan-local-cluster/s3` on the host, which outlives the VM. Docker must not be running.
 
 ```sh
-bash lima/scripts/up.sh      # creates the VMs on first run, then starts them, trusts an extra CA if present (the VMs first, ArgoCD once it is up), applies secrets, trusts the S3 CA, joins cluster local to titan-incus, applies root-local, drops the Applications of the old names
+bash lima/scripts/up.sh      # creates the VMs on first run, then starts them, trusts an extra CA if present (the VMs first, ArgoCD once it is up), applies secrets, trusts the S3 CA, joins cluster local to titan-incus, has titan-incus trust the metrics certificate, applies root-local, drops the Applications of the old names
 bash lima/scripts/down.sh    # stops both VMs; disks stay (guest VMs in titan-incus stop too, see below)
 ```
 
 `memory` in `lima/<os>/titan-k3s.yaml` applies when the VM is created. To resize a running one: `limactl stop titan-k3s && limactl edit --memory 4 titan-k3s && limactl start titan-k3s` (about 15 seconds of downtime; the pods come back by themselves).
 
-ArgoCD: http://argocd.localhost:8080 · portal: http://portal.localhost:8080.
+ArgoCD: http://argocd.localhost:8080 · portal: http://portal.localhost:8080 · metrics (vmui, no sign-in): http://metrics.localhost:8080/vmui/.
 
 After `up.sh`, ArgoCD keeps installing for a while; the cluster is ready when every application is `Synced` and `Healthy`
 (`kubectl --kubeconfig ~/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml get applications -n argocd`).
@@ -87,6 +88,11 @@ themselves, in a hook of the control plane's sync (`gitops/control-plane/rename-
 endpoint for this host's OS (`lima/scripts/host-os.sh`), has titan-incus trust Titan's certificate, and puts all of them in
 Secret `control-plane-cluster`. The portal offers an OS once an admin has synced the
 templates (admin console, Catalog).
+
+Right after, `up.sh` runs `lima/scripts/incus-metrics.sh`: it makes a second identity once
+(`~/.config/titan-local-cluster/incus-metrics.crt` and `.key`), has titan-incus trust it as type `metrics` under the name
+`titan-local-metrics` (it reads `/1.0/metrics` and nothing else; Titan's own identity never goes to the scraper), and
+writes Secret `incus-metrics` in namespace `monitoring` for VictoriaMetrics, restarting it only when the Secret changed.
 
 `down.sh` stops the guest VMs in titan-incus with it, and `up.sh` does not start them again: start them again through Titan (the VM's start).
 Once, after `down.sh` with a guest VM running, Incus's LVM pool failed its check at boot ("Manual repair required!") and
@@ -142,6 +148,7 @@ bash lima/tests/bootstrap-secrets_test.sh
 bash lima/tests/trust-s3-ca_test.sh
 bash lima/tests/trust-extra-ca_test.sh
 bash lima/tests/join-cluster_test.sh
+bash lima/tests/incus-metrics_test.sh
 bash lima/tests/drop-old-applications_test.sh
 bash lima/tests/ports-free_test.sh
 bash lima/tests/first-start_test.sh

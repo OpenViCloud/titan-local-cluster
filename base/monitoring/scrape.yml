@@ -1,0 +1,67 @@
+# Targets are found by pod labels and named ports, so one file serves every environment. A job with no matching pod
+# (Traefik where cloudflared is the ingress) scrapes nothing.
+global:
+  scrape_interval: 30s
+
+scrape_configs:
+  - job_name: node
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name, __meta_kubernetes_pod_container_port_name]
+        regex: prometheus-node-exporter;metrics
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node
+
+  - job_name: kube-state-metrics
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name, __meta_kubernetes_pod_container_port_name]
+        regex: kube-state-metrics;http
+        action: keep
+
+  - job_name: postgres
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_cnpg_io_cluster, __meta_kubernetes_pod_container_port_name]
+        regex: titan-db;metrics
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+
+  - job_name: control-plane
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app, __meta_kubernetes_pod_container_port_name]
+        regex: control-plane;metrics
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+
+  - job_name: traefik
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name, __meta_kubernetes_pod_container_port_name]
+        regex: traefik;metrics
+        action: keep
+
+  # Incus answers /1.0/metrics to a certificate of type "metrics", which can read nothing else. The address, the name
+  # on the server's certificate and the cluster id come from the incus-metrics Secret as environment variables.
+  - job_name: incus
+    scrape_interval: 60s
+    scheme: https
+    metrics_path: /1.0/metrics
+    tls_config:
+      ca_file: /etc/incus-metrics/server.crt
+      cert_file: /etc/incus-metrics/client.crt
+      key_file: /etc/incus-metrics/client.key
+      server_name: "%{INCUS_SERVER_NAME}"
+    static_configs:
+      - targets: ["%{INCUS_ADDRESS}"]
+        labels:
+          cluster: "%{INCUS_CLUSTER}"
