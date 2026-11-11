@@ -55,6 +55,9 @@ jobs:
       - name: Cluster join
         run: bash lima/tests/join-cluster_test.sh
 
+      - name: Incus metrics certificate
+        run: bash lima/tests/incus-metrics_test.sh
+
       - name: Dev secrets bootstrap
         run: bash lima/tests/bootstrap-secrets_test.sh
 

@@ -1,0 +1,7 @@
+fullnameOverride: prometheus-node-exporter
+resources:
+  requests:
+    cpu: 10m
+    memory: 24Mi
+  limits:
+    memory: 64Mi

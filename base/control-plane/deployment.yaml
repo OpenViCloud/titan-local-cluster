@@ -44,6 +44,8 @@ spec:
           image: control-plane:latest
           ports:
             - containerPort: 8080
+            - name: metrics
+              containerPort: 9464
           envFrom:
             - secretRef:
                 name: control-plane-secrets

@@ -8,7 +8,7 @@
 
 ```
  Browser on the host (Mac or Ubuntu machine)
-   │  http://portal.localhost:8080 · api.localhost:8080 · auth.localhost:8080 · admin.localhost:8080
+   │  http://portal.localhost:8080 · api.localhost:8080 · auth.localhost:8080 · admin.localhost:8080 · metrics.localhost:8080
    ▼  (127.0.0.1 only)
  Lima port-forward 127.0.0.1:8080 ──► titan-k3s :80 ── k3s ingress ──► Service
                                │
@@ -43,6 +43,7 @@ Measurements K-1 and B-1 below are from the Mac. On Ubuntu (2026-10-27) only the
 | `api.localhost` | control plane |
 | `auth.localhost` | Keycloak |
 | `argocd.localhost` | ArgoCD UI |
+| `metrics.localhost` | VictoriaMetrics' whole HTTP API (Service `victoria-metrics:8428` in `monitoring`), vmui at `/vmui/`, admin routes included, no sign-in |
 
 **Why.** Each new origin needs its redirect URI and CORS declared once. Fixed names are declared once and do not move with a `port-forward` port.
 
@@ -51,7 +52,7 @@ Measurements K-1 and B-1 below are from the Mac. On Ubuntu (2026-10-27) only the
 
 **Common rules**
 - Cluster `local` in the control plane's config (`Clusters__0__Endpoint`, `titan-ops features/cluster/design.md#cluster-from-config`) points at the Incus API endpoint of the host running the cluster and pins the server fingerprint. The endpoint must stay the same across restarts.
-- The endpoint depends on the host OS. ConfigMap `control-plane-clusters` (`gitops/control-plane/kustomization.yaml`) holds the macOS endpoint. `lima/scripts/join-cluster.sh` writes this host's endpoint (by `uname -s`, function `incus_endpoint` of `lima/scripts/host-os.sh`) into Secret `titan-dev/control-plane-cluster`, with `Clusters__0__ServerFingerprint` and the client identity. The Secret comes after the ConfigMap in `envFrom` (`base/control-plane/patch-env.yaml`), so it wins; `tests/render_test.py` guards that order.
+- The endpoint depends on the host OS. ConfigMap `control-plane-clusters` (`gitops/control-plane/kustomization.yaml`) holds the macOS endpoint. `lima/scripts/join-cluster.sh` writes this host's endpoint (by `uname -s`, function `incus_endpoint` of `lima/scripts/host-os.sh`) into Secret `titan-dev/control-plane-cluster`, with `Clusters__0__ServerFingerprint` and the client identity. The Secret comes after the ConfigMap in `envFrom` (`base/control-plane/patch-env.yaml`), so it wins; `tests/render_test.py` guards that order. `lima/scripts/incus-metrics.sh` writes the same endpoint, without `https://`, into Secret `monitoring/incus-metrics` (key `address`), where VictoriaMetrics reads it to scrape `/1.0/metrics`.
 
 | Host | Endpoint |
 |---|---|
@@ -72,9 +73,9 @@ Measurements K-1 and B-1 below are from the Mac. On Ubuntu (2026-10-27) only the
 - The two VMs talk over the host's `127.0.0.1`. Lima forwards the Incus API `192.168.5.15:8443` of `titan-incus` ⇒ the host's `127.0.0.1:8443`, and the SeaweedFS NodePort `30833` of `titan-k3s` ⇒ the host's `127.0.0.1:30833`. Besides those two ports the VM files only declare ingress `80` ⇒ `127.0.0.1:8080` and the Kubernetes API `6443` of `titan-k3s` as on macOS, the rest `ignore` (`lima/ubuntu/titan-{incus,k3s}.yaml`); `ignore` rules do not block every forwarding path ([§host-access](#host-access)), and UDP on Ubuntu is not measured.
 - Guests and pods reach the host at `192.168.5.2` (`host.lima.internal`): `titan-k3s` reaches the Incus API at `https://192.168.5.2:8443`, `titan-incus` reaches the SeaweedFS NodePort through the host.
 - Other machines on the LAN cannot get in: forwards bind only the host's `127.0.0.1` (measured 2026-10-27: curl to the host's LAN IP exits 7).
-- Programs on the host can reach port 8443. The Incus API is still guarded by TLS + trust of the client certificate.
+- Programs on the host can reach port 8443. The Incus API is still guarded by TLS + trust of the client certificate. The scripts trust two certificates: Titan's (`join-cluster.sh`) and VictoriaMetrics's (`incus-metrics.sh`, `titan-local-metrics`, type `metrics`).
 
-**Why.** The Incus API is root over every customer VM. On macOS, keeping it inside the network between the two VMs means no program on the Mac or on the LAN can reach it. On Ubuntu, `user-v2` makes QEMU abort, so the path between the two VMs goes through the host; forwards only bind `127.0.0.1`, so the LAN cannot reach it, and on the host only a holder of a trusted client certificate can call the API.
+**Why.** The Incus API is root over every customer VM. On macOS, keeping it inside the network between the two VMs means no program on the Mac or on the LAN can reach it. On Ubuntu, `user-v2` makes QEMU abort, so the path between the two VMs goes through the host; forwards only bind `127.0.0.1`, so the LAN cannot reach it, and on the host only a holder of a trusted client certificate can call the API; the metrics one is of type `metrics`.
 
 <a id="uplink"></a>
 ## OVN uplink and customer networks
@@ -109,12 +110,13 @@ Measurements K-1 and B-1 below are from the Mac. On Ubuntu (2026-10-27) only the
 
 | From → To | Port | Purpose |
 |---|---|---|
-| Host (127.0.0.1:8080) → titan-k3s | TCP 80 | Ingress: portal, admin, API, Keycloak, ArgoCD |
+| Host (127.0.0.1:8080) → titan-k3s | TCP 80 | Ingress: portal, admin, API, Keycloak, ArgoCD, VictoriaMetrics (vmui + API) |
 | Host → titan-k3s | TCP 6443 (Lima forward, 127.0.0.1) | `kubectl` |
 | titan-k3s (pods incus-worker, control-plane) → titan-incus | macOS: TCP 8443 on `user-v2` · Ubuntu: TCP 8443 through `192.168.5.2` (forwarded to the host's `127.0.0.1:8443`) | Incus API, mutual TLS |
+| titan-k3s (pod VictoriaMetrics, namespace `monitoring`) → titan-incus | Same address and port 8443 as the row above | Incus `/1.0/metrics` every 60 s, read-only: client certificate of type `metrics` |
 | titan-incus → SeaweedFS in titan-k3s (Ubuntu) | TCP 30833 through `192.168.5.2` (forwarded to the host's `127.0.0.1:30833`) | Incus uploads backups to dev's S3 (macOS: directly over `user-v2`) |
 | titan-k3s, titan-incus → Internet | Lima's NAT | ghcr images, VM images, OS packages |
-| Mac (127.0.0.1) → titan-k3s | TCP 10250, 10255 · UDP 8472, 5353 | Opened by Lima on its own (kubelet, flannel, mDNS); unused, localhost only. Measured on the Mac; not on Ubuntu |
+| Mac (127.0.0.1) → titan-k3s | TCP 10250, 10255 · UDP 8472, 5353 | Opened by Lima on its own (kubelet, flannel, mDNS); unused, localhost only. Measured on the Mac; not on Ubuntu. node-exporter listens on the node's port 9100 (chart default `hostNetwork: true`); whether Lima forwards it too is not measured |
 | Customer VM → anywhere outside its network | none | The production rule |
 
 <a id="open-questions"></a>

@@ -1,0 +1,57 @@
+# victoria-metrics-single: stores 30 days on the node's disk, scrapes scrape.yml. Not backed up: the numbers are for
+# operators to look at, nothing bills or decides on them.
+server:
+  fullnameOverride: victoria-metrics
+  retentionPeriod: 30d
+  persistentVolume:
+    enabled: true
+    storageClassName: local-path
+    size: 10Gi
+  extraArgs:
+    envflag.enable: true
+    envflag.prefix: VM_
+    loggerFormat: json
+    # local-path enforces no PVC size; below this much free space VictoriaMetrics stops taking samples instead of
+    # filling the node's disk.
+    storage.minFreeDiskSpaceBytes: 2GB
+    promscrape.configCheckInterval: 1m
+  scrape:
+    enabled: true
+    configMap: monitoring-scrape
+  env:
+    - name: INCUS_ADDRESS
+      valueFrom:
+        secretKeyRef:
+          name: incus-metrics
+          key: address
+    - name: INCUS_SERVER_NAME
+      valueFrom:
+        secretKeyRef:
+          name: incus-metrics
+          key: serverName
+    - name: INCUS_CLUSTER
+      valueFrom:
+        secretKeyRef:
+          name: incus-metrics
+          key: cluster
+  extraVolumes:
+    - name: incus-metrics
+      secret:
+        secretName: incus-metrics
+        items:
+          - key: server.crt
+            path: server.crt
+          - key: client.crt
+            path: client.crt
+          - key: client.key
+            path: client.key
+  extraVolumeMounts:
+    - name: incus-metrics
+      mountPath: /etc/incus-metrics
+      readOnly: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      memory: 384Mi

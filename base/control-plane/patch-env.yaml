@@ -39,6 +39,9 @@ spec:
               value: "false"
             - name: Logging__LogLevel__Microsoft.AspNetCore
               value: Information
+            # /metrics on a server of its own; the Service keeps port 80 only, so cloudflared never reaches it.
+            - name: Metrics__Port
+              value: "9464"
             # The wallet-mutation notify bus (titan-ops architecture/money-and-wallet.md#single-writer-outbox).
             - name: Nats__Enabled
               value: "true"

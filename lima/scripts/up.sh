@@ -1,7 +1,8 @@
 #!/bin/bash
 # Starts the local cluster (docs/topology.md#layout): both Lima VMs, created on first use, then an extra CA of the host if it
 # has one (docs/topology.md#extra-ca; the VMs first, ArgoCD once it is up, the regression runner's ConfigMap once its
-# namespace is made), the secrets, the S3 CA, cluster local joined to titan-incus, and ArgoCD's root application (and the
+# namespace is made), the secrets, the S3 CA, cluster local joined to titan-incus, the metrics certificate
+# VictoriaMetrics reads Incus with (lima/scripts/incus-metrics.sh), and ArgoCD's root application (and the
 # Applications of the names before 2026-10-27 dropped). Safe to run again.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
@@ -56,6 +57,7 @@ bash "$here/scripts/trust-extra-ca.sh"
 bash "$here/scripts/bootstrap-secrets.sh"
 bash "$here/scripts/trust-s3-ca.sh"
 bash "$here/scripts/join-cluster.sh"
+bash "$here/scripts/incus-metrics.sh"
 
 # k3s's helm controller installs ArgoCD after provisioning ends: on a fresh VM the Application kind does not
 # exist yet, and applying root fails with NotFound.
