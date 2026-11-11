@@ -1,0 +1,19 @@
+# POST /api/chat of the site's origin goes to the assistant; every other path of site.localhost stays with the site
+# (gitops/site/ingress.yaml). Traefik matches the longer path first (docs/network.md#host-access).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: chat
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: site.localhost
+      http:
+        paths:
+          - path: /api/chat
+            pathType: Exact
+            backend:
+              service:
+                name: chat
+                port:
+                  number: 80

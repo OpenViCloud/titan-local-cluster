@@ -16,6 +16,10 @@
 #   every run.
 # - ghcr-credentials with no auth: the shared base names it as the pull Secret, and GHCR serves the images anonymously.
 # - The fixed test passwords of the integration-test role titan_it and of the realm user admin-test, re-applied every run.
+# - The assistant's Secrets (base/chat), re-applied every run: the password of its role chat, generated once into
+#   secrets.env, and landing-chat-secrets. The OpenRouter key is never generated: whoever rotates it writes
+#   OPENROUTER_API_KEY into secrets.env by hand; until then the assistant's pod waits for its Secret, and the site's box
+#   answers its busy text.
 # Values go through pipes and the file only: no command-line argument, nothing printed.
 # Needs: titan-k3s running.
 set -euo pipefail
@@ -88,6 +92,7 @@ ensure_value BETA_USER_PASSWORD openssl rand -hex 16
 ensure_value BETA_USER_2_PASSWORD openssl rand -hex 16
 ensure_value BACKUP_S3_ACCESS_KEY_ID openssl rand -hex 10
 ensure_value BACKUP_S3_SECRET_ACCESS_KEY openssl rand -hex 20
+ensure_value CHAT_DB_PASSWORD openssl rand -hex 24
 echo "secrets.env at $SECRETS_FILE"
 
 # ── S3 CA and certificate ─────────────────────────────────────────────────────
@@ -180,6 +185,23 @@ unset backup_key_id backup_secret_key
 if secret_absent titan-auth-dev beta-user-2-credentials; then
   printf 'password=%s\n' "$(from_file BETA_USER_2_PASSWORD)" | apply_secret titan-auth-dev beta-user-2-credentials
 fi
+
+# ── The assistant of the landing pages (base/chat), re-applied every run ──────
+# Ahead of the early exit below: a cluster bootstrapped before the assistant gets its Secrets on the next run. Its key is
+# the one prd reads from the vault (titan-ops infra/secrets/design.md#vault-folders): the free models' quota is per account.
+chat_db_password=$(from_file CHAT_DB_PASSWORD)
+printf 'username=chat\npassword=%s\n' "$chat_db_password" |
+  k create secret generic chat-db-credentials -n titan-db-dev --type=kubernetes.io/basic-auth \
+    --from-env-file=/dev/stdin --dry-run=client -o yaml | k apply -f - >/dev/null
+echo "secret titan-db-dev/chat-db-credentials applied"
+openrouter_key=$(from_file OPENROUTER_API_KEY)
+if [ -n "$openrouter_key" ]; then
+  printf 'OPENROUTER_API_KEY=%s\nDATABASE_URL=postgres://chat:%s@titan-db-rw.titan-db-dev.svc.cluster.local:5432/chat\n' \
+    "$openrouter_key" "$chat_db_password" | apply_secret titan-dev landing-chat-secrets
+else
+  echo "no OPENROUTER_API_KEY in $SECRETS_FILE: secret titan-dev/landing-chat-secrets not applied, the assistant stays down"
+fi
+unset chat_db_password openrouter_key
 
 # ── Generated once, applied when the cluster has none ─────────────────────────
 if ! secret_absent titan-dev control-plane-secrets; then

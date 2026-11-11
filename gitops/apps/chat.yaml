@@ -1,0 +1,29 @@
+# Local cluster: copy of titan-ops's gitops/apps-prd/chat.yaml with dev's overlay from this repository (docs/topology.md#titan-integration).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: chat-local
+  namespace: argocd
+  annotations:
+    # wave 2, with the site
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/OpenViCloud/titan-local-cluster
+    targetRevision: main
+    path: gitops/chat
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: titan-dev
+  syncPolicy:
+    automated:
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 3m

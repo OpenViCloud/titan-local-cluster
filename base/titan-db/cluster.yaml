@@ -19,6 +19,19 @@ spec:
       # Every other database is a Database object (database-keycloak.yaml): initdb runs once, at creation, and not at all
       # on a cluster restored from a backup.
 
+  # Roles beside the owner titan. connectionLimit and inherit are CNPG's defaults, written out: left implicit, ArgoCD diffs
+  # the defaulted live object against this and keeps the app OutOfSync. An overlay adds a role with /spec/managed/roles/-.
+  managed:
+    roles:
+      # The assistant's own role, owner of the database chat (database-chat.yaml) and of nothing else.
+      - name: chat
+        ensure: present
+        login: true
+        connectionLimit: -1
+        inherit: true
+        passwordSecret:
+          name: chat-db-credentials
+
   storage:
     size: 10Gi
     storageClass: local-path

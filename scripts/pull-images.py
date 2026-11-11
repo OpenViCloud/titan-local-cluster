@@ -54,6 +54,8 @@ IMAGES = [
      "image": "ghcr.io/openvicloud/titan-admin-console", "app": "admin-portal", "tag_length": 7},
     {"repo": "OpenViCloud/titan-landing", "workflow": "ci-site.yml", "image": "ghcr.io/openvicloud/titan-landing",
      "app": "site", "tag_length": 7},
+    {"repo": "OpenViCloud/titan-landing", "workflow": "ci-chat.yml", "image": "ghcr.io/openvicloud/titan-landing-chat",
+     "app": "chat", "tag_length": 7},
     {"repo": "OpenViCloud/titan-incus-worker", "workflow": "ci.yml", "image": "ghcr.io/openvicloud/titan-incus-worker",
      "app": "incus-worker", "tag_length": 40},
 ]

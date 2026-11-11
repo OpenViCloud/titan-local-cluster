@@ -1,0 +1,13 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: chat
+spec:
+  # The assistant's conversations, kept 90 days (titan-ops features/public-site/design.md#chat-assistant). Its own role:
+  # the assistant reaches no table of Titan's.
+  name: chat
+  owner: chat
+  cluster:
+    name: titan-db
+  ensure: present
+  databaseReclaimPolicy: retain

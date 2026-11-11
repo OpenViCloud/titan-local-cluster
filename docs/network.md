@@ -39,7 +39,7 @@ Measurements K-1 and B-1 below are from the Mac. On Ubuntu (2026-10-27) only the
 |---|---|
 | `portal.localhost` | customer portal |
 | `admin.localhost` | admin portal |
-| `site.localhost` | site (public pages) |
+| `site.localhost` | site (public pages); path `/api/chat` exactly goes to the assistant (`gitops/chat/ingress.yaml`), as `/api/chat` of prd's `openvicloud.com` does through the tunnel |
 | `api.localhost` | control plane |
 | `auth.localhost` | Keycloak |
 | `argocd.localhost` | ArgoCD UI |

@@ -57,16 +57,15 @@ patches:
       name: titan-db
     patch: |-
       - op: add
-        path: /spec/managed
+        path: /spec/managed/roles/-
         value:
-          roles:
-            # connectionLimit and inherit are CNPG's defaults, written out: left implicit, ArgoCD diffs the
-            # defaulted live object against this and keeps the app OutOfSync, which blocks promotion.
-            - name: titan_it
-              ensure: present
-              login: true
-              createdb: true
-              connectionLimit: -1
-              inherit: true
-              passwordSecret:
-                name: titan-it-credentials
+          # connectionLimit and inherit are CNPG's defaults, written out: left implicit, ArgoCD diffs the
+          # defaulted live object against this and keeps the app OutOfSync, which blocks promotion.
+          name: titan_it
+          ensure: present
+          login: true
+          createdb: true
+          connectionLimit: -1
+          inherit: true
+          passwordSecret:
+            name: titan-it-credentials

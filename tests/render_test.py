@@ -205,6 +205,34 @@ class DevStartsEmpty(unittest.TestCase):
                          {"barmanObjectName": "titan-db-backup", "serverName": "titan-db-dev"})
 
 
+class DevChat(unittest.TestCase):
+    """The assistant of the landing pages (base/chat): its own database and role, and POST /api/chat of the site's host."""
+
+    def test_the_database_chat_belongs_to_the_role_chat_beside_the_test_role(self):
+        objects = render("titan-db")
+        self.assertEqual(first(objects, "Database", "chat")["spec"]["owner"], "chat")
+        roles = {r["name"]: r for r in first(objects, "Cluster", "titan-db")["spec"]["managed"]["roles"]}
+        self.assertEqual(sorted(roles), ["chat", "titan_it"])
+        self.assertEqual(roles["chat"]["passwordSecret"], {"name": "chat-db-credentials"})
+        self.assertNotIn("createdb", roles["chat"])
+
+    def test_only_post_api_chat_of_the_site_host_goes_to_the_assistant(self):
+        rules = first(render("chat"), "Ingress", "chat")["spec"]["rules"]
+        site_rules = first(render("site"), "Ingress", "site")["spec"]["rules"]
+        self.assertEqual([r["host"] for r in rules], [r["host"] for r in site_rules])
+        paths = rules[0]["http"]["paths"]
+        self.assertEqual([(p["path"], p["pathType"], p["backend"]["service"]["name"]) for p in paths],
+                         [("/api/chat", "Exact", "chat")])
+
+    def test_one_replica_reads_its_key_and_database_from_the_bootstrap_secret(self):
+        deployment = first(render("chat"), "Deployment", "chat")
+        self.assertEqual(deployment["spec"]["replicas"], 1)
+        container = deployment["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual(container["envFrom"], [{"secretRef": {"name": "landing-chat-secrets"}}])
+        self.assertIn("landing-chat-secrets", (LIMA / "scripts" / "bootstrap-secrets.sh").read_text())
+        self.assertIn("chat-db-credentials", (LIMA / "scripts" / "bootstrap-secrets.sh").read_text())
+
+
 def yaml_text(text):
     as_json = subprocess.run(["ruby", "-ryaml", "-rjson", "-e", "puts JSON.generate(YAML.load(STDIN.read))"],
                              input=text, capture_output=True, text=True, check=True).stdout
