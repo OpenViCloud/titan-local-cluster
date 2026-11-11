@@ -205,6 +205,8 @@ printf 'username=chat\npassword=%s\n' "$chat_db" | cmp -s - "$WORK/running.stdin
   && ok "a running cluster gets the role chat's password from the file" || bad "chat-db-credentials differs from the file"
 grep -q 'create secret generic chat-db-credentials -n titan-db-dev --type=kubernetes.io/basic-auth' "$WORK/running.kubectl" \
   && ok "in titan-db-dev, as a basic-auth Secret CNPG reads" || bad "wrong namespace or type for chat-db-credentials"
+grep -q 'label secret chat-db-credentials -n titan-db-dev cnpg.io/reload=true' "$WORK/running.kubectl" \
+  && ok "labelled so CNPG watches it and sets the role's password" || bad "chat-db-credentials has no cnpg.io/reload label"
 printf 'OPENROUTER_API_KEY=no-key-on-this-machine\nDATABASE_URL=postgres://chat:%s@titan-db-rw.titan-db-dev.svc.cluster.local:5432/chat\n' \
   "$chat_db" | cmp -s - "$WORK/running.stdin.landing-chat-secrets" && printf '%s' "$OUT" | grep -q 'no OPENROUTER_API_KEY' \
   && ok "no key in the file: landing-chat-secrets carries the no-key value, so the pod starts, and the output says so" \
