@@ -206,7 +206,7 @@ class DevStartsEmpty(unittest.TestCase):
 
 
 class DevChat(unittest.TestCase):
-    """The assistant of the landing pages (base/chat): its own database and role, and POST /api/chat of the site's host."""
+    """The assistant of the landing pages (base/chat): its own database and role, and /api/chat of the site's host."""
 
     def test_the_database_chat_belongs_to_the_role_chat_beside_the_test_role(self):
         objects = render("titan-db")
@@ -216,10 +216,12 @@ class DevChat(unittest.TestCase):
         self.assertEqual(roles["chat"]["passwordSecret"], {"name": "chat-db-credentials"})
         self.assertNotIn("createdb", roles["chat"])
 
-    def test_only_post_api_chat_of_the_site_host_goes_to_the_assistant(self):
+    def test_only_api_chat_of_the_site_host_goes_to_the_assistant_first(self):
         rules = first(render("chat"), "Ingress", "chat")["spec"]["rules"]
         site_rules = first(render("site"), "Ingress", "site")["spec"]["rules"]
         self.assertEqual([r["host"] for r in rules], [r["host"] for r in site_rules])
+        ingress = first(render("chat"), "Ingress", "chat")
+        self.assertEqual(ingress["metadata"]["annotations"]["traefik.ingress.kubernetes.io/router.priority"], "100")
         paths = rules[0]["http"]["paths"]
         self.assertEqual([(p["path"], p["pathType"], p["backend"]["service"]["name"]) for p in paths],
                          [("/api/chat", "Exact", "chat")])

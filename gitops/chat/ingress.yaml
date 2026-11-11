@@ -1,9 +1,12 @@
-# POST /api/chat of the site's origin goes to the assistant; every other path of site.localhost stays with the site
-# (gitops/site/ingress.yaml). Traefik matches the longer path first (docs/network.md#host-access).
+# /api/chat of the site's host goes to the assistant (which answers only POST); every other path of site.localhost stays
+# with the site (gitops/site/ingress.yaml), whose Prefix / also matches /api/chat. Traefik ranks routers by the length of
+# their rule unless a priority is set: set here, so the order does not hang on the two rules' lengths.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: chat
+  annotations:
+    traefik.ingress.kubernetes.io/router.priority: "100"
 spec:
   ingressClassName: traefik
   rules:

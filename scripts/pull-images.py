@@ -32,7 +32,7 @@ import sys
 import time
 
 # A push run on main takes at most ~4 minutes (measured in titan's iteration:deploy); the rest is room for a queue.
-# With a last poll and GH_TIMEOUT_SECONDS per call (one workflow per repository in IMAGES: about 21.5 minutes) it stays
+# With a last poll and GH_TIMEOUT_SECONDS per call (at most two workflows per repository in IMAGES: about 22.5 minutes) it stays
 # under the 25 minutes the Monitor that runs --wait is given, so the result line gets out.
 WAIT_LIMIT_SECONDS = 20 * 60
 WAIT_POLL_SECONDS = 30

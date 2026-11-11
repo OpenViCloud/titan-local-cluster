@@ -1,4 +1,5 @@
-# Local cluster: copy of titan-ops's gitops/apps-prd/chat.yaml with dev's overlay from this repository (docs/topology.md#titan-integration).
+# Local cluster: the assistant's Application, shaped like site.yaml beside it, with dev's overlay from this repository
+# (docs/topology.md#titan-integration).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
