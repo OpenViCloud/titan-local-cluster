@@ -198,6 +198,9 @@ chat_db_password=$(from_file CHAT_DB_PASSWORD)
 printf 'username=chat\npassword=%s\n' "$chat_db_password" |
   k create secret generic chat-db-credentials -n titan-db-dev --type=kubernetes.io/basic-auth \
     --from-env-file=/dev/stdin --dry-run=client -o yaml | k apply -f - >/dev/null
+# CNPG sets a managed role's password from a Secret it watches: without this label, a role made before its Secret existed
+# (a running cluster that gets the assistant) kept no password, measured on dev 2026-11-11.
+k label secret chat-db-credentials -n titan-db-dev cnpg.io/reload=true --overwrite >/dev/null
 echo "secret titan-db-dev/chat-db-credentials applied"
 openrouter_key=$(from_file OPENROUTER_API_KEY)
 if [ -z "$openrouter_key" ]; then
