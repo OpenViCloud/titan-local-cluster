@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat
+spec:
+  # One replica: the daily answer cap of each visitor address is kept in the pod's memory, so a second replica would
+  # double it (titan-ops features/public-site/design.md#chat-assistant).
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat
+  template:
+    metadata:
+      labels:
+        app: chat
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      containers:
+        - name: chat
+          image: chat:latest
+          ports:
+            - containerPort: 8080
+          env:
+            # The prices the assistant quotes: the control plane's anonymous offering routes, in the same namespace.
+            - name: API_BASE_URL
+              value: http://control-plane
+          # OPENROUTER_API_KEY and DATABASE_URL.
+          envFrom:
+            - secretRef:
+                name: landing-chat-secrets
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 192Mi

@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - cluster.yaml
   - database-keycloak.yaml
+  - database-chat.yaml

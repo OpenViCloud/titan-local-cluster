@@ -2,7 +2,7 @@
 # Puts the local cluster's secrets into titan-k3s (docs/topology.md#secrets).
 # Needs no vault and no token: the repositories and the images are public.
 # - ~/.config/titan-local-cluster/secrets.env (mode 600) keeps every value generated once: the DB password, the internal
-#   token, the Keycloak admin and the two beta-user passwords. The first run writes them; later runs read
+#   token, the Keycloak admin and the two beta-user passwords, the assistant's DB password. The first run writes them; later runs read
 #   them and only add a key a newer script needs. The file outlives the VM, so a cluster rebuilt with `limactl delete`
 #   gets the same values, which the database restored from a backup already holds. It also keeps the key pair of dev's S3
 #   (SeaweedFS, gitops/seaweedfs), generated the same way.
@@ -16,6 +16,11 @@
 #   every run.
 # - ghcr-credentials with no auth: the shared base names it as the pull Secret, and GHCR serves the images anonymously.
 # - The fixed test passwords of the integration-test role titan_it and of the realm user admin-test, re-applied every run.
+# - The assistant's Secrets (base/chat), re-applied every run: the password of its role chat, generated once into
+#   secrets.env, and landing-chat-secrets. The OpenRouter key is never generated: whoever has one writes
+#   OPENROUTER_API_KEY into secrets.env by hand. Until then the Secret carries NO_KEY_VALUE instead: the pod starts
+#   and is Healthy (a stranger's cluster gets ready, L-22), and every model refuses the value, so every answer is the
+#   assistant's busy text.
 # Values go through pipes and the file only: no command-line argument, nothing printed.
 # Needs: titan-k3s running.
 set -euo pipefail
@@ -30,6 +35,8 @@ S3_KEY="$SECRETS_DIR/s3.key"
 # The name every S3 client uses, from titan-incus and from pods alike: on macOS Lima's user-v2 network resolves it, whatever
 # address DHCP gives the VM; on Ubuntu the hostResolver of lima/ubuntu/*.yaml maps it to Lima's fixed addresses.
 S3_HOST="lima-titan-k3s.internal"
+# What landing-chat-secrets carries while secrets.env has no OpenRouter key: not empty, never a key.
+NO_KEY_VALUE="no-key-on-this-machine"
 
 k() {
   kubectl --kubeconfig "$KUBECONFIG_FILE" --request-timeout=30s "$@"
@@ -88,6 +95,7 @@ ensure_value BETA_USER_PASSWORD openssl rand -hex 16
 ensure_value BETA_USER_2_PASSWORD openssl rand -hex 16
 ensure_value BACKUP_S3_ACCESS_KEY_ID openssl rand -hex 10
 ensure_value BACKUP_S3_SECRET_ACCESS_KEY openssl rand -hex 20
+ensure_value CHAT_DB_PASSWORD openssl rand -hex 24
 echo "secrets.env at $SECRETS_FILE"
 
 # ── S3 CA and certificate ─────────────────────────────────────────────────────
@@ -134,7 +142,7 @@ printf '{"auths": {}}\n' |
 echo "secret titan-dev/ghcr-credentials applied"
 
 # ── Test values, re-applied every run ─────────────────────────────────────────
-# Role titan_it of the dev database (base/titan-db): integration tests create and drop
+# Role titan_it of the dev database (overlay gitops/titan-db): integration tests create and drop
 # their own databases with it. A fixed test value, not a secret: the cluster only listens on 127.0.0.1, and
 # test-all.sh of OpenViCloud/titan-control-plane needs the same value.
 printf 'username=titan_it\npassword=titan-it-local-only\n' |
@@ -180,6 +188,27 @@ unset backup_key_id backup_secret_key
 if secret_absent titan-auth-dev beta-user-2-credentials; then
   printf 'password=%s\n' "$(from_file BETA_USER_2_PASSWORD)" | apply_secret titan-auth-dev beta-user-2-credentials
 fi
+
+# ── The assistant of the landing pages (base/chat), re-applied every run ──────
+# Ahead of the early exit below: a cluster bootstrapped before the assistant gets its Secrets on the next run, and a key
+# written into secrets.env later reaches the cluster on the next run. The key belongs to the OpenRouter account prd uses
+# (Tôn Chủ decided 2026-11-11), so dev's turns count against the same daily quota of the free models
+# (titan-ops features/public-site/design.md#chat-assistant). Restart Deployment chat after a new key: env is read at start.
+chat_db_password=$(from_file CHAT_DB_PASSWORD)
+printf 'username=chat\npassword=%s\n' "$chat_db_password" |
+  k create secret generic chat-db-credentials -n titan-db-dev --type=kubernetes.io/basic-auth \
+    --from-env-file=/dev/stdin --dry-run=client -o yaml | k apply -f - >/dev/null
+echo "secret titan-db-dev/chat-db-credentials applied"
+openrouter_key=$(from_file OPENROUTER_API_KEY)
+if [ -z "$openrouter_key" ]; then
+  openrouter_key=$NO_KEY_VALUE
+  echo "no OPENROUTER_API_KEY in $SECRETS_FILE: the assistant runs without a key and answers only its busy text"
+else
+  echo "a running assistant reads a new key only after: kubectl --kubeconfig $KUBECONFIG_FILE -n titan-dev rollout restart deployment/chat"
+fi
+printf 'OPENROUTER_API_KEY=%s\nDATABASE_URL=postgres://chat:%s@titan-db-rw.titan-db-dev.svc.cluster.local:5432/chat\n' \
+  "$openrouter_key" "$chat_db_password" | apply_secret titan-dev landing-chat-secrets
+unset chat_db_password openrouter_key
 
 # ── Generated once, applied when the cluster has none ─────────────────────────
 if ! secret_absent titan-dev control-plane-secrets; then

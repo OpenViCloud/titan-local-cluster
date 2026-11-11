@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The assistant of the landing pages (OpenViCloud/titan-landing chat/). Each environment routes POST /api/chat of the
+# site's origin here in its own network layer; the site's image knows nothing of it
+# (titan-ops features/public-site/design.md#chat-assistant).
+resources:
+  - deployment.yaml
+  - service.yaml

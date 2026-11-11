@@ -93,7 +93,7 @@ run() {
 value() { sed -n "s/^$2=//p" "$1"; }
 
 KEYS="TITAN_DB_PASSWORD INTERNAL_TOKEN KEYCLOAK_ADMIN_PASSWORD BETA_USER_PASSWORD BETA_USER_2_PASSWORD
-  BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY"
+  BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY CHAT_DB_PASSWORD"
 
 echo "first run on a new cluster: no vault, no GitHub token, no secrets.env"
 mkdir -p "$WORK/fresh"
@@ -198,6 +198,31 @@ printf 'password=admin-test-local-only\n' | cmp -s - "$WORK/running.stdin.admin-
   && ok "admin-test gets its fixed test password" || bad "stdin of admin-test-credentials was: $(cat "$WORK/running.stdin.admin-test-credentials" 2>&1)"
 grep -q 'create secret generic admin-test-credentials -n titan-auth-dev' "$WORK/running.kubectl" \
   && ok "in titan-auth-dev, where the keycloak-config-cli Job reads it" || bad "wrong namespace or name for admin-test-credentials"
+
+echo "the assistant (base/chat): its role's password, and its key only when someone wrote one"
+chat_db=$(value "$FILE" CHAT_DB_PASSWORD)
+printf 'username=chat\npassword=%s\n' "$chat_db" | cmp -s - "$WORK/running.stdin.chat-db-credentials" \
+  && ok "a running cluster gets the role chat's password from the file" || bad "chat-db-credentials differs from the file"
+grep -q 'create secret generic chat-db-credentials -n titan-db-dev --type=kubernetes.io/basic-auth' "$WORK/running.kubectl" \
+  && ok "in titan-db-dev, as a basic-auth Secret CNPG reads" || bad "wrong namespace or type for chat-db-credentials"
+printf 'OPENROUTER_API_KEY=no-key-on-this-machine\nDATABASE_URL=postgres://chat:%s@titan-db-rw.titan-db-dev.svc.cluster.local:5432/chat\n' \
+  "$chat_db" | cmp -s - "$WORK/running.stdin.landing-chat-secrets" && printf '%s' "$OUT" | grep -q 'no OPENROUTER_API_KEY' \
+  && ok "no key in the file: landing-chat-secrets carries the no-key value, so the pod starts, and the output says so" \
+  || bad "landing-chat-secrets without a key was: $(sed 's/=.*/=<value>/' "$WORK/running.stdin.landing-chat-secrets" 2>&1)"
+grep -q '^OPENROUTER_API_KEY=' "$FILE" && bad "the script wrote an OpenRouter key" || ok "the script never generates the key"
+printf 'OPENROUTER_API_KEY=sk-or-test-only\n' >> "$FILE"
+run keyed "$WORK/fresh"
+[ "$RC" -eq 0 ] && ok "exit 0" || bad "exit $RC: $OUT"
+printf 'OPENROUTER_API_KEY=sk-or-test-only\nDATABASE_URL=postgres://chat:%s@titan-db-rw.titan-db-dev.svc.cluster.local:5432/chat\n' \
+  "$chat_db" | cmp -s - "$WORK/keyed.stdin.landing-chat-secrets" \
+  && ok "a key written later reaches a running cluster, with the role's password in DATABASE_URL" \
+  || bad "landing-chat-secrets was: $(sed 's/=.*/=<value>/' "$WORK/keyed.stdin.landing-chat-secrets" 2>&1)"
+printf '%s' "$OUT" | grep -q "kubeconfig $WORK/fresh/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml -n titan-dev rollout restart deployment/chat" \
+  && ok "with a key, it prints the restart a running assistant needs, on titan-k3s" || bad "no restart hint: $OUT"
+grep -q 'create secret generic landing-chat-secrets -n titan-dev' "$WORK/keyed.kubectl" \
+  && ok "in titan-dev, beside the assistant" || bad "wrong namespace for landing-chat-secrets"
+grep -q -e 'sk-or-test-only' -e "$chat_db" "$WORK/keyed.kubectl" <(printf '%s' "$OUT") \
+  && bad "the key or the password is in a kubectl argument or the output" || ok "the key and the password go through stdin only"
 
 echo "the S3 key pair, generated once"
 kid=$(value "$FILE" BACKUP_S3_ACCESS_KEY_ID)
