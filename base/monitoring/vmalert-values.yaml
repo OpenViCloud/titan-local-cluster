@@ -35,8 +35,10 @@ server:
               for: 5m
               annotations:
                 summary: "Node {{ $labels.node }} root filesystem is more than 90% full"
+            # increase() of VictoriaMetrics counts the first value of a series it has just seen as an increase, so a
+            # pod that restarted days ago fires as soon as scraping begins; increase_prometheus() does not.
             - alert: PodRestarting
-              expr: increase(kube_pod_container_status_restarts_total[10m]) > 3
+              expr: increase_prometheus(kube_pod_container_status_restarts_total[10m]) > 3
               annotations:
                 summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} restarted more than 3 times in 10 minutes"
             - alert: ControlPlane5xx
