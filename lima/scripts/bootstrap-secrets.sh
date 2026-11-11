@@ -192,7 +192,8 @@ fi
 
 # ── The assistant of the landing pages (base/chat), re-applied every run ──────
 # Ahead of the early exit below: a cluster bootstrapped before the assistant gets its Secrets on the next run, and a key
-# written into secrets.env by hand reaches the cluster on the next run (titan-ops features/public-site/design.md#chat-assistant).
+# written into secrets.env by hand reaches the cluster on the next run
+# (titan-ops features/public-site/design.md#chat-assistant).
 # Restart Deployment chat after a new key: env is read at start.
 chat_db_password=$(from_file CHAT_DB_PASSWORD)
 printf 'username=chat\npassword=%s\n' "$chat_db_password" |
