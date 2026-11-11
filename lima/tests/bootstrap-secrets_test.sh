@@ -217,6 +217,8 @@ printf 'OPENROUTER_API_KEY=sk-or-test-only\nDATABASE_URL=postgres://chat:%s@tita
   "$chat_db" | cmp -s - "$WORK/keyed.stdin.landing-chat-secrets" \
   && ok "a key written later reaches a running cluster, with the role's password in DATABASE_URL" \
   || bad "landing-chat-secrets was: $(sed 's/=.*/=<value>/' "$WORK/keyed.stdin.landing-chat-secrets" 2>&1)"
+printf '%s' "$OUT" | grep -q "kubeconfig $WORK/fresh/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml -n titan-dev rollout restart deployment/chat" \
+  && ok "with a key, it prints the restart a running assistant needs, on titan-k3s" || bad "no restart hint: $OUT"
 grep -q 'create secret generic landing-chat-secrets -n titan-dev' "$WORK/keyed.kubectl" \
   && ok "in titan-dev, beside the assistant" || bad "wrong namespace for landing-chat-secrets"
 grep -q -e 'sk-or-test-only' -e "$chat_db" "$WORK/keyed.kubectl" <(printf '%s' "$OUT") \

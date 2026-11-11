@@ -203,10 +203,11 @@ openrouter_key=$(from_file OPENROUTER_API_KEY)
 if [ -z "$openrouter_key" ]; then
   openrouter_key=$NO_KEY_VALUE
   echo "no OPENROUTER_API_KEY in $SECRETS_FILE: the assistant runs without a key and answers only its busy text"
+else
+  echo "a running assistant reads a new key only after: kubectl --kubeconfig $KUBECONFIG_FILE -n titan-dev rollout restart deployment/chat"
 fi
 printf 'OPENROUTER_API_KEY=%s\nDATABASE_URL=postgres://chat:%s@titan-db-rw.titan-db-dev.svc.cluster.local:5432/chat\n' \
   "$openrouter_key" "$chat_db_password" | apply_secret titan-dev landing-chat-secrets
-echo "a running assistant reads a changed key only after: kubectl -n titan-dev rollout restart deployment/chat"
 unset chat_db_password openrouter_key
 
 # ── Generated once, applied when the cluster has none ─────────────────────────
