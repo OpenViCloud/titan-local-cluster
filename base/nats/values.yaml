@@ -1,15 +1,22 @@
 # titan-ops architecture/money-and-wallet.md#single-writer-outbox S3 — NATS core for the wallet-mutation notify bus.
 #
-# NATS CORE, not JetStream: the bus is a NOTIFY layer only. The durable queue is the DB
-# (wallet_mutations); a message lost while the subscriber is down is a delayed apply, never lost
-# money, because the command is durable and the sweeper (S6) re-drives it. So persistence is deliberately
-# OFF (OD-2) — turning JetStream on here would add operational weight the design does not need.
+# NATS core for the wallet bus: a NOTIFY layer only. The durable queue is the DB (wallet_mutations); a message lost
+# while the subscriber is down is a delayed apply, never lost money, because the command is durable and the sweeper (S6)
+# re-drives it. JetStream is on in memory only, with no file store and no volume, for one thing: the chat assistant's
+# daily cap bucket (titan-ops features/public-site/design.md#chat-assistant). A NATS restart empties it; the chat pods
+# open it anew and the cap starts again from zero.
 #
 # Single server, no cluster. Every control plane pod subscribes and receives every notify; the consumer's row locks
 # make the applies of one wallet take turns.
 config:
   jetstream:
-    enabled: false
+    enabled: true
+    fileStore:
+      enabled: false
+    # Below the container's memory limit; the chat bucket is capped at 8 MiB of it.
+    memoryStore:
+      enabled: true
+      maxSize: 32Mi
   cluster:
     enabled: false
 
@@ -21,8 +28,12 @@ container:
         cpu: 50m
         memory: 64Mi
       limits:
-        cpu: 200m
         memory: 128Mi
+
+podTemplate:
+  merge:
+    spec:
+      priorityClassName: titan-platform
 
 # No monitoring sidecar / reloader needed for iteration 1; keep the footprint small.
 natsBox:

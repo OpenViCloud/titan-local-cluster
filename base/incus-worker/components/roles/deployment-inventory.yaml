@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: incus-worker-inventory
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: incus-worker-inventory
+  template:
+    metadata:
+      labels:
+        app: incus-worker-inventory
+    spec:
+      priorityClassName: titan-platform
+      imagePullSecrets:
+        - name: ghcr-credentials
+      containers:
+        - name: incus-worker
+          image: incus-worker:latest
+          ports:
+            - name: health
+              containerPort: 8080
+          # CP_INTERNAL_TOKEN comes from worker-secrets. No backup credentials: backups run on the command pods.
+          envFrom:
+            - secretRef:
+                name: worker-secrets
+          env:
+            # The worker runs in the control plane's namespace, so the Service's short name reaches it.
+            - name: CP_BASE_URL
+              value: http://control-plane:80
+            - name: WORKER_ROLE
+              value: inventory
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi

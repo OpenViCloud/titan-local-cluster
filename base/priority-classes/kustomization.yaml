@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The two priorities of every cluster (titan-ops architecture/platform-infra.md#pod-priority): the apps that serve
+# customers above the default, the regression runner below it.
+resources:
+  - priority-classes.yaml

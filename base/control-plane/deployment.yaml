@@ -29,6 +29,7 @@ spec:
       # The preStop sleep lets the Service drop the pod before it stops taking requests; the rest of the grace period
       # is for requests in flight. Open SSH sessions are cut when the pod stops.
       terminationGracePeriodSeconds: 45
+      priorityClassName: titan-platform
       imagePullSecrets:
         - name: ghcr-credentials
       containers:
@@ -55,10 +56,11 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+          # Request at what one pod uses idle (about 200 MiB, titan-local-cluster docs/topology.md#ram-budget); no CPU
+          # limit, CPU is shared by request when pods contend (titan-ops architecture/platform-infra.md#pod-priority).
           resources:
             requests:
               cpu: 100m
-              memory: 128Mi
+              memory: 256Mi
             limits:
-              cpu: 500m
               memory: 512Mi

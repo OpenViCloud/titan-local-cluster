@@ -7,8 +7,20 @@ namespace: titan-dev
 resources:
   - ../../base/incus-worker
 
+# Command pods and one inventory pod (titan-ops architecture/worker-structure.md#worker-roles). No HPA: local runs without
+# metrics-server (docs/topology.md#ram-budget R-2), so two command pods, fixed.
+components:
+  - ../../base/incus-worker/components/roles
+
 patches:
   - path: patch-backup-bucket.yaml
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: incus-worker
+      spec:
+        replicas: 2
 
 # Dev's own image: a commit OpenViCloud/titan-incus-worker published from main. Prd's name and tag move only by promotion in
 # titan-ops (titan-ops architecture/platform-infra.md#gitops-flow).

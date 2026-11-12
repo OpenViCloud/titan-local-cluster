@@ -6,4 +6,5 @@ kind: Kustomization
 # (titan-ops features/public-site/design.md#chat-assistant).
 resources:
   - deployment.yaml
+  - hpa.yaml
   - service.yaml

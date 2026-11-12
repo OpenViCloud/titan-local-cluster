@@ -3,8 +3,10 @@ kind: Deployment
 metadata:
   name: incus-worker
 spec:
-  # One replica: two would each lease commands, which is safe (titan-ops architecture/provider-and-worker.md#provider-command-lease)
-  # but runs every reconciler twice.
+  # One replica that runs every loop (WORKER_ROLE all): two would each lease commands, which is safe
+  # (titan-ops architecture/provider-and-worker.md#provider-command-lease), but run every reconciler twice. An overlay
+  # that takes components/roles splits it into command pods and one inventory pod (titan-ops
+  # architecture/worker-structure.md#worker-roles); components/autoscale then lets an HPA own the command pods' count.
   replicas: 1
   selector:
     matchLabels:
@@ -14,6 +16,7 @@ spec:
       labels:
         app: incus-worker
     spec:
+      priorityClassName: titan-platform
       imagePullSecrets:
         - name: ghcr-credentials
       containers:
@@ -41,7 +44,6 @@ spec:
               cpu: 50m
               memory: 64Mi
             limits:
-              cpu: 500m
               memory: 256Mi
           # template.sync streams the distro's image (~700 MB) to a temporary file before the upload, never into
           # memory (titan-ops features/catalog/design.md#template-is-an-image-alias).

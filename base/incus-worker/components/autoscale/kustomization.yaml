@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Two to four command pods by memory against the request (titan-ops architecture/worker-structure.md#worker-roles).
+# Take it only with components/roles: on the one worker of every role it would run the reconciler once per pod. The
+# count of incus-worker leaves git for the HPA.
+resources:
+  - hpa.yaml
+
+patches:
+  - target:
+      kind: Deployment
+      name: incus-worker
+    patch: |-
+      - op: remove
+        path: /spec/replicas
