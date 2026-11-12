@@ -508,7 +508,7 @@ class DevClusterIdRename(unittest.TestCase):
 
     def test_runs_after_the_migration_before_and_after_the_control_plane_rolls(self):
         notes = self.job()["metadata"]["annotations"]
-        # PreSync: before the new control plane starts. PostSync again: rows the old pod wrote while PreSync ran.
+        # PreSync: before the new control plane starts. PostSync again: rows the old pods wrote while PreSync ran.
         self.assertEqual(notes["argocd.argoproj.io/hook"], "PreSync,PostSync")
         migrate = first(render("control-plane"), "Job", "control-plane-migrate")["metadata"]["annotations"]
         self.assertGreater(int(notes["argocd.argoproj.io/sync-wave"]), int(migrate.get("argocd.argoproj.io/sync-wave", "0")))
