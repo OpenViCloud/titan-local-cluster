@@ -3,32 +3,21 @@ kind: Deployment
 metadata:
   name: control-plane
 spec:
-  replicas: 1
-  # Recreate, not RollingUpdate. The default surges a new pod to Ready BEFORE the old one is
-  # terminated, so for a moment two versions of the control-plane serve at once — and this service is
-  # the sole writer to the billing database.
+  # At least two pods, one at a time, none leaving before its replacement is ready
+  # (titan-ops architecture/platform-infra.md#control-plane-replicas). No replicas here: the HPA in hpa.yaml owns the
+  # count, two to four, and a count in git would put ArgoCD and the HPA at odds. Every pod runs the wallet subscriber
+  # and sweeper: the consumer's row locks make the applies of one wallet take turns
+  # (titan-ops architecture/money-and-wallet.md#single-writer-outbox).
   #
-  # That overlap is only survivable while both versions agree on how a write is guarded. titan-ops architecture/money-and-wallet.md#confirmed-topup-is-receipt is a
-  # worked example of them not agreeing: the old code stopped a double credit with a unique index on
-  # receipts, the new code stops it with `WHERE status = 'Pending'` inside the claim. Neither guard can
-  # see the other, so a top-up confirmed by the new pod could be confirmed AGAIN by the old one, and
-  # the customer's wallet would be credited twice with nothing to detect it.
-  #
-  # The cost is a few seconds of 503 per deploy. At replicas: 1 there is no high availability to
-  # protect anyway — RollingUpdate was buying a zero-downtime deploy, not resilience, and paying for it
-  # with a window where two writers race on money. This also closes Q-R1, open since titan-ops architecture/money-and-wallet.md#wallet-one-balance, rather
-  # than patching one deploy and leaving the next one exposed.
-  #
-  # titan-ops architecture/money-and-wallet.md#single-writer-outbox (2026-09-21) now leans on BOTH lines above, so neither is free to change casually:
-  #   • replicas: 1 IS the single-writer guarantee (OD-3). The wallet-mutation subscriber and the
-  #     sweeper both run in this pod; a second replica means two writers per wallet. Correctness would
-  #     still hold — FOR UPDATE SKIP LOCKED, the wallet version token and command idempotency are all
-  #     layered underneath — but the design's central property would be gone, and scaling out needs the
-  #     consistent-hash partitioning parked in the backlog (owner Athena), not just a higher number.
-  #   • Recreate keeps two sweepers from overlapping during a deploy, the same overlap the paragraph
-  #     above describes for request writers.
+  # A rolling update serves the old and the new version at once until the last old pod stops. A release that changes
+  # how money is guarded (titan-ops architecture/money-and-wallet.md#confirmed-topup-is-receipt is a worked example of
+  # two versions whose guards cannot see each other) deploys with Recreate instead, by a patch that an overlay adds
+  # (titan-ops architecture/platform-infra.md#control-plane-replicas says which).
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: control-plane
@@ -37,6 +26,9 @@ spec:
       labels:
         app: control-plane
     spec:
+      # The preStop sleep lets the Service drop the pod before it stops taking requests; the rest of the grace period
+      # is for requests in flight. Open SSH sessions are cut when the pod stops.
+      terminationGracePeriodSeconds: 45
       imagePullSecrets:
         - name: ghcr-credentials
       containers:
@@ -46,6 +38,10 @@ spec:
             - containerPort: 8080
             - name: metrics
               containerPort: 9464
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10
           envFrom:
             - secretRef:
                 name: control-plane-secrets

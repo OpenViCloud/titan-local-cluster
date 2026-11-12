@@ -5,9 +5,8 @@
 # money, because the command is durable and the sweeper (S6) re-drives it. So persistence is deliberately
 # OFF (OD-2) — turning JetStream on here would add operational weight the design does not need.
 #
-# Single server, no cluster: control-plane runs at replicas: 1, so there is exactly one subscriber and
-# one writer per wallet (OD-3, iteration 1). Scale-out (JetStream + consistent-hash partitions) is the
-# strangler backlog, not this.
+# Single server, no cluster. Every control plane pod subscribes and receives every notify; the consumer's row locks
+# make the applies of one wallet take turns.
 config:
   jetstream:
     enabled: false

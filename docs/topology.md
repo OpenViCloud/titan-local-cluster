@@ -187,6 +187,7 @@ Measured A-1 (2026-10-09), after rebuilding `titan-k3s` from scratch:
 
 - Each idle `s` VM uses about 185 MiB of its 2 GiB. The ceiling is only reached when the guest really uses RAM, as S-0 measured.
 - `titan-k3s` is already near its 3 GiB ceiling. With the regression runner in the cluster, about 270–600 MiB is left available. No pod was OOM-killed.
+- The control plane runs 2 pods after these measurements. One pod used 198 MiB on the Ubuntu cluster on 2026-11-12 (`memory.current` of its cgroup), so the second adds about that much (request 128 Mi).
 - The assistant (Application `chat-local`, 2026-11-11) requests 64 Mi, limit 192 Mi: its footprint is **not measured** on `titan-k3s` yet.
 - The operator metrics tier (Application `monitoring-local`, namespace `monitoring`) came after these measurements. Requests 224 Mi in all (VictoriaMetrics 96 Mi, vmalert 32 Mi, Alertmanager 24 Mi, node-exporter 24 Mi, kube-state-metrics 48 Mi), limits 736 Mi (384, 96, 64, 64, 128). Neither is its footprint: **not measured** on `titan-k3s` yet; it will be measured after the first sync, budget ≤ 300 MiB ([§unmeasured](#unmeasured)).
 
@@ -197,7 +198,7 @@ Ubuntu (measured 2026-10-27, 15 GB host, same ceilings 4 GiB + 7 GiB, [§layout]
 - **R-2:** trim the workload, patched in dev's overlay, prd unchanged:
   - Cap Keycloak's JVM heap.
   - ArgoCD drops dex, notifications, applicationset. The UI is reached with the admin account.
-  - Turn off k3s's metrics-server.
+  - Turn off k3s's metrics-server. So the control plane's HPA could read no CPU: dev's overlay drops it and fixes the control plane at 2 pods.
   - k3s runs with `GOMEMLIMIT=512MiB` (systemd drop-in, `lima/provision/k3s.sh`). Measured 10 minutes after restart both ways: k3s 723 ⇒ 645 MiB, equal CPU time (1:03 / 1:02); guest RAM used 2137 ⇒ 2046 MiB. With no limit, k3s grows by the hour: 883 MiB after 1 hour 46 minutes.
   - PostgreSQL requests 256 MiB (overlay `gitops/titan-db/`); it uses about 100 MiB. The limit stays 1 GiB. A request only reserves room for scheduling, it takes no RAM.
 - **Cannot be turned off:** the `kubectl` run by Lima's guest agent (≈ 115 MiB) forwards Traefik's LoadBalancer port 80 to `127.0.0.1:8080`. Removing it ⇒ no way into the cluster. Dropping it needs Traefik to open a real socket in the guest (hostNetwork), not tried.
