@@ -9,8 +9,8 @@ globalDefault: false
 preemptionPolicy: Never
 description: Titan's apps that serve customers (identity, control plane, worker, NATS, chat, sites)
 ---
-# The regression runner: below every other pod, it waits for room instead of taking it, and when the node runs short of
-# memory it is the pod the kubelet evicts first.
+# The regression runner: below every other pod, it waits for room instead of taking it. When the node runs short of
+# memory the kubelet evicts pods over their request first, then by priority, so a runner over its request goes first.
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
 metadata:
