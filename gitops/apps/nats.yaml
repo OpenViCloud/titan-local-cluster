@@ -2,7 +2,8 @@
 # titan-ops architecture/money-and-wallet.md#single-writer-outbox S3 — NATS core for the wallet-mutation notify bus.
 # NATS core, non-persistent (OD-2): the DB is the durable queue, the bus only notifies; a lost notify
 # is a delayed apply (the sweeper, S6, re-drives it), never lost money. Single server; every control plane
-# pod subscribes, and the consumer's row locks make the applies of one wallet take turns.
+# pod subscribes, and the consumer's row locks make the applies of one wallet take turns. JetStream is on in memory
+# only, for the chat assistant's cap bucket (the base values this app reads).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

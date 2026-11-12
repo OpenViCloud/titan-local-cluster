@@ -6,8 +6,9 @@ deployments share everything; what differs is the two VM files (`lima/macos/`, `
 `lima/scripts/host-os.sh`.
 
 `base/` holds the manifests every environment shares: the apps, the database with its backup and restore components, the
-Keycloak realm import and values, the values of NATS, CloudNativePG and the Barman Cloud plugin's manifest, and the
-operator metrics tier (`base/monitoring/`: chart values and the scrape config). Every overlay here
+Keycloak realm import and values, the values of NATS, CloudNativePG and the Barman Cloud plugin's manifest, the
+operator metrics tier (`base/monitoring/`: chart values and the scrape config), and the two pod priorities
+(`base/priority-classes/`). Every overlay here
 (`gitops/<app>/`) builds on `../../base/<app>` and adds only what the local cluster needs: hostnames, the cluster list, the token issuer and Keycloak's metadata
 address, Keycloak's database host, the realm's portal origins (a ConfigMap the overlay generates), the
 backup bucket and endpoint, smaller requests, dev's own image tags. `base/` names no environment (`tests/render_test.py`,

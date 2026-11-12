@@ -1,5 +1,5 @@
-# Local cluster: copy of titan-ops's gitops/apps-prd/priority-classes.yaml with dev's path in this repository
-# (docs/topology.md#titan-integration).
+# Local cluster's Application for base/priority-classes; prd's comes in titan-ops with the release that moves its pin
+# past this base (docs/topology.md#titan-integration).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

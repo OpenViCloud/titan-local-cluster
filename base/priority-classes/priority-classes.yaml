@@ -1,11 +1,13 @@
-# The apps customers depend on: scheduled first, and never preempted by the runner.
+# The apps customers depend on: scheduled first, and never preempted by the runner. They do not preempt either: the
+# database, the tunnel and ArgoCD have no class yet, so a pod of this class could otherwise push them off the node.
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
 metadata:
   name: titan-platform
 value: 1000000
 globalDefault: false
-description: Titan's own apps (database, identity, control plane, worker, NATS, tunnel, chat, sites)
+preemptionPolicy: Never
+description: Titan's apps that serve customers (identity, control plane, worker, NATS, chat, sites)
 ---
 # The regression runner: below every other pod, it waits for room instead of taking it, and when the node runs short of
 # memory it is the pod the kubelet evicts first.

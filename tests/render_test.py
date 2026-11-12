@@ -253,6 +253,8 @@ class PodPriority(unittest.TestCase):
         self.assertGreater(classes["titan-platform"]["value"], 0)
         self.assertLess(classes["titan-regression"]["value"], 0)
         self.assertEqual(classes["titan-regression"]["preemptionPolicy"], "Never")
+        # Pods without a class (titan-db, the tunnel, ArgoCD) must not be pushed off the node by an app's new pod.
+        self.assertEqual(classes["titan-platform"]["preemptionPolicy"], "Never")
         self.assertFalse(any(c.get("globalDefault") for c in classes.values()))
         self.assertIn("priority-classes", [path.split("/")[-1] for _, _, path in applications()])
 
@@ -266,11 +268,13 @@ class PodPriority(unittest.TestCase):
                     self.assertIn("memory", c["resources"]["limits"], name)
                     self.assertNotIn("cpu", c["resources"]["limits"], name)
                     self.assertIn("cpu", c["resources"]["requests"], name)
-        for values in [BASE / "keycloak" / "values.yaml", BASE / "nats" / "values.yaml"]:
-            data = yaml_file(values)
-            self.assertIn("titan-platform", values.read_text(), values)
-            limits = data["resources"]["limits"] if "resources" in data else data["container"]["merge"]["resources"]["limits"]
-            self.assertNotIn("cpu", limits, values)
+        keycloak = yaml_file(BASE / "keycloak" / "values.yaml")
+        self.assertEqual(keycloak["priorityClassName"], "titan-platform")
+        nats = yaml_file(BASE / "nats" / "values.yaml")
+        self.assertEqual(nats["podTemplate"]["merge"]["spec"]["priorityClassName"], "titan-platform")
+        for limits in [keycloak["resources"]["limits"], nats["container"]["merge"]["resources"]["limits"]]:
+            self.assertIn("memory", limits)
+            self.assertNotIn("cpu", limits)
 
     def test_the_runner_asks_little_has_no_limit_and_the_lowest_priority(self):
         for cronjob in ["titan-regression", "titan-regression-b"]:
