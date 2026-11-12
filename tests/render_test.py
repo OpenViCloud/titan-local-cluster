@@ -709,6 +709,80 @@ class DevMeterTick(unittest.TestCase):
             self.assertNotIn("METER_INTERVAL_MINUTES", text, app)
 
 
+class ScheduledJobs(unittest.TestCase):
+    """The control plane's background jobs run when a CronJob calls POST /internal/jobs/{job}, so one pod runs each pass
+    however many pods there are; the IPv6 route seed runs after every sync from a PostSync hook
+    (titan-ops architecture/background-jobs.md#background-jobs)."""
+
+    JOBS = {"meter", "backup-schedule", "backup-status", "template-sync-never-asked", "idempotency-cleanup",
+            "provider-command-retention", "vm-metric-retention", "usage-record-retention"}
+
+    @staticmethod
+    def job_of(cronjob):
+        pod = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+        return pod, " ".join(pod["containers"][0]["command"])
+
+    def cronjobs(self, root):
+        objects = render("control-plane", root)
+        return {o["metadata"]["name"]: o for o in objects
+                if o["kind"] == "CronJob" and o["metadata"]["name"].startswith("control-plane-job-")}
+
+    def test_every_job_has_a_cronjob_that_calls_its_route(self):
+        for root in (BASE, GITOPS):
+            cronjobs = self.cronjobs(root)
+            self.assertEqual({n.removeprefix("control-plane-job-") for n in cronjobs}, self.JOBS, root)
+            for name, cronjob in cronjobs.items():
+                _, command = self.job_of(cronjob)
+                self.assertIn(f"http://control-plane/internal/jobs/{name.removeprefix('control-plane-job-')}", command)
+
+    def test_a_pass_never_overlaps_never_hangs_a_missed_one_is_dropped_and_a_failed_one_stays(self):
+        for name, cronjob in self.cronjobs(GITOPS).items():
+            spec = cronjob["spec"]
+            pod, command = self.job_of(cronjob)
+            self.assertEqual(spec["concurrencyPolicy"], "Forbid", name)
+            self.assertIn("startingDeadlineSeconds", spec, name)
+            # A failed Job stays for kubectl get jobs (failedJobsHistoryLimit), not deleted by a TTL.
+            self.assertNotIn("ttlSecondsAfterFinished", spec["jobTemplate"]["spec"], name)
+            deadline = spec["jobTemplate"]["spec"]["activeDeadlineSeconds"]
+            self.assertIn("--fail-with-body", command, name)
+            max_time = int(command.split("--max-time ")[1].split()[0])
+            self.assertLess(max_time, deadline, name)
+
+    def test_the_trigger_pods_are_platform_with_a_memory_ceiling_and_no_cpu_limit(self):
+        objects = render("control-plane")
+        cronjobs = [o for o in objects if o["kind"] == "CronJob"]
+        self.assertIn("control-plane-invoice-generation", [c["metadata"]["name"] for c in cronjobs])
+        for cronjob in cronjobs:
+            pod, _ = self.job_of(cronjob)
+            self.assertEqual(pod.get("priorityClassName"), "titan-platform", cronjob["metadata"]["name"])
+            limits = pod["containers"][0]["resources"]["limits"]
+            self.assertIn("memory", limits, cronjob["metadata"]["name"])
+            self.assertNotIn("cpu", limits, cronjob["metadata"]["name"])
+
+    @staticmethod
+    def minutes_between_runs(schedule):
+        minute = schedule.split()[0]
+        if minute == "*":
+            return 1
+        return int(minute.removeprefix("*/"))
+
+    def test_the_meter_runs_every_bucket_of_the_tick_it_bills(self):
+        # Base, which prd builds on, keeps the control plane's default tick of 10 minutes; dev ticks every minute
+        # (DevMeterTick). A schedule that divides 60 keeps to the bucket boundaries; a longer gap than the tick bills less.
+        for root, tick in ((BASE, 10), (GITOPS, int(control_plane_env()["BillingMeter__IntervalMinutes"]))):
+            schedule = self.cronjobs(root)["control-plane-job-meter"]["spec"]["schedule"]
+            gap = self.minutes_between_runs(schedule)
+            self.assertEqual(60 % gap, 0, schedule)
+            self.assertLessEqual(gap, tick, (root, schedule))
+
+    def test_the_ipv6_route_seed_runs_after_every_sync(self):
+        job = first(render("control-plane"), "Job", "control-plane-ipv6-route-seed")
+        self.assertEqual(job["metadata"]["annotations"]["argocd.argoproj.io/hook"], "PostSync")
+        command = " ".join(job["spec"]["template"]["spec"]["containers"][0]["command"])
+        self.assertIn("http://control-plane/internal/jobs/ipv6-route-seed", command)
+        self.assertIn("--fail-with-body", command)
+
+
 class RunnerTrustsExtraCa(unittest.TestCase):
     """Behind a TLS-inspecting proxy the runner's npm needs the host's CA; without ConfigMap titan-extra-ca the runner runs as
     before, with no variable set, since node warns at every start when NODE_EXTRA_CA_CERTS names a missing file

@@ -1,0 +1,351 @@
+# The control plane's background jobs (titan-ops architecture/background-jobs.md#background-jobs): each CronJob calls
+# POST /internal/jobs/{job} and waits for the pass, so one control plane pod runs each pass however many pods there are.
+# Forbid: a pass still running when the next is due skips that one. A curl that hangs ends at --max-time, its Job at
+# activeDeadlineSeconds. startingDeadlineSeconds: even the most recent missed run is skipped when it cannot start within
+# 120 s of its schedule (a machine that slept waits for the next one). No ttlSecondsAfterFinished: the history limits
+# keep the last failed Jobs readable with kubectl get jobs.
+# The hourly ones run at different minutes so they do not start together.
+---
+# Every meter's tick (BillingMeter:IntervalMinutes, default 10): one usage record per resource per bucket, so a second pass in a bucket bills nothing more. Dev patches it to every minute.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: control-plane-job-meter
+spec:
+  schedule: "*/10 * * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          priorityClassName: titan-platform
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.0
+              env:
+                - name: INTERNAL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: control-plane-secrets
+                      key: Internal__Token
+              command:
+                - sh
+                - -c
+                - >
+                  curl --fail-with-body -sS --max-time 540 -X POST
+                  http://control-plane/internal/jobs/meter
+                  -H "X-Internal-Token: $INTERNAL_TOKEN"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi
+---
+# The day's backup of every VM and volume; a day's backup that ran is not asked again, one that failed is.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: control-plane-job-backup-schedule
+spec:
+  schedule: "0 * * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          priorityClassName: titan-platform
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.0
+              env:
+                - name: INTERNAL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: control-plane-secrets
+                      key: Internal__Token
+              command:
+                - sh
+                - -c
+                - >
+                  curl --fail-with-body -sS --max-time 540 -X POST
+                  http://control-plane/internal/jobs/backup-schedule
+                  -H "X-Internal-Token: $INTERNAL_TOKEN"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi
+---
+# Reads the backup bucket; the admin page calls a reading older than 30 minutes stale.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: control-plane-job-backup-status
+spec:
+  schedule: "*/5 * * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          priorityClassName: titan-platform
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.0
+              env:
+                - name: INTERNAL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: control-plane-secrets
+                      key: Internal__Token
+              command:
+                - sh
+                - -c
+                - >
+                  curl --fail-with-body -sS --max-time 540 -X POST
+                  http://control-plane/internal/jobs/backup-status
+                  -H "X-Internal-Token: $INTERNAL_TOKEN"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi
+---
+# Syncs every template into a configured cluster none was ever asked into.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: control-plane-job-template-sync-never-asked
+spec:
+  schedule: "*/5 * * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          priorityClassName: titan-platform
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.0
+              env:
+                - name: INTERNAL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: control-plane-secrets
+                      key: Internal__Token
+              command:
+                - sh
+                - -c
+                - >
+                  curl --fail-with-body -sS --max-time 540 -X POST
+                  http://control-plane/internal/jobs/template-sync-never-asked
+                  -H "X-Internal-Token: $INTERNAL_TOKEN"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi
+---
+# Deletes idempotency keys past their TTL.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: control-plane-job-idempotency-cleanup
+spec:
+  schedule: "15 * * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          priorityClassName: titan-platform
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.0
+              env:
+                - name: INTERNAL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: control-plane-secrets
+                      key: Internal__Token
+              command:
+                - sh
+                - -c
+                - >
+                  curl --fail-with-body -sS --max-time 540 -X POST
+                  http://control-plane/internal/jobs/idempotency-cleanup
+                  -H "X-Internal-Token: $INTERNAL_TOKEN"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi
+---
+# Deletes finished provider commands past their retention.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: control-plane-job-provider-command-retention
+spec:
+  schedule: "25 * * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          priorityClassName: titan-platform
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.0
+              env:
+                - name: INTERNAL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: control-plane-secrets
+                      key: Internal__Token
+              command:
+                - sh
+                - -c
+                - >
+                  curl --fail-with-body -sS --max-time 540 -X POST
+                  http://control-plane/internal/jobs/provider-command-retention
+                  -H "X-Internal-Token: $INTERNAL_TOKEN"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi
+---
+# Deletes VM metric samples past their retention.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: control-plane-job-vm-metric-retention
+spec:
+  schedule: "35 * * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          priorityClassName: titan-platform
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.0
+              env:
+                - name: INTERNAL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: control-plane-secrets
+                      key: Internal__Token
+              command:
+                - sh
+                - -c
+                - >
+                  curl --fail-with-body -sS --max-time 540 -X POST
+                  http://control-plane/internal/jobs/vm-metric-retention
+                  -H "X-Internal-Token: $INTERNAL_TOKEN"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi
+---
+# Deletes usage records past their 90 days.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: control-plane-job-usage-record-retention
+spec:
+  schedule: "45 * * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          priorityClassName: titan-platform
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.0
+              env:
+                - name: INTERNAL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: control-plane-secrets
+                      key: Internal__Token
+              command:
+                - sh
+                - -c
+                - >
+                  curl --fail-with-body -sS --max-time 540 -X POST
+                  http://control-plane/internal/jobs/usage-record-retention
+                  -H "X-Internal-Token: $INTERNAL_TOKEN"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi

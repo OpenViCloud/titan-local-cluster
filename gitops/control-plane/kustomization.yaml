@@ -43,6 +43,14 @@ patches:
         name: control-plane
       spec:
         replicas: 2
+  # The meter's pass every minute, the tick patch-env.yaml sets (BillingMeter__IntervalMinutes).
+  - patch: |-
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: control-plane-job-meter
+      spec:
+        schedule: "* * * * *"
 
 # Dev's own image: a commit OpenViCloud/titan-control-plane published from main. Prd's name and tag move only by promotion in
 # titan-ops (titan-ops architecture/platform-infra.md#gitops-flow).
@@ -50,4 +58,4 @@ images:
   # Matched by the name base/control-plane gives the image (scripts/pull-images.py stops on any other).
   - name: control-plane
     newName: ghcr.io/openvicloud/titan-control-plane
-    newTag: "83ae324"
+    newTag: "1e2d1fe"

@@ -9,6 +9,8 @@ resources:
   - migration-job.yaml
   - deploy-hook-logs.yaml
   - invoice-generation-cronjob.yaml
+  - scheduled-jobs.yaml
+  - ipv6-route-seed-job.yaml
 
 patches:
   - path: patch-env.yaml

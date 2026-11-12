@@ -1,0 +1,41 @@
+# After every sync the control plane gives each cluster with public IPv6 the static routes it lacks
+# (titan-ops features/network/design.md#ipv6-public): the cluster list is the ConfigMap control-plane-clusters, and a
+# change to it is a sync. PostSync, not PreSync: the ConfigMap's name carries a hash of its content and is made only in the
+# sync phase, and the call needs the control plane's pods serving. A failure fails the sync; the pods keep serving, the
+# SyncFail hook keeps the Job's logs (deploy-hook-logs.yaml) and the next sync calls again.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: control-plane-ipv6-route-seed
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  template:
+    spec:
+      restartPolicy: Never
+      priorityClassName: titan-platform
+      containers:
+        - name: trigger
+          image: curlimages/curl:8.11.0
+          env:
+            - name: INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: control-plane-secrets
+                  key: Internal__Token
+          command:
+            - sh
+            - -c
+            - >
+              curl --fail-with-body -sS --max-time 120 -X POST
+              http://control-plane/internal/jobs/ipv6-route-seed
+              -H "X-Internal-Token: $INTERNAL_TOKEN"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
