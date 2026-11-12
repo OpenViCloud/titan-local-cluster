@@ -1,5 +1,5 @@
 # Two to four control plane pods by CPU against the request (titan-ops architecture/platform-infra.md#control-plane-replicas);
-# four pods at a Postgres pool of 40 each fit under titan-db's max_connections.
+# four pods at a Postgres pool of 40 each fit under titan-db's max_connections, and the fifth of a roll at four reaches it.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
