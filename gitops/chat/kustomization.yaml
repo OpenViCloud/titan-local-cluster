@@ -15,4 +15,4 @@ images:
   # Matched by the name base/chat gives the image (scripts/pull-images.py stops on any other).
   - name: chat
     newName: ghcr.io/openvicloud/titan-landing-chat
-    newTag: "07702a3"
+    newTag: "f12c056"
