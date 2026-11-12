@@ -36,6 +36,13 @@ patches:
           limits:
             cpu: "2"
             memory: 1Gi
+      # The control plane's meter tick on dev (control-plane/patch-env.yaml, BillingMeter__IntervalMinutes): the billing
+      # specs wait that long for a usage line and price one line by it (lib/meter.ts of titan-regression).
+      - op: add
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/-
+        value:
+          name: METER_INTERVAL_MINUTES
+          value: "1"
       # Node's own HTTP client (the request fixture) resolves through /etc/hosts; Chromium maps *.localhost to
       # loopback by itself.
       - op: add

@@ -10,6 +10,11 @@ spec:
           env:
             - name: ASPNETCORE_ENVIRONMENT
               value: Production
+            # The meter ticks every minute on dev, not every 10 (titan-ops features/billing/metering/design.md#meters):
+            # billing tests wait a minute for a usage line. The regression runner reads the same number
+            # (METER_INTERVAL_MINUTES, regression-runner/kustomization.yaml); prd keeps the default.
+            - name: BillingMeter__IntervalMinutes
+              value: "1"
             # Dev's S3, SeaweedFS of gitops/seaweedfs, over TLS with the CA of lima/scripts/bootstrap-secrets.sh (patch-s3-ca.yaml);
             # the key pair is the Secret control-plane-backup-credentials that the same script writes. SeaweedFS ignores
             # the region, the S3 client needs one.
