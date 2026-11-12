@@ -52,8 +52,7 @@ spec:
             # notify was lost; off means a top-up silently never arrives.
             - name: WalletSweeper__Enabled
               value: "true"
-            # Commands idle for 10 s+: anything younger belongs to a notify still in flight, and claiming it would put a
-            # second writer on the wallet.
+            # Commands idle for 10 s+: anything younger belongs to a notify still in flight.
             - name: WalletSweeper__IntervalSeconds
               value: "30"
             - name: WalletSweeper__StaleAfterSeconds

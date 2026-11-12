@@ -1,0 +1,11 @@
+# A drain or eviction keeps one control plane pod serving
+# (titan-ops architecture/platform-infra.md#control-plane-replicas).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: control-plane
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: control-plane

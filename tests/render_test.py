@@ -156,6 +156,33 @@ def control_plane_env():
     return {e["name"]: e.get("value") for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
 
 
+class ControlPlanePods(unittest.TestCase):
+    """The control plane runs at least two pods, rolls one at a time and stops quietly
+    (titan-ops architecture/platform-infra.md#control-plane-replicas)."""
+
+    def test_the_autoscaler_owns_the_count_and_pods_roll_one_at_a_time_none_leaving_before_its_replacement(self):
+        deployment = first(render("control-plane"), "Deployment", "control-plane")
+        self.assertNotIn("replicas", deployment["spec"])
+        self.assertEqual(deployment["spec"]["strategy"],
+                         {"type": "RollingUpdate", "rollingUpdate": {"maxSurge": 1, "maxUnavailable": 0}})
+
+    def test_a_stopping_pod_leaves_the_service_first_and_has_time_to_finish(self):
+        pod = first(render("control-plane"), "Deployment", "control-plane")["spec"]["template"]["spec"]
+        self.assertGreaterEqual(pod["terminationGracePeriodSeconds"], 45)
+        app = [c for c in pod["containers"] if c["name"] == "control-plane"][0]
+        self.assertEqual(app["lifecycle"]["preStop"], {"sleep": {"seconds": 10}})
+
+    def test_a_voluntary_eviction_keeps_one_pod_and_the_autoscaler_stays_between_two_and_four(self):
+        objects = render("control-plane")
+        pdb = first(objects, "PodDisruptionBudget", "control-plane")
+        self.assertEqual(pdb["spec"]["minAvailable"], 1)
+        self.assertEqual(pdb["spec"]["selector"], {"matchLabels": {"app": "control-plane"}})
+        hpa = first(objects, "HorizontalPodAutoscaler", "control-plane")["spec"]
+        self.assertEqual((hpa["minReplicas"], hpa["maxReplicas"]), (2, 4))
+        self.assertEqual(hpa["scaleTargetRef"], {"apiVersion": "apps/v1", "kind": "Deployment", "name": "control-plane"})
+        self.assertEqual([m["resource"]["name"] for m in hpa["metrics"]], ["cpu"])
+
+
 class DevBackup(unittest.TestCase):
     """Dev backs titan-db up through git, with base's backup component (titan-ops infra/oci/architecture.md#backup-bucket).
     CNPG writes the bucket the control plane reads: declared in two Applications, so held equal here."""

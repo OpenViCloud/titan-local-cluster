@@ -3,6 +3,8 @@ kind: Kustomization
 
 resources:
   - deployment.yaml
+  - pdb.yaml
+  - hpa.yaml
   - service.yaml
   - migration-job.yaml
   - deploy-hook-logs.yaml
