@@ -570,6 +570,28 @@ class RunnerIsAnApplication(unittest.TestCase):
             self.assertIs(first(objects, "CronJob", name)["spec"]["suspend"], True)
 
 
+class DevMeterTick(unittest.TestCase):
+    """Dev's meter ticks every minute so billing tests wait a minute, not ten; the runner prices a usage line by the
+    same tick, and base, which prd builds on, keeps the control plane's default
+    (titan-ops features/billing/metering/design.md#meters)."""
+
+    def test_the_control_plane_ticks_every_minute(self):
+        self.assertEqual(control_plane_env().get("BillingMeter__IntervalMinutes"), "1")
+
+    def test_both_lanes_read_the_tick_the_control_plane_runs(self):
+        tick = control_plane_env()["BillingMeter__IntervalMinutes"]
+        objects = render("regression-runner")
+        for name in ("titan-regression", "titan-regression-b"):
+            env = first(objects, "CronJob", name)["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]["env"]
+            self.assertEqual([e.get("value") for e in env if e["name"] == "METER_INTERVAL_MINUTES"], [tick], name)
+
+    def test_base_sets_no_tick(self):
+        for app in ("control-plane", "regression-runner"):
+            text = "\n".join(p.read_text() for p in (BASE / app).glob("*.yaml"))
+            self.assertNotIn("BillingMeter__IntervalMinutes", text, app)
+            self.assertNotIn("METER_INTERVAL_MINUTES", text, app)
+
+
 class RunnerTrustsExtraCa(unittest.TestCase):
     """Behind a TLS-inspecting proxy the runner's npm needs the host's CA; without ConfigMap titan-extra-ca the runner runs as
     before, with no variable set, since node warns at every start when NODE_EXTRA_CA_CERTS names a missing file
