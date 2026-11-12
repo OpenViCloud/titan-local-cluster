@@ -106,10 +106,12 @@ readinessProbe: |
 service:
   httpPort: 80
 
+priorityClassName: titan-platform
+
+# No CPU limit: CPU is shared by request when pods contend (titan-ops architecture/platform-infra.md#pod-priority).
 resources:
   requests:
     cpu: 250m
     memory: 512Mi
   limits:
-    cpu: "1"
     memory: 1Gi

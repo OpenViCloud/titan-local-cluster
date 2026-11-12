@@ -9,6 +9,24 @@ resources:
   - ../../base/chat
   - ingress.yaml
 
+patches:
+  # Local runs without metrics-server (docs/topology.md#ram-budget R-2): base's HPA could never read CPU and ArgoCD would
+  # mark the app Degraded, so local drops it and
+  # runs two pods, which share the cap's count in NATS.
+  - patch: |-
+      $patch: delete
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: chat
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: chat
+      spec:
+        replicas: 2
+
 # Dev's own image: a commit OpenViCloud/titan-landing published from main. Prd's tag moves only by promotion in titan-ops
 # (titan-ops architecture/platform-infra.md#gitops-flow).
 images:

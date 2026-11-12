@@ -26,16 +26,6 @@ patches:
       kind: CronJob
       name: titan-regression(-b)?
     patch: |-
-      # titan-k3s had 3 GiB when this was measured (4 now); base's request of 1 GiB leaves the cluster no headroom.
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/resources
-        value:
-          requests:
-            cpu: 250m
-            memory: 512Mi
-          limits:
-            cpu: "2"
-            memory: 1Gi
       # The control plane's meter tick on dev (control-plane/patch-env.yaml, BillingMeter__IntervalMinutes): the billing
       # specs wait that long for a usage line and price one line by it (lib/meter.ts of titan-regression).
       - op: add

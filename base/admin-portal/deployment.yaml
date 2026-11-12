@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: admin-portal
 spec:
-  replicas: 1
+  # No replicas: hpa.yaml owns the count (titan-ops architecture/platform-infra.md#pod-priority).
   selector:
     matchLabels:
       app: admin-portal
@@ -12,6 +12,7 @@ spec:
       labels:
         app: admin-portal
     spec:
+      priorityClassName: titan-platform
       imagePullSecrets:
         - name: ghcr-credentials
       volumes:
@@ -33,3 +34,10 @@ spec:
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 10
+          # nginx serving files uses 4–12 MiB (measured on dev 2026-11-12); the HPA measures CPU against the request.
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi

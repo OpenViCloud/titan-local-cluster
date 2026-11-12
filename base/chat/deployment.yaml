@@ -3,9 +3,8 @@ kind: Deployment
 metadata:
   name: chat
 spec:
-  # One replica: the daily answer cap of each visitor address is kept in the pod's memory, so a second replica would
-  # double it (titan-ops features/public-site/design.md#chat-assistant).
-  replicas: 1
+  # No replicas: hpa.yaml owns the count. Every pod counts the daily answer cap of each visitor address in one NATS KV
+  # bucket, so pods share it (titan-ops features/public-site/design.md#chat-assistant).
   selector:
     matchLabels:
       app: chat
@@ -14,6 +13,7 @@ spec:
       labels:
         app: chat
     spec:
+      priorityClassName: titan-platform
       imagePullSecrets:
         - name: ghcr-credentials
       containers:
@@ -25,6 +25,9 @@ spec:
             # The prices the assistant quotes: the control plane's anonymous offering routes, in the same namespace.
             - name: API_BASE_URL
               value: http://control-plane
+            # The NATS of the wallet notify bus, with JetStream on in memory for the cap's bucket (base/nats/values.yaml).
+            - name: NATS_URL
+              value: nats://nats.titan-nats.svc.cluster.local:4222
           # OPENROUTER_API_KEY and DATABASE_URL.
           envFrom:
             - secretRef:
@@ -36,10 +39,10 @@ spec:
             initialDelaySeconds: 3
             periodSeconds: 10
             timeoutSeconds: 3
+          # One pod uses about 80 MiB (measured on dev 2026-11-12).
           resources:
             requests:
               cpu: 20m
-              memory: 64Mi
+              memory: 96Mi
             limits:
-              cpu: 250m
               memory: 192Mi

@@ -1,0 +1,19 @@
+# The apps customers depend on: scheduled first, and never preempted by the runner.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: titan-platform
+value: 1000000
+globalDefault: false
+description: Titan's own apps (database, identity, control plane, worker, NATS, tunnel, chat, sites)
+---
+# The regression runner: below every other pod, it waits for room instead of taking it, and when the node runs short of
+# memory it is the pod the kubelet evicts first.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: titan-regression
+value: -10
+globalDefault: false
+preemptionPolicy: Never
+description: The regression runner, which yields to every other pod

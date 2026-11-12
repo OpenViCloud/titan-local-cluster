@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Two to four command pods by memory against the request (titan-ops architecture/worker-structure.md#worker-roles).
+# Taken with components/roles: the count of incus-worker leaves git for the HPA.
+resources:
+  - hpa.yaml
+
+patches:
+  - target:
+      kind: Deployment
+      name: incus-worker
+    patch: |-
+      - op: remove
+        path: /spec/replicas

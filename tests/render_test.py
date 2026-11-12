@@ -11,6 +11,7 @@ Run:  python3 tests/render_test.py     (needs kubectl for `kubectl kustomize` an
 """
 import hashlib
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -239,6 +240,114 @@ class DevStartsEmpty(unittest.TestCase):
                          {"barmanObjectName": "titan-db-backup", "serverName": "titan-db-dev"})
 
 
+class PodPriority(unittest.TestCase):
+    """Customer-facing apps above the default priority, the runner below it, CPU shared by request
+    (titan-ops architecture/platform-infra.md#pod-priority)."""
+
+    PLATFORM = {"control-plane": ["control-plane"], "incus-worker": ["incus-worker", "incus-worker-inventory"],
+                "chat": ["chat"], "site": ["site"], "cloud-console": ["cloud-console"], "admin-portal": ["admin-portal"]}
+
+    def test_the_two_priorities_and_the_runner_yields(self):
+        classes = {o["metadata"]["name"]: o for o in render("priority-classes") if o["kind"] == "PriorityClass"}
+        self.assertEqual(sorted(classes), ["titan-platform", "titan-regression"])
+        self.assertGreater(classes["titan-platform"]["value"], 0)
+        self.assertLess(classes["titan-regression"]["value"], 0)
+        self.assertEqual(classes["titan-regression"]["preemptionPolicy"], "Never")
+        self.assertFalse(any(c.get("globalDefault") for c in classes.values()))
+        self.assertIn("priority-classes", [path.split("/")[-1] for _, _, path in applications()])
+
+    def test_every_app_pod_is_platform_with_a_memory_ceiling_and_no_cpu_limit(self):
+        for app, deployments in self.PLATFORM.items():
+            objects = render(app)
+            for name in deployments:
+                pod = first(objects, "Deployment", name)["spec"]["template"]["spec"]
+                self.assertEqual(pod.get("priorityClassName"), "titan-platform", name)
+                for c in pod["containers"]:
+                    self.assertIn("memory", c["resources"]["limits"], name)
+                    self.assertNotIn("cpu", c["resources"]["limits"], name)
+                    self.assertIn("cpu", c["resources"]["requests"], name)
+        for values in [BASE / "keycloak" / "values.yaml", BASE / "nats" / "values.yaml"]:
+            data = yaml_file(values)
+            self.assertIn("titan-platform", values.read_text(), values)
+            limits = data["resources"]["limits"] if "resources" in data else data["container"]["merge"]["resources"]["limits"]
+            self.assertNotIn("cpu", limits, values)
+
+    def test_the_runner_asks_little_has_no_limit_and_the_lowest_priority(self):
+        for cronjob in ["titan-regression", "titan-regression-b"]:
+            for root in [BASE, GITOPS]:
+                job = first(render("regression-runner", root=root), "CronJob", cronjob)
+                pod = job["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+                self.assertEqual(pod["priorityClassName"], "titan-regression")
+                self.assertEqual(pod["containers"][0]["resources"], {"requests": {"cpu": "100m", "memory": "256Mi"}})
+
+
+class Autoscaling(unittest.TestCase):
+    """Base gives chat and the three sites an HPA on CPU; local, without metrics-server, drops every HPA
+    (docs/topology.md#ram-budget R-2)."""
+
+    def test_base_scales_chat_and_the_sites_one_to_three_by_cpu_and_sets_no_count(self):
+        for app in ["chat", "site", "cloud-console", "admin-portal"]:
+            objects = render(app, root=BASE)
+            hpa = first(objects, "HorizontalPodAutoscaler", app)["spec"]
+            self.assertEqual((hpa["minReplicas"], hpa["maxReplicas"]), (1, 3), app)
+            self.assertEqual([m["resource"]["name"] for m in hpa["metrics"]], ["cpu"], app)
+            self.assertNotIn("replicas", first(objects, "Deployment", app)["spec"], app)
+
+    def test_local_has_no_autoscaler(self):
+        for app in ["control-plane", "incus-worker", "chat", "site", "cloud-console", "admin-portal"]:
+            self.assertEqual([o for o in render(app) if o["kind"] == "HorizontalPodAutoscaler"], [], app)
+
+
+class WorkerRoles(unittest.TestCase):
+    """Base runs one worker with every loop, as prd still does; components/roles splits it into command pods and one
+    inventory pod, components/autoscale adds the HPA on memory (titan-ops architecture/worker-structure.md#worker-roles)."""
+
+    def role(self, deployment):
+        env = {e["name"]: e.get("value") for e in deployment["spec"]["template"]["spec"]["containers"][0]["env"]}
+        return env.get("WORKER_ROLE")
+
+    def test_base_is_one_worker_with_every_loop(self):
+        objects = render("incus-worker", root=BASE)
+        self.assertEqual([o["metadata"]["name"] for o in objects if o["kind"] == "Deployment"], ["incus-worker"])
+        worker = first(objects, "Deployment", "incus-worker")
+        self.assertEqual((worker["spec"]["replicas"], self.role(worker)), (1, None))
+
+    def test_local_runs_two_command_pods_and_one_inventory_pod_that_never_overlaps(self):
+        objects = render("incus-worker")
+        commands, inventory = first(objects, "Deployment", "incus-worker"), first(objects, "Deployment", "incus-worker-inventory")
+        self.assertEqual((commands["spec"]["replicas"], self.role(commands)), (2, "commands"))
+        self.assertEqual((inventory["spec"]["replicas"], self.role(inventory)), (1, "inventory"))
+        self.assertEqual(inventory["spec"]["strategy"], {"type": "Recreate"})
+        self.assertEqual(inventory["spec"]["template"]["spec"]["containers"][0]["image"],
+                         commands["spec"]["template"]["spec"]["containers"][0]["image"])
+        self.assertEqual(inventory["spec"]["selector"]["matchLabels"], {"app": "incus-worker-inventory"})
+
+    def test_autoscale_owns_the_command_pods_count_by_memory(self):
+        # An overlay as prd's will be once it takes both components; kustomize loads them by relative path only.
+        with tempfile.TemporaryDirectory(dir=REPO) as overlay:
+            worker = os.path.relpath(BASE / "incus-worker", overlay)
+            pathlib.Path(overlay, "kustomization.yaml").write_text(
+                "resources: [%s]\ncomponents: [%s/components/roles, %s/components/autoscale]\n" % (worker, worker, worker))
+            objects = render("", root=pathlib.Path(overlay))
+        self.assertNotIn("replicas", first(objects, "Deployment", "incus-worker")["spec"])
+        hpa = first(objects, "HorizontalPodAutoscaler", "incus-worker")["spec"]
+        self.assertEqual((hpa["minReplicas"], hpa["maxReplicas"]), (2, 4))
+        self.assertEqual([m["resource"]["name"] for m in hpa["metrics"]], ["memory"])
+
+
+class NatsJetStreamInMemory(unittest.TestCase):
+    """JetStream on, memory only, for the chat cap's bucket (titan-ops features/public-site/design.md#chat-assistant)."""
+
+    def test_memory_store_below_the_container_limit_and_no_file_store(self):
+        values = yaml_file(BASE / "nats" / "values.yaml")
+        jetstream = values["config"]["jetstream"]
+        self.assertTrue(jetstream["enabled"])
+        self.assertFalse(jetstream["fileStore"]["enabled"])
+        self.assertTrue(jetstream["memoryStore"]["enabled"])
+        self.assertEqual(jetstream["memoryStore"]["maxSize"], "32Mi")
+        self.assertEqual(values["container"]["merge"]["resources"]["limits"]["memory"], "128Mi")
+
+
 class DevChat(unittest.TestCase):
     """The assistant of the landing pages (base/chat): its own database and role, and /api/chat of the site's host."""
 
@@ -260,11 +369,15 @@ class DevChat(unittest.TestCase):
         self.assertEqual([(p["path"], p["pathType"], p["backend"]["service"]["name"]) for p in paths],
                          [("/api/chat", "Exact", "chat")])
 
-    def test_one_replica_reads_its_key_and_database_from_the_bootstrap_secret(self):
-        deployment = first(render("chat"), "Deployment", "chat")
-        self.assertEqual(deployment["spec"]["replicas"], 1)
+    def test_two_pods_share_the_cap_in_nats_and_read_their_key_and_database_from_the_bootstrap_secret(self):
+        objects = render("chat")
+        deployment = first(objects, "Deployment", "chat")
+        self.assertEqual(deployment["spec"]["replicas"], 2)
+        self.assertEqual([o for o in objects if o["kind"] == "HorizontalPodAutoscaler"], [])
         container = deployment["spec"]["template"]["spec"]["containers"][0]
         self.assertEqual(container["envFrom"], [{"secretRef": {"name": "landing-chat-secrets"}}])
+        env = {e["name"]: e.get("value") for e in container["env"]}
+        self.assertEqual(env["NATS_URL"], control_plane_env()["Nats__Url"])
         self.assertIn("landing-chat-secrets", (LIMA / "scripts" / "bootstrap-secrets.sh").read_text())
         self.assertIn("chat-db-credentials", (LIMA / "scripts" / "bootstrap-secrets.sh").read_text())
 

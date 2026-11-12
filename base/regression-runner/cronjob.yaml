@@ -37,6 +37,7 @@ spec:
             app: titan-regression
         spec:
           restartPolicy: Never
+          priorityClassName: titan-regression
           securityContext:
             runAsNonRoot: true
             runAsUser: 1001   # pwuser in the Playwright image
@@ -107,10 +108,9 @@ spec:
                 - name: extra-ca
                   mountPath: /extra-ca
                   readOnly: true
+              # A small request and no limit, at the lowest priority: the runner takes what is free, and the kubelet
+              # evicts it before any app when the node runs short of memory (titan-ops architecture/platform-infra.md#pod-priority).
               resources:
                 requests:
-                  cpu: 500m
-                  memory: 1Gi
-                limits:
-                  cpu: "2"
-                  memory: 2Gi
+                  cpu: 100m
+                  memory: 256Mi
