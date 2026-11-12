@@ -1,7 +1,7 @@
 # Keeps the logs of a failed deploy-time Job until someone reads them.
 #
-# The deploy-time migration Job uses BeforeHookCreation: the next sync — Argo's own retry
-# 30s later included — deletes the failed Job with its pods. generateName would let a failed Job survive, but
+# The deploy-time Jobs (the PreSync migration, the PostSync IPv6 route seed) use BeforeHookCreation: the next sync —
+# Argo's own retry 30s later included — deletes the failed Job with its pods. generateName would let a failed Job survive, but
 # kustomize refuses a resource without metadata.name. So a SyncFail hook, which Argo runs when the sync fails and
 # before the next attempt, copies the pod logs into a ConfigMap:
 #   kubectl -n <the control plane's namespace> get configmap control-plane-deploy-hook-logs -o yaml
@@ -80,7 +80,7 @@ spec:
               out=/tmp/logs
               mkdir -p "$out"
               date -u +%Y-%m-%dT%H:%M:%SZ > "$out/collected-at"
-              for job in control-plane-migrate; do
+              for job in control-plane-migrate control-plane-ipv6-route-seed; do
                 kubectl get pods -l "job-name=$job" -o wide > "$out/$job.pods" 2>&1
                 for pod in $(kubectl get pods -l "job-name=$job" -o name); do
                   # A ConfigMap holds at most 1 MiB; the end of a failed run is the part that explains it.

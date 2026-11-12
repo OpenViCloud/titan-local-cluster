@@ -18,6 +18,7 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          priorityClassName: titan-platform
           containers:
             - name: trigger
               image: curlimages/curl:8.11.0
@@ -42,6 +43,6 @@ spec:
                 requests:
                   cpu: 50m
                   memory: 64Mi
+                # No CPU limit, like every app pod (titan-ops architecture/platform-infra.md#pod-priority).
                 limits:
-                  cpu: 200m
                   memory: 128Mi
