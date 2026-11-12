@@ -160,11 +160,18 @@ class ControlPlanePods(unittest.TestCase):
     """The control plane runs at least two pods, rolls one at a time and stops quietly
     (titan-ops architecture/platform-infra.md#control-plane-replicas)."""
 
-    def test_the_autoscaler_owns_the_count_and_pods_roll_one_at_a_time_none_leaving_before_its_replacement(self):
-        deployment = first(render("control-plane"), "Deployment", "control-plane")
+    def test_in_base_the_autoscaler_owns_the_count_and_pods_roll_one_at_a_time_none_leaving_before_its_replacement(self):
+        deployment = first(render("control-plane", root=BASE), "Deployment", "control-plane")
         self.assertNotIn("replicas", deployment["spec"])
         self.assertEqual(deployment["spec"]["strategy"],
                          {"type": "RollingUpdate", "rollingUpdate": {"maxSurge": 1, "maxUnavailable": 0}})
+
+    def test_local_has_no_metrics_so_no_autoscaler_and_runs_two_pods(self):
+        # An HPA with no metrics-server reports FailedGetResourceMetric, which ArgoCD counts as Degraded.
+        objects = render("control-plane")
+        self.assertEqual([o for o in objects if o["kind"] == "HorizontalPodAutoscaler"], [])
+        self.assertEqual(first(objects, "Deployment", "control-plane")["spec"]["replicas"], 2)
+        self.assertIn("--disable metrics-server", (LIMA / "provision" / "k3s.sh").read_text())
 
     def test_a_stopping_pod_leaves_the_service_first_and_has_time_to_finish(self):
         pod = first(render("control-plane"), "Deployment", "control-plane")["spec"]["template"]["spec"]
@@ -173,7 +180,7 @@ class ControlPlanePods(unittest.TestCase):
         self.assertEqual(app["lifecycle"]["preStop"], {"sleep": {"seconds": 10}})
 
     def test_a_voluntary_eviction_keeps_one_pod_and_the_autoscaler_stays_between_two_and_four(self):
-        objects = render("control-plane")
+        objects = render("control-plane", root=BASE)
         pdb = first(objects, "PodDisruptionBudget", "control-plane")
         self.assertEqual(pdb["spec"]["minAvailable"], 1)
         self.assertEqual(pdb["spec"]["selector"], {"matchLabels": {"app": "control-plane"}})

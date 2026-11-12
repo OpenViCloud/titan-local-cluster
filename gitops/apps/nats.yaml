@@ -1,8 +1,8 @@
 # Local cluster: copy of titan-ops's gitops/apps-prd/nats.yaml (docs/topology.md#titan-integration).
 # titan-ops architecture/money-and-wallet.md#single-writer-outbox S3 — NATS core for the wallet-mutation notify bus.
 # NATS core, non-persistent (OD-2): the DB is the durable queue, the bus only notifies; a lost notify
-# is a delayed apply (the sweeper, S6, re-drives it), never lost money. Single server; control-plane
-# runs at replicas: 1, so one subscriber is one writer per wallet (OD-3, iteration 1).
+# is a delayed apply (the sweeper, S6, re-drives it), never lost money. Single server; every control plane
+# pod subscribes, and the consumer's row locks make the applies of one wallet take turns.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

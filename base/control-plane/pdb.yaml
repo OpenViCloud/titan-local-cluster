@@ -1,5 +1,6 @@
-# A drain or eviction keeps one control plane pod serving
-# (titan-ops architecture/platform-infra.md#control-plane-replicas).
+# An eviction leaves at least one control plane pod serving
+# (titan-ops architecture/platform-infra.md#control-plane-replicas). On a one-node cluster a drain cannot evict the
+# last one: its replacement has no node to start on.
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

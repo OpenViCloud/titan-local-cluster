@@ -28,6 +28,21 @@ configMapGenerator:
 patches:
   - path: patch-env.yaml
   - path: patch-s3-ca.yaml
+  # Local runs without metrics-server (docs/topology.md#ram-budget R-2): base's HPA could never read CPU and ArgoCD would
+  # mark the app Degraded. Local drops it and runs the two pods the HPA keeps at least.
+  - patch: |-
+      $patch: delete
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: control-plane
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: control-plane
+      spec:
+        replicas: 2
 
 # Dev's own image: a commit OpenViCloud/titan-control-plane published from main. Prd's name and tag move only by promotion in
 # titan-ops (titan-ops architecture/platform-infra.md#gitops-flow).
