@@ -67,13 +67,21 @@ OUT=$(instance "{\"guestPort\": $HELD, \"hostIP\": \"127.0.0.1\", \"hostPort\": 
 
 echo "up.sh"
 mkdir -p "$WORK/bin" "$WORK/home"
+# The Lima files up.sh reads on this host: the fake reports their sizes, so up.sh does not resize the VMs here.
+source "$HERE/../scripts/host-os.sh"
+VMS_DIR=$(vm_dir "$(uname -s)")
 cat > "$WORK/bin/limactl" <<'FAKE'
 #!/bin/bash
-# limactl list --format '{{.Status}}' VM prints $FAKE_STATUS; list --json VM prints $FAKE_JSON; every call is logged.
+# limactl list --format '{{.Status}}' VM prints $FAKE_STATUS; list --json VM prints $FAKE_JSON with the cpus and memory
+# of the VM's file in $FAKE_VMS; every call is logged.
 printf '%s\n' "$*" >> "$FAKE_LOG"
 case "$1 $2" in
   "list --format") echo "$FAKE_STATUS" ;;
-  "list --json") cat "$FAKE_JSON" ;;
+  "list --json") python3 -c 'import json, re, sys
+d, text = json.load(open(sys.argv[1])), open(sys.argv[2]).read()
+d["cpus"] = int(re.search(r"^cpus: (\d+)", text, re.M).group(1))
+d["memory"] = int(re.search(r"^memory: (\d+)GiB", text, re.M).group(1)) * 1024 ** 3
+print(json.dumps(d))' "$FAKE_JSON" "$FAKE_VMS/$3.yaml" ;;
   "shell "*) echo "provision did not finish" ;;
   *) ;;
 esac
@@ -87,7 +95,7 @@ chmod +x "$WORK/bin/limactl" "$WORK/bin/docker"
 run_up() {  # run_up STATUS RULE_JSON
   : > "$WORK/log"
   instance "$2" > "$WORK/json"
-  OUT=$(FAKE_LOG="$WORK/log" FAKE_STATUS="$1" FAKE_JSON="$WORK/json" HOME="$WORK/home" PATH="$WORK/bin:$PATH" bash "$UP" 2>&1); RC=$?
+  OUT=$(FAKE_LOG="$WORK/log" FAKE_STATUS="$1" FAKE_JSON="$WORK/json" FAKE_VMS="$VMS_DIR" HOME="$WORK/home" PATH="$WORK/bin:$PATH" bash "$UP" 2>&1); RC=$?
 }
 
 run_up Stopped "{\"guestPort\": 6443, \"hostIP\": \"127.0.0.1\", \"hostPort\": $HELD}"
@@ -96,7 +104,7 @@ grep -q '^start ' "$WORK/log" && bad "limactl start was called: $(cat "$WORK/log
 printf '%s' "$OUT" | grep -q "127.0.0.1:$HELD" && ok "up.sh names the held port" || bad "message: $OUT"
 
 run_up Running "{\"guestPort\": 6443, \"hostIP\": \"127.0.0.1\", \"hostPort\": $HELD}"
-grep -q '^list --json' "$WORK/log" && bad "a running VM was checked: $(cat "$WORK/log")" || ok "a running VM is not checked"
+printf '%s' "$OUT" | grep -q "127.0.0.1:$HELD" && bad "a running VM's ports were checked: $OUT" || ok "a running VM's ports are not checked"
 grep -q '^start ' "$WORK/log" && bad "a running VM was started" || ok "a running VM is not started"
 
 run_up Stopped "{\"guestPort\": 6443, \"hostIP\": \"127.0.0.1\", \"hostPort\": $FREE}"

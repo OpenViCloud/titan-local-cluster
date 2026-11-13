@@ -3,8 +3,8 @@
 #   limactl create --name titan-k3s lima/macos/titan-k3s.yaml
 base: template://ubuntu-24.04
 vmType: vz
-cpus: 2
-memory: 4GiB
+cpus: 3
+memory: 6GiB
 disk: 30GiB
 # SeaweedFS's data (gitops/seaweedfs) lives on the Mac, so it outlives `limactl delete titan-k3s`; up.sh makes the folder.
 # A fixed mountPoint, because the manifest's hostPath cannot name a Mac user's home.

@@ -27,11 +27,11 @@ Design, rules and runbook of the dev cluster: [docs/topology.md](docs/topology.m
 | `base/` | The manifests every environment shares; prd builds on them from titan-ops |
 | `gitops/<app>/` | Dev's overlay of each app, on `../../base/<app>` |
 | `scripts/pull-images.py` | Moves dev to the images other repositories published from main |
-| `tests/` | Render checks of the overlays, the pull script, the Keycloak theme check, and the guest-log sweeper compared with titan-ops's template |
+| `tests/` | Render checks of the overlays, the Lima files and the resize of an existing VM, the pull script, the Keycloak theme check, and the guest-log sweeper compared with titan-ops's template |
 
 ## Run
 
-Needs, on either OS: 16 GB, [Lima](https://lima-vm.io/) (measured with 2.2.1), `kubectl`, `openssl` and `python3`. No account and no token: the
+Needs, on either OS: 16 GB (the two VMs' ceilings, 6 + 7 GiB, and the host's own share add up to more than 16 GB, so the host may swap: [docs/topology.md#ram-budget](docs/topology.md#ram-budget)), [Lima](https://lima-vm.io/) (measured with 2.2.1), `kubectl`, `openssl` and `python3`. No account and no token: the
 repositories and the images (linux/arm64 and linux/amd64) are public. titan-incus runs KVM guests, so it needs nested virtualization:
 - macOS: an Apple M3 or later.
 - Ubuntu: x86_64 with KVM (`/dev/kvm` writable by your user) and nesting on (`cat /sys/module/kvm_intel/parameters/nested` says `Y`,
@@ -63,11 +63,11 @@ Ubuntu also 8443 and 30833) another cluster or program already holds, and names 
 The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/` (`secrets.env`, the S3 CA and SeaweedFS's certificate, Titan's client identity `titan-client.crt`/`.key`, the metrics certificate `incus-metrics.crt`/`.key`; keys mode 600; and, on a host behind a TLS-inspecting proxy, its CA as `extra-ca.crt`, [docs/topology.md#extra-ca](docs/topology.md#extra-ca)), so a rebuilt cluster gets them again; keep that folder. Behind a TLS-inspecting proxy a new titan-k3s gets no ArgoCD: build or rebuild it off the proxy ([docs/topology.md#extra-ca](docs/topology.md#extra-ca)). Backups go to SeaweedFS in titan-k3s (`gitops/seaweedfs`), over TLS at `https://lima-titan-k3s.internal:30833`, with its data in `~/.local/share/titan-local-cluster/s3` on the host, which outlives the VM. Docker must not be running.
 
 ```sh
-bash lima/scripts/up.sh      # creates the VMs on first run, then starts them, trusts an extra CA if present (the VMs first, ArgoCD once it is up), applies secrets, trusts the S3 CA, joins cluster local to titan-incus, has titan-incus trust the metrics certificate, applies root-local, drops the Applications of the old names
+bash lima/scripts/up.sh      # creates the VMs on first run, brings a VM to its Lima file's cpus and memory (stopping it if it runs), starts them, trusts an extra CA if present (the VMs first, ArgoCD once it is up), applies secrets, trusts the S3 CA, joins cluster local to titan-incus, has titan-incus trust the metrics certificate, applies root-local, drops the Applications of the old names
 bash lima/scripts/down.sh    # stops both VMs; disks stay (guest VMs in titan-incus stop too, see below)
 ```
 
-`memory` in `lima/<os>/titan-k3s.yaml` applies when the VM is created. To resize a running one: `limactl stop titan-k3s && limactl edit --memory 4 titan-k3s && limactl start titan-k3s` (about 15 seconds of downtime; the pods come back by themselves).
+A new `cpus` or `memory` in `lima/<os>/*.yaml` reaches an existing VM at the next `up.sh`, which stops the VM, edits it and starts it again; the pods come back by themselves ([docs/topology.md#ram-budget](docs/topology.md#ram-budget)).
 
 ArgoCD: http://argocd.localhost:8080 · portal: http://portal.localhost:8080 · metrics (vmui, no sign-in): http://metrics.localhost:8080/vmui/.
 
@@ -140,6 +140,7 @@ runs.
 ```sh
 python3 tests/render_test.py          # kubectl and ruby
 python3 tests/test_lima_files.py      # ruby
+python3 tests/test_vm_size.py         # ruby
 python3 tests/test_pull_images.py
 python3 tests/test_keycloak_theme.py && python3 scripts/keycloak-theme.py --check
 bash tests/sweeper_test.sh            # network and gh signed in (titan-ops's template on GitHub)
