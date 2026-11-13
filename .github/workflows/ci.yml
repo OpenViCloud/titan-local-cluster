@@ -34,6 +34,9 @@ jobs:
       - name: Size of an existing VM brought to its Lima file
         run: python3 tests/test_vm_size.py
 
+      - name: Provision scripts of an existing VM brought to its Lima file's
+        run: python3 tests/test_vm_provision.py
+
       - name: Pull script
         run: python3 tests/test_pull_images.py
 

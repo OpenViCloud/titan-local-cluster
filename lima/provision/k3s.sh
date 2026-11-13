@@ -9,10 +9,11 @@ export DEBIAN_FRONTEND=noninteractive
 K3S_VERSION="v1.32.3+k3s1"
 ARGOCD_CHART_VERSION="7.0.0"
 
-# A soft memory limit makes the Go GC give memory back instead of letting k3s grow over the day
-# (docs/topology.md#ram-budget). Written before the install so a new VM starts with it.
+# A soft memory limit makes the Go GC give memory back instead of letting k3s grow over the day; a limit below what k3s
+# holds makes the GC run nonstop and take the node's CPU (docs/topology.md#ram-budget). Written before the install so a
+# new VM starts with it.
 memory_dropin=/etc/systemd/system/k3s.service.d/memory.conf
-memory_wanted=$'[Service]\nEnvironment=GOMEMLIMIT=512MiB'
+memory_wanted=$'[Service]\nEnvironment=GOMEMLIMIT=1GiB'
 memory_current=""
 if [ -f "$memory_dropin" ]; then
   memory_current=$(cat "$memory_dropin")
