@@ -67,6 +67,13 @@ class Layout(unittest.TestCase):
             for key in ("cpus", "memory", "disk", "mounts"):
                 self.assertEqual(mac.get(key), ubuntu.get(key), (name, key))
 
+    def test_k3s_has_room_for_the_regression_runner(self):
+        # The regression runner beside two control plane pods, two chat pods and the metrics tier needs this much
+        # (docs/topology.md#ram-budget); both VMs on one host hold their ceilings, so the size is a budget, not a guess.
+        for os_dir in ("macos", "ubuntu"):
+            spec = vm(os_dir, "titan-k3s")
+            self.assertEqual((spec["cpus"], spec["memory"]), (3, "6GiB"), os_dir)
+
 
 class MacOS(unittest.TestCase):
     def test_vz_on_user_v2(self):

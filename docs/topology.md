@@ -91,7 +91,7 @@ Tôn Chủ chose **(a)** (L-4). Reason: (b) makes local measure something produc
 ```
 macOS (Apple M3 · 8 cores · 16 GB RAM · 133 GB free disk)
 │
-├── Lima VM "titan-k3s"    (vz · Ubuntu 24.04 arm64 · 2 CPU · 4 GiB · 30 GiB)
+├── Lima VM "titan-k3s"    (vz · Ubuntu 24.04 arm64 · 3 CPU · 6 GiB · 30 GiB)
 │     k3s single-node
 │     ├── ArgoCD
 │     ├── control-plane · customer portal · admin-portal · incus-worker
@@ -111,7 +111,7 @@ macOS (Apple M3 · 8 cores · 16 GB RAM · 133 GB free disk)
 ```
 Ubuntu x86_64 (host)
 │
-├── Lima VM "titan-k3s"    (qemu · Ubuntu 24.04 amd64 · 2 CPU · 4 GiB · 30 GiB)
+├── Lima VM "titan-k3s"    (qemu · Ubuntu 24.04 amd64 · 3 CPU · 6 GiB · 30 GiB)
 └── Lima VM "titan-incus"  (qemu · Debian 13 amd64 · 4 CPU · 7 GiB · 60 GiB · customer VMs are nested KVM)
 ```
 
@@ -167,16 +167,16 @@ Measured 2026-10-08 on the OCI cluster before prd (`kubectl top`):
 |---|---|
 | macOS + Tôn Chủ's applications | ≈ 5 GB |
 | Docker Desktop (holding 3.8 GiB) | 0: off while the cluster runs (L-6) |
-| `titan-k3s` (after R-2; 3 GiB until 2026-10-25, 1 GiB more for cert-manager, the Barman plugin and Postgres running beside tests) | 4 GiB |
+| `titan-k3s` (after R-2; 3 GiB until 2026-10-25, 4 GiB until 2026-11-13: the second control plane and chat pods, the metrics tier and the regression runner ran it out of RAM, [below](#ram-2026-11-13)) | 6 GiB, 3 CPU |
 | `titan-incus` (OS + Incus + OVN ≈ 1 GiB, the rest for customers) | 7 GiB |
-| **Total** | ≈ 16 GB, all of the Mac's RAM: macOS swaps more when both VMs run at their ceilings (this table is measured on the Mac; Ubuntu below) |
+| **Total** | ≈ 19 GB, more than the Mac's 16 GB: macOS swaps when both VMs run at their ceilings (this table is measured on the Mac before 2026-11-13; the Mac is not measured at 6 GiB; Ubuntu below) |
 
 Lima's `memory` is a **ceiling**. Measured S-0 on `titan-incus` (phys_footprint of the Virtualization process):
 - After 3 image pulls and one idle 2 GiB VM: 5368 MB of a 7 GiB ceiling.
 - Guest writes 1.5 GiB: 6908 MB. Guest gives it back, page cache of 3.9 GB dropped too: still 6909 MB.
 - No balloon device is attached to the VM. RAM returns to macOS only when the VM **stops**.
 
-So after a while each VM holds nearly **all of its ceiling**. The budget below counts ceilings.
+So after a while each VM holds nearly **all of its ceiling**. The budget below counts ceilings. A ceiling is set when Lima creates the VM; `up.sh` brings a VM made at another size to its file's `cpus` and `memory` (`lima/scripts/vm-size.py`): it stops the VM, runs `limactl edit` (Lima edits only a stopped VM), and starts it again.
 
 Measured A-1 (2026-10-09), after rebuilding `titan-k3s` from scratch:
 
@@ -189,9 +189,19 @@ Measured A-1 (2026-10-09), after rebuilding `titan-k3s` from scratch:
 - `titan-k3s` is already near its 3 GiB ceiling. With the regression runner in the cluster, about 270–600 MiB is left available. No pod was OOM-killed.
 - The control plane runs 2 pods after these measurements. One pod used 198 MiB on the Ubuntu cluster on 2026-11-12 (`memory.current` of its cgroup), so the second adds about that much (request 256 Mi since the same day).
 - Also after them (2026-11-12, `memory.current` on the Ubuntu cluster): the worker runs 2 command pods and 1 inventory pod; the one worker pod of every role before the split used 19 MiB (`memory.current`) and peaked at 22 MiB (`memory.peak`) after regression `vm` runs with 4 command slots. Chat runs 2 pods; its one pod used about 80 MiB (request 96 Mi). The regression runner asks 256 Mi with no limit, at the lowest priority: under memory pressure the kubelet evicts pods over their request first, then by priority, so a runner over 256 Mi goes before the apps.
-- The operator metrics tier (Application `monitoring-local`, namespace `monitoring`) came after these measurements. Requests 224 Mi in all (VictoriaMetrics 96 Mi, vmalert 32 Mi, Alertmanager 24 Mi, node-exporter 24 Mi, kube-state-metrics 48 Mi), limits 736 Mi (384, 96, 64, 64, 128). Neither is its footprint: **not measured** on `titan-k3s` yet; it will be measured after the first sync, budget ≤ 300 MiB ([§unmeasured](#unmeasured)).
+- The operator metrics tier (Application `monitoring-local`, namespace `monitoring`) came after these measurements. Requests 224 Mi in all (VictoriaMetrics 96 Mi, vmalert 32 Mi, Alertmanager 24 Mi, node-exporter 24 Mi, kube-state-metrics 48 Mi), limits 736 Mi (384, 96, 64, 64, 128). Working set 191 MiB on 2026-11-13 (VictoriaMetrics 130, kube-state-metrics 24, node-exporter 15, Alertmanager 14, vmalert 8; [below](#ram-2026-11-13)).
 
-Ubuntu (measured 2026-10-27, 15 GB host, same ceilings 4 GiB + 7 GiB, [§layout](#layout)): QEMU of `titan-incus` holds its full 7 GiB ceiling while provisioning; the host has 1.2–5 GB available depending on the moment. Not measured: RAM of each VM after provisioning, RAM with customer VMs running, the share of the host OS and applications.
+Ubuntu (measured 2026-10-27, 15 GB host, ceilings then 4 GiB + 7 GiB, [§layout](#layout)): QEMU of `titan-incus` holds its full 7 GiB ceiling while provisioning; the host has 1.2–5 GB available depending on the moment. Not measured: RAM of each VM after provisioning, RAM with customer VMs running, the share of the host OS and applications.
+
+<a id="ram-2026-11-13"></a>
+Measured 2026-11-13 on the Ubuntu host (15407 MiB): `sudo k3s crictl stats -o json` in `titan-k3s` (working set), `free -m` and `/proc/pressure/memory` in `titan-k3s` every 30 s while regression modules ran, `free -m` and `ps -o rss` of the QEMU processes on the host.
+
+| `titan-k3s` | QEMU RSS | In `titan-k3s` | Host |
+|---|---|---|---|
+| 2 CPU · 4 GiB, modules `network`, `firewall`, `cleanup` of a release's dev pass | 3897 MiB (`titan-incus` 2219 MiB, read between 05:40 and 06:00Z, after the pass) | 145 containers 2141 MiB (Keycloak 444, control plane 241 + 197, Postgres 238, ArgoCD application controller 211, SeaweedFS 197, metrics tier 191), k3s-server 547 MiB; sampled 05:21–05:35Z while the runner ran its modules: available down to 45 MiB, memory PSI `full` avg10 up to 34.77 %, load up to 49.2; `network`, its rerun, `firewall` and a second `cleanup` failed on `fetch failed` or a sign-in page that did not load, and before that the probes of the worker, chat and admin portal pods timed out (05:18:33–05:18:57Z, read with `kubectl get events -n titan-dev` at 05:19Z) | 6688 MiB available, swap 2085 MiB used |
+| 3 CPU · 6 GiB, three passes of `network`, `firewall`, `network-lifecycle`, `cleanup` (`network` once, `network-lifecycle` in the third) | 6148 MiB (`titan-incus` 1359 MiB) | 158 containers 2104 MiB, k3s-server 634 MiB; over three passes available at least 2304 MiB, memory PSI `full` avg10 ≤ 0.01 %, load ≤ 6.2; `network`, `network-lifecycle` and `cleanup` passed, `firewall` too once its activity check counted only the run's own rows (a fix of the spec in `OpenViCloud/titan-regression`); `titan-db-1` did not restart | 5361 MiB available, swap 2965 MiB used |
+
+- Not measured: the Mac at 6 GiB; `titan-incus` while a regression pass runs its VMs; what the host swapped out.
 
 **Cutting RAM (L-13)**
 - **R-1:** when unused, `limactl stop` both VMs. RAM goes to 0. Starting again takes about 1–2 minutes.
@@ -340,11 +350,10 @@ Every question of the design was answered by Tôn Chủ on 2026-10-08 (L-1…L-1
 | ~~CIDR clashes between tenants on uplink `ovnup` (D-2)~~ — closed in INCUS-4: tenant networks have no uplink ([network §uplink](network.md#uplink)) | — |
 | Why the first reconcile after a push **without** a refresh sometimes reads the old commit ([§dev-sync](#dev-sync)): no control run yet; with a refresh it was not seen (one measurement, 2026-10-22) | Eos |
 | `GOMEMLIMIT=512MiB` keeps k3s around 640 MiB over **many hours** (measured up to 12 minutes only) | Eos |
-| **Accepted risk:** `titan-k3s` has about 270–600 MiB available while the runner runs ([§ram-budget](#ram-budget)). Raised to 4 GiB (2026-10-25). That headroom was measured before the operator metrics tier (`monitoring-local`, requests 224 Mi), whose footprint is not measured yet (row below). Next trigger: a pod OOM-killed, or heavy Mac swapping with both VMs at their ceilings ⇒ revisit the budget in [§ram-budget](#ram-budget) | Eos |
-| The operator metrics tier (`monitoring-local`: VictoriaMetrics, vmalert, Alertmanager, node-exporter, kube-state-metrics) fits in ≤ 300 MiB on `titan-k3s`. Requests 224 Mi, limits 736 Mi; the real footprint will be measured after its first sync ([§ram-budget](#ram-budget)) | Eos |
+| **Accepted risk:** both VMs at their ceilings (6 + 7 GiB) on the Ubuntu host of 15 GB, or the 16 GB Mac, swap the host ([§ram-budget](#ram-budget)). Next trigger: the host swapping while a regression pass runs, or `titan-incus` near its ceiling with the regression's VMs (not measured yet) ⇒ revisit the budget | Eos |
 
 Measured in the LOCAL-CLUSTER iteration:
-- `titan-k3s` (3 GiB then; 4 GiB now) runs every app with no pod OOM-killed ([§ram-budget](#ram-budget)).
+- `titan-k3s` (3 GiB then; 6 GiB now) runs every app with no pod OOM-killed ([§ram-budget](#ram-budget)).
 - RAM with 3 VMs `s` running ([§ram-budget](#ram-budget)).
 - Instances in projects `lab-*` are not reported by the reconciler: 0 log lines in the worker and the control plane.
 - Images of the OCI cluster before prd run on local unchanged except for the overlay's patches.
@@ -364,7 +373,7 @@ bash lima/scripts/up.sh
 - On Ubuntu the same command: `up.sh` picks `lima/ubuntu/` by `uname -s` (`lima/scripts/host-os.sh`); the host needs nested KVM and QEMU ([§layout](#layout)). Measured 2026-10-27 on an empty machine: `up.sh` 348 s, then 13/13 Applications `Synced/Healthy` after 789 s; `titan-db` `ContinuousArchiving=True`; Z-1 PASS; module `vm` of titan-regression 24 passed.
 - On an empty Ubuntu (measured 2026-10-28): the first provision of `titan-incus` (apt installs Incus and OVN) took 689 s, longer than Lima's wait ceiling of about 10 minutes; `up.sh` keeps waiting for `cloud-init` in the VM up to 30 minutes; on an even slower network run `up.sh` again, it waits one more round for the install and goes on. Before starting a VM that is not running, `up.sh` stops if a host port of the VM (`127.0.0.1` 6443, 8080; Ubuntu adds 8443, 30833) is already held by another cluster or program (`lima/scripts/ports-free.py`).
 - The first time, the script creates both VMs, waits for ArgoCD to install its CRDs, gives ArgoCD and the regression runner the extra CA if the host has one ([§extra-ca](#extra-ca)), makes and has `titan-incus` trust two identities, Titan's (`join-cluster.sh`, `titan-local`) and the metrics scraper's (`incus-metrics.sh`, `titan-local-metrics`, [§titan-integration](#titan-integration)), then applies `root-local`. ArgoCD syncs the rest by itself from `main` here. Measured rebuild from empty 2026-10-21 (`dd13c9a`, both VMs `limactl delete`, Lima's OS image cache kept): `up.sh` 4 minutes, the last app synced about 15 minutes after the start, read at about 24 minutes 10/10 apps `Synced/Healthy` (exact Healthy time not measured).
-- With the VMs already there, the script only starts them. Internal secrets stay ([§secrets](#secrets)).
+- With the VMs already there, the script starts them; a VM whose `cpus` or `memory` differ from its Lima file is first stopped and edited to the file's size ([§ram-budget](#ram-budget)). Internal secrets stay ([§secrets](#secrets)).
 - No account or token is needed. Keep `~/.config/titan-local-cluster/secrets.env`: rebuilding the cluster needs that very file.
 
 **Stop (R-1).** `bash lima/scripts/down.sh`. The two VMs' RAM returns to the host; disks and data stay. Customer VMs in `titan-incus` stop too and do not start again after `up.sh`: Titan reports `Stopped` with "requested: Running" (drift, `titan-ops features/vm/design.md`), started again with Titan's start command (measured 2026-10-27 with `lc3-vm`, through the API). That time the Incus LVM thin pool broke after `down.sh` and had to be repaired by hand first (known-state `titan-ops status/known-state.md#incus-thinpool-after-down`).

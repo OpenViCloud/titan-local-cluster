@@ -4,7 +4,8 @@
 # WHY this file exists: on a new titan-incus, the provision script (apt installs Incus and OVN) measured 689 s on an Ubuntu
 # host. Lima waits about 10 minutes for its final requirement ("boot scripts must have finished"), whatever --timeout says,
 # then `limactl start` exits 1 with the VM Running and still provisioning. up.sh then waits for cloud-init in the VM itself
-# (also when it is run again on a VM still provisioning) and reads the provision script's last word as before. It runs
+# (also when it is run again on a VM still provisioning) and reads the provision script's last word as before. It also
+# brings a VM made at an older size to the cpus and memory of its Lima file (docs/topology.md#ram-budget). It runs
 # against a fake `limactl`.
 #
 # Run:  bash lima/tests/first-start_test.sh     (from the repo root)
@@ -22,19 +23,33 @@ ok()  { printf '  PASS %s\n' "$1"; PASS=$((PASS + 1)); }
 bad() { printf '  FAIL %s\n' "$1"; FAIL=$((FAIL + 1)); }
 
 mkdir -p "$WORK/bin" "$WORK/home"
+# The Lima files up.sh reads on this host, so the fake reports their sizes.
+source "$HERE/../scripts/host-os.sh"
+VMS_DIR=$(vm_dir "$(uname -s)")
 cat > "$WORK/bin/limactl" <<'FAKE'
 #!/bin/bash
 # The VM is Stopped until `start` (Running from the start when named in $FAKE_RUNNING); `start` exits $FAKE_START_RC and
-# leaves it Running unless $FAKE_START_STOPS is set. The provision grep prints "VM: done" unless the VM is named in $FAKE_UNPROVISIONED. Every call is logged.
+# leaves it Running unless $FAKE_START_STOPS is set; `stop` stops it. The provision grep prints "VM: done" unless the VM is
+# named in $FAKE_UNPROVISIONED. `list --json` reports the cpus and memory of the VM's file in $FAKE_VMS, or 1 CPU and
+# 1 GiB for a VM named in $FAKE_SMALL until `edit` ran on it. Every call is logged.
 printf '%s\n' "$*" >> "$FAKE_LOG"
 vm=""
 for a in "$@"; do case "$a" in titan-incus|titan-k3s) vm="$a" ;; esac; done
 case "$1" in
   list)
-    if [ "$2" = "--json" ]; then echo '{"name": "x", "config": {"portForwards": []}}'
+    if [ "$2" = "--json" ]; then
+      small=$(case " $FAKE_SMALL " in *" $vm "*) [ -e "$FAKE_DIR/$vm.edited" ] || echo yes ;; esac)
+      python3 -c 'import json, re, sys
+text = open(sys.argv[1]).read()
+cpus, gib = int(re.search(r"^cpus: (\d+)", text, re.M).group(1)), int(re.search(r"^memory: (\d+)GiB", text, re.M).group(1))
+if sys.argv[3]:
+    cpus, gib = 1, 1
+print(json.dumps({"name": sys.argv[2], "cpus": cpus, "memory": gib * 1024 ** 3, "config": {"portForwards": []}}))' "$FAKE_VMS/$vm.yaml" "$vm" "$small"
     elif [ -e "$FAKE_DIR/$vm.running" ] || case " $FAKE_RUNNING " in *" $vm "*) true ;; *) false ;; esac; then echo Running
     else echo Stopped; fi ;;
   start) [ -n "$FAKE_START_STOPS" ] || touch "$FAKE_DIR/$vm.running"; exit "$FAKE_START_RC" ;;
+  stop) rm -f "$FAKE_DIR/$vm.running" ;;
+  edit) touch "$FAKE_DIR/$vm.edited" ;;
   shell)
     case "$*" in
       *"cloud-init status --wait"*) exit 2 ;;
@@ -47,9 +62,10 @@ printf '#!/bin/bash\nexit 1\n' > "$WORK/bin/docker"
 printf '#!/bin/bash\nexit 1\n' > "$WORK/bin/kubectl"
 chmod +x "$WORK/bin/limactl" "$WORK/bin/docker" "$WORK/bin/kubectl"
 
-run_up() {  # run_up START_RC UNPROVISIONED_VMS [RUNNING_VMS] [START_STOPS]
-  : > "$WORK/log"; rm -f "$WORK"/*.running
-  OUT=$(FAKE_LOG="$WORK/log" FAKE_DIR="$WORK" FAKE_START_RC="$1" FAKE_UNPROVISIONED="$2" FAKE_RUNNING="${3:-}" FAKE_START_STOPS="${4:-}" \
+run_up() {  # run_up START_RC UNPROVISIONED_VMS [RUNNING_VMS] [START_STOPS] [SMALL_VMS]
+  : > "$WORK/log"; rm -f "$WORK"/*.running "$WORK"/*.edited
+  OUT=$(FAKE_LOG="$WORK/log" FAKE_DIR="$WORK" FAKE_VMS="$VMS_DIR" FAKE_START_RC="$1" FAKE_UNPROVISIONED="$2" FAKE_RUNNING="${3:-}" \
+    FAKE_START_STOPS="${4:-}" FAKE_SMALL="${5:-}" \
     HOME="$WORK/home" PATH="$WORK/bin:$PATH" bash "$UP" 2>&1); RC=$?
 }
 provisioned() { grep -c "^shell $1 -- sudo grep" "$WORK/log"; }
@@ -72,6 +88,21 @@ printf '%s' "$OUT" | grep -q 'ERROR: provisioning of titan-incus did not finish'
 run_up 1 "" "" yes
 [ "$RC" -ne 0 ] && ok "start exits 1, VM not Running: up.sh fails" || bad "up.sh went on after a start that left the VM stopped"
 grep -q 'cloud-init status --wait' "$WORK/log" && bad "waited on a stopped VM: $(cat "$WORK/log")" || ok "no wait on a VM that did not start"
+
+# A VM made before its file grew: up.sh stops it, edits it to the file's size and starts it; the other VM is left alone.
+k3s_size=$(python3 -c 'import re, sys
+t = open(sys.argv[1]).read()
+print("--cpus", re.search(r"^cpus: (\d+)", t, re.M).group(1), "--memory", re.search(r"^memory: (\d+)GiB", t, re.M).group(1))' "$VMS_DIR/titan-k3s.yaml")
+run_up 0 "" "titan-incus titan-k3s" "" titan-k3s
+awk '$1 == "stop" && $2 == "titan-k3s" {s=NR} $1 == "edit" && /titan-k3s/ {e=NR} $1 == "start" && $2 == "titan-k3s" {r=NR} END {exit !(s && e > s && r > e)}' "$WORK/log" \
+  && ok "a running VM at an older size is stopped, edited, then started" || bad "resize order: $(cat "$WORK/log")"
+grep -qx "edit --tty=false titan-k3s $k3s_size" "$WORK/log" && ok "the edit carries the file's cpus and memory" || bad "edit flags: $(grep '^edit' "$WORK/log")"
+grep -q -e '^stop titan-incus' -e '^edit .*titan-incus' -e '^start titan-incus' "$WORK/log" && bad "the VM at its file's size was touched: $(cat "$WORK/log")" || ok "a VM at its file's size is not stopped"
+printf '%s' "$OUT" | grep -q "titan-k3s: resizing to $k3s_size" && ok "up.sh says it resizes" || bad "message: $OUT"
+
+run_up 0 "" "" "" titan-k3s
+grep -q '^stop titan-k3s' "$WORK/log" && bad "a stopped VM was stopped again: $(cat "$WORK/log")" || ok "a stopped VM at an older size is edited without a stop"
+grep -qx "edit --tty=false titan-k3s $k3s_size" "$WORK/log" && ok "the stopped VM is edited" || bad "no edit: $(cat "$WORK/log")"
 
 echo
 echo "$PASS passed, $FAIL failed"

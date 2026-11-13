@@ -4,8 +4,8 @@
 # template:_images/, not template:ubuntu-24.04: the latter also mounts the user's home into the VM.
 base: template:_images/ubuntu-24.04
 vmType: qemu
-cpus: 2
-memory: 4GiB
+cpus: 3
+memory: 6GiB
 disk: 30GiB
 # SeaweedFS's data (gitops/seaweedfs) lives on the host, so it outlives `limactl delete titan-k3s`; up.sh makes the folder.
 # A fixed mountPoint, because the manifest's hostPath cannot name the user's home.

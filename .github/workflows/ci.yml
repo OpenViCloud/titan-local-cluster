@@ -31,6 +31,9 @@ jobs:
       - name: Lima files of macOS and Ubuntu, host-os.sh
         run: python3 tests/test_lima_files.py
 
+      - name: Size of an existing VM brought to its Lima file
+        run: python3 tests/test_vm_size.py
+
       - name: Pull script
         run: python3 tests/test_pull_images.py
 
