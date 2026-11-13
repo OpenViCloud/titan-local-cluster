@@ -715,7 +715,7 @@ class ScheduledJobs(unittest.TestCase):
     (titan-ops architecture/background-jobs.md#background-jobs)."""
 
     JOBS = {"meter", "backup-schedule", "backup-status", "template-sync-never-asked", "idempotency-cleanup",
-            "provider-command-retention", "vm-metric-retention", "usage-record-retention"}
+            "provider-command-retention", "vm-metric-retention", "usage-record-retention", "wallet-sweep"}
 
     @staticmethod
     def job_of(cronjob):
@@ -774,6 +774,20 @@ class ScheduledJobs(unittest.TestCase):
             gap = self.minutes_between_runs(schedule)
             self.assertEqual(60 % gap, 0, schedule)
             self.assertLessEqual(gap, tick, (root, schedule))
+
+    def test_the_wallet_sweep_runs_as_often_as_its_health_check_expects_and_ends_before_the_next(self):
+        # /healthz/wallet reads WalletSweeper__IntervalSeconds to know when a pass is late, and its pending threshold is
+        # twice StaleAfter + Interval: a schedule apart from that number makes the check lie in one direction or the other
+        # (titan-ops features/billing/wallet/design.md#wallet-sweeper). No pod sweeps on a timer, so without this CronJob
+        # a lost notify is never applied.
+        for root in (BASE, GITOPS):
+            env = {e["name"]: e.get("value")
+                   for c in containers(render("control-plane", root), "control-plane") for e in c["env"]}
+            self.assertNotIn("WalletSweeper__Enabled", env, root)
+            interval = int(env["WalletSweeper__IntervalSeconds"])
+            cronjob = self.cronjobs(root)["control-plane-job-wallet-sweep"]
+            self.assertEqual(self.minutes_between_runs(cronjob["spec"]["schedule"]) * 60, interval, root)
+            self.assertLess(cronjob["spec"]["jobTemplate"]["spec"]["activeDeadlineSeconds"], interval, root)
 
     def test_the_ipv6_route_seed_runs_after_every_sync(self):
         job = first(render("control-plane"), "Job", "control-plane-ipv6-route-seed")

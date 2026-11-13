@@ -5,8 +5,8 @@ metadata:
 spec:
   # At least two pods, one at a time, none leaving before its replacement is ready
   # (titan-ops architecture/platform-infra.md#control-plane-replicas). No replicas here: the HPA in hpa.yaml owns the
-  # count, two to four, and a count in git would put ArgoCD and the HPA at odds. Every pod runs the wallet subscriber
-  # and sweeper: the consumer's row locks make the applies of one wallet take turns
+  # count, two to four, and a count in git would put ArgoCD and the HPA at odds. Every pod runs the wallet subscriber,
+  # and the sweeper's CronJob reaches any pod: the consumer's row locks make the applies of one wallet take turns
   # (titan-ops architecture/money-and-wallet.md#single-writer-outbox).
   #
   # A rolling update serves the old and the new version at once until the last old pod stops. A release that changes
