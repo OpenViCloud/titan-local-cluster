@@ -63,11 +63,11 @@ Ubuntu also 8443 and 30833) another cluster or program already holds, and names 
 The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/` (`secrets.env`, the S3 CA and SeaweedFS's certificate, Titan's client identity `titan-client.crt`/`.key`, the metrics certificate `incus-metrics.crt`/`.key`; keys mode 600; and, on a host behind a TLS-inspecting proxy, its CA as `extra-ca.crt`, [docs/topology.md#extra-ca](docs/topology.md#extra-ca)), so a rebuilt cluster gets them again; keep that folder. Behind a TLS-inspecting proxy a new titan-k3s gets no ArgoCD: build or rebuild it off the proxy ([docs/topology.md#extra-ca](docs/topology.md#extra-ca)). Backups go to SeaweedFS in titan-k3s (`gitops/seaweedfs`), over TLS at `https://lima-titan-k3s.internal:30833`, with its data in `~/.local/share/titan-local-cluster/s3` on the host, which outlives the VM. Docker must not be running.
 
 ```sh
-bash lima/scripts/up.sh      # creates the VMs on first run, brings a VM to its Lima file's cpus and memory (stopping it if it runs), starts them, trusts an extra CA if present (the VMs first, ArgoCD once it is up), applies secrets, trusts the S3 CA, joins cluster local to titan-incus, has titan-incus trust the metrics certificate, applies root-local, drops the Applications of the old names
+bash lima/scripts/up.sh      # creates the VMs on first run, brings a VM to its Lima file's cpus, memory and provision scripts (stopping it if it runs), starts them, trusts an extra CA if present (the VMs first, ArgoCD once it is up), applies secrets, trusts the S3 CA, joins cluster local to titan-incus, has titan-incus trust the metrics certificate, applies root-local, drops the Applications of the old names
 bash lima/scripts/down.sh    # stops both VMs; disks stay (guest VMs in titan-incus stop too, see below)
 ```
 
-A new `cpus` or `memory` in `lima/<os>/*.yaml` reaches an existing VM at the next `up.sh`, which stops the VM, edits it and starts it again; the pods come back by themselves ([docs/topology.md#ram-budget](docs/topology.md#ram-budget)).
+A new `cpus` or `memory` in `lima/<os>/*.yaml`, or any change to a script in `lima/provision/` (a comment too), reaches an existing VM at the next `up.sh`, which stops the VM, edits it and starts it again; the pods come back by themselves, customer VMs in titan-incus do not ([docs/topology.md#ram-budget](docs/topology.md#ram-budget), [docs/topology.md#provision-sync](docs/topology.md#provision-sync)).
 
 ArgoCD: http://argocd.localhost:8080 · portal: http://portal.localhost:8080 · metrics (vmui, no sign-in): http://metrics.localhost:8080/vmui/.
 

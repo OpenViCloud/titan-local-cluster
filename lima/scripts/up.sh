@@ -1,10 +1,10 @@
 #!/bin/bash
-# Starts the local cluster (docs/topology.md#layout): both Lima VMs, created on first use and brought to their Lima file's
-# cpus and memory (docs/topology.md#ram-budget), then an extra CA of the host if it
-# has one (docs/topology.md#extra-ca; the VMs first, ArgoCD once it is up, the regression runner's ConfigMap once its
-# namespace is made), the secrets, the S3 CA, cluster local joined to titan-incus, the metrics certificate
-# VictoriaMetrics reads Incus with (lima/scripts/incus-metrics.sh), and ArgoCD's root application (and the
-# Applications of the names before 2026-10-27 dropped). Safe to run again.
+# Starts the local cluster (docs/topology.md#layout): both Lima VMs, created on first use and brought to their Lima
+# file's cpus and memory (docs/topology.md#ram-budget) and provision scripts (docs/topology.md#provision-sync), then an
+# extra CA of the host if it has one (docs/topology.md#extra-ca; the VMs first, ArgoCD once it is up, the regression
+# runner's ConfigMap once its namespace is made), the secrets, the S3 CA, cluster local joined to titan-incus, the
+# metrics certificate VictoriaMetrics reads Incus with (lima/scripts/incus-metrics.sh), and ArgoCD's root application
+# (and the Applications of the names before 2026-10-27 dropped). Safe to run again.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(cd "$here/.." && pwd)
@@ -30,16 +30,24 @@ for vm in titan-incus titan-k3s; do
     limactl create --name "$vm" --tty=false "$vms/$vm.yaml"
     status="Stopped"
   fi
-  # create reads the file once: a VM made before its file's cpus or memory changed keeps the old size until it is edited,
-  # and Lima edits only a stopped VM (docs/topology.md#ram-budget).
+  # create reads the file once: a VM made before its file's cpus or memory or provision scripts changed keeps the old ones
+  # until it is edited, and Lima edits only a stopped VM (docs/topology.md#ram-budget, docs/topology.md#provision-sync).
   resize=$(limactl list --json "$vm" | python3 "$here/scripts/vm-size.py" "$vms/$vm.yaml")
-  if [ -n "$resize" ]; then
-    echo "$vm: resizing to $resize of $vm.yaml."
+  provision=$(limactl list --json "$vm" | python3 "$here/scripts/vm-provision.py" "$vms/$vm.yaml")
+  reprovision=()
+  while IFS= read -r expression; do
+    [ -z "$expression" ] || reprovision+=(--set "$expression")
+  done <<< "$provision"
+  if [ -n "$resize" ] || [ -n "$provision" ]; then
+    [ -z "$resize" ] || echo "$vm: resizing to $resize of $vm.yaml."
+    [ -z "$provision" ] || echo "$vm: copying in $((${#reprovision[@]} / 2)) provision script(s) changed in lima/provision/."
     if [ "$status" = "Running" ]; then
       echo "$vm: stopping it for a minute or two."
       limactl stop "$vm"
     fi
-    limactl edit --tty=false "$vm" $resize   # unquoted: two flags and their values
+    # $resize unquoted: two flags and their values, or none. The array form keeps bash 3.2 (macOS) quiet under set -u
+    # when it is empty.
+    limactl edit --tty=false "$vm" $resize ${reprovision[@]+"${reprovision[@]}"}
     status="Stopped"
   fi
   if [ "$status" != "Running" ]; then

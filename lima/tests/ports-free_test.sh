@@ -67,13 +67,14 @@ OUT=$(instance "{\"guestPort\": $HELD, \"hostIP\": \"127.0.0.1\", \"hostPort\": 
 
 echo "up.sh"
 mkdir -p "$WORK/bin" "$WORK/home"
-# The Lima files up.sh reads on this host: the fake reports their sizes, so up.sh does not resize the VMs here.
+# The Lima files up.sh reads on this host: the fake reports their sizes and provision scripts, so up.sh does not resize
+# or reprovision the VMs here.
 source "$HERE/../scripts/host-os.sh"
 VMS_DIR=$(vm_dir "$(uname -s)")
 cat > "$WORK/bin/limactl" <<'FAKE'
 #!/bin/bash
-# limactl list --format '{{.Status}}' VM prints $FAKE_STATUS; list --json VM prints $FAKE_JSON with the cpus and memory
-# of the VM's file in $FAKE_VMS; every call is logged.
+# limactl list --format '{{.Status}}' VM prints $FAKE_STATUS; list --json VM prints $FAKE_JSON with the cpus, memory and
+# provision scripts of the VM's file in $FAKE_VMS; every call is logged.
 printf '%s\n' "$*" >> "$FAKE_LOG"
 case "$1 $2" in
   "list --format") echo "$FAKE_STATUS" ;;
@@ -81,6 +82,8 @@ case "$1 $2" in
 d, text = json.load(open(sys.argv[1])), open(sys.argv[2]).read()
 d["cpus"] = int(re.search(r"^cpus: (\d+)", text, re.M).group(1))
 d["memory"] = int(re.search(r"^memory: (\d+)GiB", text, re.M).group(1)) * 1024 ** 3
+d["config"]["provision"] = [{"mode": "system", "script": open(sys.argv[2].rsplit("/", 1)[0] + "/" + url).read()}
+                            for url in re.findall(r"^    url: (\S+)$", text, re.M)]
 print(json.dumps(d))' "$FAKE_JSON" "$FAKE_VMS/$3.yaml" ;;
   "shell "*) echo "provision did not finish" ;;
   *) ;;
