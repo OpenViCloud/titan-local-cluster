@@ -368,7 +368,8 @@ spec:
 ---
 # The wallet sweeper (titan-ops features/billing/wallet/design.md#wallet-sweeper): applies the wallet commands whose NATS
 # notify was lost, the only thing that does. Every 2 minutes, WalletSweeper__IntervalSeconds in patch-env.yaml; a pass ends
-# before the next is due. Two passes at once claim different rows (FOR UPDATE SKIP LOCKED).
+# before the next is due. Two passes at once are safe: the consumer reads each command under its row lock and leaves one
+# that is no longer Pending.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
