@@ -782,6 +782,16 @@ class ScheduledJobs(unittest.TestCase):
         self.assertIn("http://control-plane/internal/jobs/ipv6-route-seed", command)
         self.assertIn("--fail-with-body", command)
 
+    def test_every_call_sends_a_json_body(self):
+        # The route reads a request object, so a POST without a JSON content type gets 415 before it runs a pass.
+        for root in (BASE, GITOPS):
+            commands = {name: self.job_of(cronjob)[1] for name, cronjob in self.cronjobs(root).items()}
+            seed = first(render("control-plane", root), "Job", "control-plane-ipv6-route-seed")
+            commands["control-plane-ipv6-route-seed"] = " ".join(seed["spec"]["template"]["spec"]["containers"][0]["command"])
+            for name, command in commands.items():
+                self.assertIn('-H "Content-Type: application/json"', command, (root, name))
+                self.assertIn("-d '{}'", command, (root, name))
+
 
 class RunnerTrustsExtraCa(unittest.TestCase):
     """Behind a TLS-inspecting proxy the runner's npm needs the host's CA; without ConfigMap titan-extra-ca the runner runs as

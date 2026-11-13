@@ -42,6 +42,8 @@ spec:
                   curl --fail-with-body -sS --max-time 540 -X POST
                   http://control-plane/internal/jobs/meter
                   -H "X-Internal-Token: $INTERNAL_TOKEN"
+                  -H "Content-Type: application/json"
+                  -d '{}'
               resources:
                 requests:
                   cpu: 10m
@@ -85,6 +87,8 @@ spec:
                   curl --fail-with-body -sS --max-time 540 -X POST
                   http://control-plane/internal/jobs/backup-schedule
                   -H "X-Internal-Token: $INTERNAL_TOKEN"
+                  -H "Content-Type: application/json"
+                  -d '{}'
               resources:
                 requests:
                   cpu: 10m
@@ -128,6 +132,8 @@ spec:
                   curl --fail-with-body -sS --max-time 540 -X POST
                   http://control-plane/internal/jobs/backup-status
                   -H "X-Internal-Token: $INTERNAL_TOKEN"
+                  -H "Content-Type: application/json"
+                  -d '{}'
               resources:
                 requests:
                   cpu: 10m
@@ -171,6 +177,8 @@ spec:
                   curl --fail-with-body -sS --max-time 540 -X POST
                   http://control-plane/internal/jobs/template-sync-never-asked
                   -H "X-Internal-Token: $INTERNAL_TOKEN"
+                  -H "Content-Type: application/json"
+                  -d '{}'
               resources:
                 requests:
                   cpu: 10m
@@ -214,6 +222,8 @@ spec:
                   curl --fail-with-body -sS --max-time 540 -X POST
                   http://control-plane/internal/jobs/idempotency-cleanup
                   -H "X-Internal-Token: $INTERNAL_TOKEN"
+                  -H "Content-Type: application/json"
+                  -d '{}'
               resources:
                 requests:
                   cpu: 10m
@@ -257,6 +267,8 @@ spec:
                   curl --fail-with-body -sS --max-time 540 -X POST
                   http://control-plane/internal/jobs/provider-command-retention
                   -H "X-Internal-Token: $INTERNAL_TOKEN"
+                  -H "Content-Type: application/json"
+                  -d '{}'
               resources:
                 requests:
                   cpu: 10m
@@ -300,6 +312,8 @@ spec:
                   curl --fail-with-body -sS --max-time 540 -X POST
                   http://control-plane/internal/jobs/vm-metric-retention
                   -H "X-Internal-Token: $INTERNAL_TOKEN"
+                  -H "Content-Type: application/json"
+                  -d '{}'
               resources:
                 requests:
                   cpu: 10m
@@ -343,6 +357,8 @@ spec:
                   curl --fail-with-body -sS --max-time 540 -X POST
                   http://control-plane/internal/jobs/usage-record-retention
                   -H "X-Internal-Token: $INTERNAL_TOKEN"
+                  -H "Content-Type: application/json"
+                  -d '{}'
               resources:
                 requests:
                   cpu: 10m
