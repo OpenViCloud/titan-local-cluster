@@ -33,6 +33,8 @@ spec:
               curl --fail-with-body -sS --max-time 120 -X POST
               http://control-plane/internal/jobs/ipv6-route-seed
               -H "X-Internal-Token: $INTERNAL_TOKEN"
+              -H "Content-Type: application/json"
+              -d '{}'
           resources:
             requests:
               cpu: 10m
