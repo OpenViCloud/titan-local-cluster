@@ -47,13 +47,13 @@ spec:
               value: "true"
             - name: Nats__Url
               value: nats://nats.titan-nats.svc.cluster.local:4222
-            # The sweeper. These match the code's defaults and are written out so the safety net is visible here. Do NOT
-            # set Enabled=false: NATS core keeps no messages, and the sweeper is the only thing that picks up a command whose
-            # notify was lost; off means a top-up silently never arrives.
-            - name: WalletSweeper__Enabled
-              value: "true"
-            # Commands idle for 10 s+: anything younger belongs to a notify still in flight.
+            # The sweeper, run by the control-plane-job-wallet-sweep CronJob (scheduled-jobs.yaml). These match the code's
+            # defaults and are written out so the safety net is visible here. IntervalSeconds is the CronJob's schedule:
+            # /healthz/wallet reads it to know when a pass is late (render_test.py compares the two). NATS core keeps no
+            # messages, and the sweeper is the only thing that picks up a command whose notify was lost; a suspended
+            # CronJob means a top-up silently never arrives.
             - name: WalletSweeper__IntervalSeconds
-              value: "30"
+              value: "120"
+            # Commands idle for 10 s+: anything younger belongs to a notify still in flight.
             - name: WalletSweeper__StaleAfterSeconds
               value: "10"

@@ -2,7 +2,7 @@
 # POST /internal/jobs/{job} and waits for the pass, so one control plane pod runs each pass however many pods there are.
 # Forbid: a pass still running when the next is due skips that one. A curl that hangs ends at --max-time, its Job at
 # activeDeadlineSeconds. startingDeadlineSeconds: even the most recent missed run is skipped when it cannot start within
-# 120 s of its schedule (a machine that slept waits for the next one). No ttlSecondsAfterFinished: the history limits
+# 120 s of its schedule, 60 s for the 2-minute wallet sweep (a machine that slept waits for the next one). No ttlSecondsAfterFinished: the history limits
 # keep the last failed Jobs readable with kubectl get jobs.
 # The hourly ones run at different minutes so they do not start together.
 ---
@@ -356,6 +356,54 @@ spec:
                 - >
                   curl --fail-with-body -sS --max-time 540 -X POST
                   http://control-plane/internal/jobs/usage-record-retention
+                  -H "X-Internal-Token: $INTERNAL_TOKEN"
+                  -H "Content-Type: application/json"
+                  -d '{}'
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi
+---
+# The wallet sweeper (titan-ops features/billing/wallet/design.md#wallet-sweeper): applies the wallet commands whose NATS
+# notify was lost, the only thing that does. Every 2 minutes, WalletSweeper__IntervalSeconds in patch-env.yaml; a pass ends
+# before the next is due. Two passes at once are safe: the consumer reads each command under its row lock and leaves one
+# that is no longer Pending.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: control-plane-job-wallet-sweep
+spec:
+  schedule: "*/2 * * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 60
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 110
+      template:
+        spec:
+          restartPolicy: Never
+          priorityClassName: titan-platform
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.0
+              env:
+                - name: INTERNAL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: control-plane-secrets
+                      key: Internal__Token
+              command:
+                - sh
+                - -c
+                - >
+                  curl --fail-with-body -sS --max-time 100 -X POST
+                  http://control-plane/internal/jobs/wallet-sweep
                   -H "X-Internal-Token: $INTERNAL_TOKEN"
                   -H "Content-Type: application/json"
                   -d '{}'
