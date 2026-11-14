@@ -10,8 +10,8 @@
 # - The S3 CA and SeaweedFS's server certificate (name lima-titan-k3s.internal), made once with openssl next to secrets.env:
 #   the CA's key never enters the cluster, and a rebuilt cluster trusts the same CA. Incus trusts it through titan-incus's
 #   system store (lima/scripts/trust-s3-ca.sh); barman, the control plane and the worker through Secret s3-ca.
-# - Those Secrets are applied only when the cluster has none yet: a running cluster keeps its own values, and the script
-#   never reads a Secret back.
+# - The Secrets made from those values are applied only when the cluster has none yet, except the ones listed below as
+#   re-applied every run: a running cluster keeps its own values, and the script never reads a Secret back.
 # - The S3 key pair as SeaweedFS's identity and as three Secrets with the same pair (CNPG reads one, the control plane one,
 #   the worker one for Incus's uploads: CNPG is in another namespace, and each reader has its own key names); re-applied
 #   every run.
@@ -219,8 +219,8 @@ unset chat_db_password openrouter_key
 
 # The server key of the control plane's Idempotency request hash (titan-ops architecture/http-contract.md#idempotency-key):
 # a Secret of its own, applied on every run from the file, so a cluster made before the key existed gets it too. The
-# value stays as long as secrets.env does; a lost file means a new key, which only makes Idempotency-Keys of the last
-# 24 hours answer 422 IDEMPOTENCY_KEY_REUSED. A running control plane reads it only after a restart.
+# value stays as long as secrets.env does; a lost file means a new key, which only makes Idempotency-Keys still kept
+# (about a day: IdempotencyCleanup) answer 422 IDEMPOTENCY_KEY_REUSED. A running control plane reads it only after a restart.
 printf 'Idempotency__HashKey=%s\n' "$(from_file IDEMPOTENCY_HASH_KEY)" | apply_secret titan-dev control-plane-idempotency
 
 # ── Generated once, applied when the cluster has none ─────────────────────────
