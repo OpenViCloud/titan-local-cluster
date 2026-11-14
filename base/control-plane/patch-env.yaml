@@ -29,6 +29,12 @@ spec:
             - secretRef:
                 name: control-plane-backup-credentials
                 optional: true
+            # The server key of the Idempotency request hash (titan-ops architecture/http-contract.md#idempotency-key).
+            # Optional so an image that does not read it starts without it; a control plane that reads it does not
+            # start until it exists.
+            - secretRef:
+                name: control-plane-idempotency
+                optional: true
           env:
             - name: Keycloak__Audience
               value: titan-api

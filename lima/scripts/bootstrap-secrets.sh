@@ -97,6 +97,7 @@ ensure_value BETA_USER_2_PASSWORD openssl rand -hex 16
 ensure_value BACKUP_S3_ACCESS_KEY_ID openssl rand -hex 10
 ensure_value BACKUP_S3_SECRET_ACCESS_KEY openssl rand -hex 20
 ensure_value CHAT_DB_PASSWORD openssl rand -hex 24
+ensure_value IDEMPOTENCY_HASH_KEY openssl rand -hex 32
 echo "secrets.env at $SECRETS_FILE"
 
 # ── S3 CA and certificate ─────────────────────────────────────────────────────
@@ -213,6 +214,11 @@ fi
 printf 'OPENROUTER_API_KEY=%s\nDATABASE_URL=postgres://chat:%s@titan-db-rw.titan-db-dev.svc.cluster.local:5432/chat\n' \
   "$openrouter_key" "$chat_db_password" | apply_secret titan-dev landing-chat-secrets
 unset chat_db_password openrouter_key
+
+# The server key of the control plane's Idempotency request hash (titan-ops architecture/http-contract.md#idempotency-key):
+# a Secret of its own, applied on every run from the file, so a cluster made before the key existed gets it too. The
+# value never changes after the first run. A running control plane reads it only after a restart.
+printf 'Idempotency__HashKey=%s\n' "$(from_file IDEMPOTENCY_HASH_KEY)" | apply_secret titan-dev control-plane-idempotency
 
 # ── Generated once, applied when the cluster has none ─────────────────────────
 if ! secret_absent titan-dev control-plane-secrets; then
