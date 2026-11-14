@@ -2,7 +2,8 @@
 # Puts the local cluster's secrets into titan-k3s (docs/topology.md#secrets).
 # Needs no vault and no token: the repositories and the images are public.
 # - ~/.config/titan-local-cluster/secrets.env (mode 600) keeps every value generated once: the DB password, the internal
-#   token, the Keycloak admin and the two beta-user passwords, the assistant's DB password. The first run writes them; later runs read
+#   token, the Keycloak admin and the two beta-user passwords, the assistant's DB password, the control plane's
+#   Idempotency hash key. The first run writes them; later runs read
 #   them and only add a key a newer script needs. The file outlives the VM, so a cluster rebuilt with `limactl delete`
 #   gets the same values, which the database restored from a backup already holds. It also keeps the key pair of dev's S3
 #   (SeaweedFS, gitops/seaweedfs), generated the same way.
@@ -22,6 +23,7 @@
 #   Secret carries NO_KEY_VALUE, the pod starts and is Healthy (a stranger's cluster gets ready, L-22), every model
 #   refuses the value, so every answer is the assistant's busy text. The script never generates a key; one written into
 #   secrets.env by hand as OPENROUTER_API_KEY is used instead.
+# - control-plane-idempotency, the control plane's Idempotency hash key from secrets.env, re-applied every run.
 # Values go through pipes and the file only: no command-line argument, nothing printed.
 # Needs: titan-k3s running.
 set -euo pipefail
@@ -97,6 +99,7 @@ ensure_value BETA_USER_2_PASSWORD openssl rand -hex 16
 ensure_value BACKUP_S3_ACCESS_KEY_ID openssl rand -hex 10
 ensure_value BACKUP_S3_SECRET_ACCESS_KEY openssl rand -hex 20
 ensure_value CHAT_DB_PASSWORD openssl rand -hex 24
+ensure_value IDEMPOTENCY_HASH_KEY openssl rand -hex 32
 echo "secrets.env at $SECRETS_FILE"
 
 # ── S3 CA and certificate ─────────────────────────────────────────────────────
@@ -213,6 +216,12 @@ fi
 printf 'OPENROUTER_API_KEY=%s\nDATABASE_URL=postgres://chat:%s@titan-db-rw.titan-db-dev.svc.cluster.local:5432/chat\n' \
   "$openrouter_key" "$chat_db_password" | apply_secret titan-dev landing-chat-secrets
 unset chat_db_password openrouter_key
+
+# The server key of the control plane's Idempotency request hash (titan-ops architecture/http-contract.md#idempotency-key):
+# a Secret of its own, applied on every run from the file, so a cluster made before the key existed gets it too. The
+# value stays as long as secrets.env does; a lost file means a new key, which only makes Idempotency-Keys still kept
+# (about a day: IdempotencyCleanup) answer 422 IDEMPOTENCY_KEY_REUSED. A running control plane reads it only after a restart.
+printf 'Idempotency__HashKey=%s\n' "$(from_file IDEMPOTENCY_HASH_KEY)" | apply_secret titan-dev control-plane-idempotency
 
 # ── Generated once, applied when the cluster has none ─────────────────────────
 if ! secret_absent titan-dev control-plane-secrets; then

@@ -145,6 +145,10 @@ class DevRender(unittest.TestCase):
         refs = [r["secretRef"] for c in containers(render("control-plane"), "control-plane") for r in c.get("envFrom", []) if "secretRef" in r]
         self.assertIn({"name": "control-plane-cluster", "optional": True}, refs)
 
+    def test_the_idempotency_key_secret_is_optional_so_an_older_image_starts_without_it(self):
+        refs = [r["secretRef"] for c in containers(render("control-plane"), "control-plane") for r in c.get("envFrom", []) if "secretRef" in r]
+        self.assertIn({"name": "control-plane-idempotency", "optional": True}, refs)
+
 
 def first(objects, kind, name):
     for obj in objects:

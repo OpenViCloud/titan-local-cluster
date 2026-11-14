@@ -93,7 +93,7 @@ run() {
 value() { sed -n "s/^$2=//p" "$1"; }
 
 KEYS="TITAN_DB_PASSWORD INTERNAL_TOKEN KEYCLOAK_ADMIN_PASSWORD BETA_USER_PASSWORD BETA_USER_2_PASSWORD
-  BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY CHAT_DB_PASSWORD"
+  BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY CHAT_DB_PASSWORD IDEMPOTENCY_HASH_KEY"
 
 echo "first run on a new cluster: no vault, no GitHub token, no secrets.env"
 mkdir -p "$WORK/fresh"
@@ -118,6 +118,10 @@ grep -q "Password=$db\$" "$WORK/fresh.stdin.control-plane-db" \
   && ok "the control plane's connection string carries the same password" || bad "control-plane-db differs from the file"
 printf 'Internal__Token=%s\n' "$token" | cmp -s - "$WORK/fresh.stdin.control-plane-secrets" \
   && ok "the control plane gets the file's internal token, and no cluster key" || bad "control-plane-secrets differs from the file"
+printf 'Idempotency__HashKey=%s\n' "$(value "$FILE" IDEMPOTENCY_HASH_KEY)" | cmp -s - "$WORK/fresh.stdin.control-plane-idempotency" \
+  && ok "the control plane's Idempotency hash key comes from the file" || bad "control-plane-idempotency differs from the file"
+grep -q 'create secret generic control-plane-idempotency -n titan-dev' "$WORK/fresh.kubectl" \
+  && ok "in titan-dev, where the control plane reads it" || bad "wrong namespace or name for control-plane-idempotency"
 printf 'CP_INTERNAL_TOKEN=%s\n' "$token" | cmp -s - "$WORK/fresh.stdin.worker-secrets" \
   && ok "the worker gets the same internal token" || bad "worker-secrets differs from the file"
 printf 'admin-password=%s\n' "$(value "$FILE" KEYCLOAK_ADMIN_PASSWORD)" | cmp -s - "$WORK/fresh.stdin.keycloak-admin-secret" \
@@ -192,6 +196,9 @@ for name in titan-db-credentials control-plane-secrets worker-secrets keycloak-a
   [ -e "$WORK/running.stdin.$name" ] && over="$over $name"
 done
 [ -z "$over" ] && ok "no generated Secret is applied over the cluster's own values" || bad "applied over the cluster:$over"
+# Added after the cluster's other secrets: applied on every run from the file, so a running cluster gets it too.
+printf 'Idempotency__HashKey=%s\n' "$(value "$FILE" IDEMPOTENCY_HASH_KEY)" | cmp -s - "$WORK/running.stdin.control-plane-idempotency" \
+  && ok "a running cluster gets the Idempotency hash key from the file" || bad "control-plane-idempotency was not applied on a running cluster"
 grep -q 'get secret.*-o \|get secret.*jsonpath\|get secret.*yaml\|get secret.*json' "$WORK/running.kubectl" \
   && bad "the script reads a Secret's content" || ok "the script never reads a Secret's content"
 printf 'password=admin-test-local-only\n' | cmp -s - "$WORK/running.stdin.admin-test-credentials" \
