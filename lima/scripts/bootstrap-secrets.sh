@@ -10,8 +10,8 @@
 # - The S3 CA and SeaweedFS's server certificate (name lima-titan-k3s.internal), made once with openssl next to secrets.env:
 #   the CA's key never enters the cluster, and a rebuilt cluster trusts the same CA. Incus trusts it through titan-incus's
 #   system store (lima/scripts/trust-s3-ca.sh); barman, the control plane and the worker through Secret s3-ca.
-# - The Secrets made from those values are applied only when the cluster has none yet, except the ones listed below as
-#   re-applied every run: a running cluster keeps its own values, and the script never reads a Secret back.
+# - Those Secrets are applied only when the cluster has none yet: a running cluster keeps its own values, and the script
+#   never reads a Secret back.
 # - The S3 key pair as SeaweedFS's identity and as three Secrets with the same pair (CNPG reads one, the control plane one,
 #   the worker one for Incus's uploads: CNPG is in another namespace, and each reader has its own key names); re-applied
 #   every run.
