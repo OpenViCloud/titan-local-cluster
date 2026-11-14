@@ -36,7 +36,9 @@ def wanted(path):
         entry = ENTRY.match(rest)
         if not entry:
             raise ValueError(f"provision entry not of the form '- mode:, file:, url:': {rest.splitlines()[0]!r}")
-        entries.append((entry.group(1), (path.parent / entry.group(2)).read_text()))
+        # Bytes as they are: Lima copies the file unchanged, and read_text() would turn a CRLF script into LF, so it
+        # would never match and every up.sh would stop the VM.
+        entries.append((entry.group(1), (path.parent / entry.group(2)).read_bytes().decode()))
         rest = rest[entry.end():]
     return entries
 

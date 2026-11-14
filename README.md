@@ -141,6 +141,7 @@ runs.
 python3 tests/render_test.py          # kubectl and ruby
 python3 tests/test_lima_files.py      # ruby
 python3 tests/test_vm_size.py         # ruby
+python3 tests/test_vm_provision.py    # ruby
 python3 tests/test_pull_images.py
 python3 tests/test_keycloak_theme.py && python3 scripts/keycloak-theme.py --check
 bash tests/sweeper_test.sh            # network and gh signed in (titan-ops's template on GitHub)
