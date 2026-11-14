@@ -2,7 +2,8 @@
 # Puts the local cluster's secrets into titan-k3s (docs/topology.md#secrets).
 # Needs no vault and no token: the repositories and the images are public.
 # - ~/.config/titan-local-cluster/secrets.env (mode 600) keeps every value generated once: the DB password, the internal
-#   token, the Keycloak admin and the two beta-user passwords, the assistant's DB password. The first run writes them; later runs read
+#   token, the Keycloak admin and the two beta-user passwords, the assistant's DB password, the control plane's
+#   Idempotency hash key. The first run writes them; later runs read
 #   them and only add a key a newer script needs. The file outlives the VM, so a cluster rebuilt with `limactl delete`
 #   gets the same values, which the database restored from a backup already holds. It also keeps the key pair of dev's S3
 #   (SeaweedFS, gitops/seaweedfs), generated the same way.
@@ -22,6 +23,7 @@
 #   Secret carries NO_KEY_VALUE, the pod starts and is Healthy (a stranger's cluster gets ready, L-22), every model
 #   refuses the value, so every answer is the assistant's busy text. The script never generates a key; one written into
 #   secrets.env by hand as OPENROUTER_API_KEY is used instead.
+# - control-plane-idempotency, the control plane's Idempotency hash key from secrets.env, re-applied every run.
 # Values go through pipes and the file only: no command-line argument, nothing printed.
 # Needs: titan-k3s running.
 set -euo pipefail
@@ -217,7 +219,8 @@ unset chat_db_password openrouter_key
 
 # The server key of the control plane's Idempotency request hash (titan-ops architecture/http-contract.md#idempotency-key):
 # a Secret of its own, applied on every run from the file, so a cluster made before the key existed gets it too. The
-# value never changes after the first run. A running control plane reads it only after a restart.
+# value stays as long as secrets.env does; a lost file means a new key, which only makes Idempotency-Keys of the last
+# 24 hours answer 422 IDEMPOTENCY_KEY_REUSED. A running control plane reads it only after a restart.
 printf 'Idempotency__HashKey=%s\n' "$(from_file IDEMPOTENCY_HASH_KEY)" | apply_secret titan-dev control-plane-idempotency
 
 # ── Generated once, applied when the cluster has none ─────────────────────────
