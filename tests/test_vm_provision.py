@@ -60,6 +60,12 @@ class VmProvisionTest(unittest.TestCase):
                            {"k3s.sh": K3S, "user.sh": "new\n"})
         self.assertEqual((code, [set_value(line) for line in out]), (0, [(1, "new\n")]))
 
+    def test_a_crlf_script_the_vm_already_runs_needs_nothing(self):
+        crlf = "#!/bin/bash\r\necho k3s\r\n"
+        self.assertEqual(run(FILE, [{"mode": "system", "script": crlf}], {"k3s.sh": crlf}), (0, [], ""))
+        code, out, _ = run(FILE, [{"mode": "system", "script": "#!/bin/bash\necho k3s\n"}], {"k3s.sh": crlf})
+        self.assertEqual((code, [set_value(line) for line in out]), (0, [(0, crlf)]))
+
     def test_a_blank_line_in_the_files_provision_stops(self):
         two = FILE.replace("copyToHost:", "\n- mode: user\n  file:\n    url: provision/k3s.sh\ncopyToHost:")
         code, out, err = run(two, [{"mode": "system", "script": K3S}, {"mode": "user", "script": K3S}])
