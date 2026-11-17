@@ -112,7 +112,7 @@ macOS (Apple M3 · 8 cores · 16 GB RAM · 133 GB free disk)
 Ubuntu x86_64 (host)
 │
 ├── Lima VM "titan-k3s"    (qemu · Ubuntu 24.04 amd64 · 3 CPU · 6 GiB · 30 GiB)
-└── Lima VM "titan-incus"  (qemu · Debian 13 amd64 · 4 CPU · 7 GiB · 60 GiB · customer VMs are nested KVM)
+└── Lima VM "titan-incus"  (qemu · Debian 13 amd64 · 4 CPU · 4 GiB · 60 GiB · customer VMs are nested KVM)
 ```
 
 - No `user-v2`: QEMU 10.2.1 aborts under load on its `-netdev socket` NIC (`net_socket_send` passes `-1` into `net_fill_rstate` when `recv()` returns `EWOULDBLOCK` ⇒ `assert(size == 0)`). Control run: the same VM with `user-v2` aborts on its first download; without `user-v2` it downloads 3×625 MB with no error.
@@ -137,7 +137,7 @@ Ubuntu x86_64 (host)
 |---|---|---|
 | Config source | `lab-incus-lab.yaml` in the INCUS-1 evidence, plus steps installed iteration by iteration | Lima file + cloud-init in this repository (`lima/`) |
 | Role | Lab only: records REST responses of a real Incus | Titan's cluster `local` **and** the lab |
-| RAM | 8 GiB | 7 GiB |
+| RAM | 8 GiB | 7 GiB on the Mac, 4 GiB on Ubuntu ([why](#ram-2026-11-17)) |
 
 **Rules**
 - Incus is installed from **the same 7.0 LTS line** as `incus-lab` (server 7.0.1). The lab recordings (`OpenViCloud/titan-incus-worker:incus/provider/testdata/`) still compare.
@@ -168,7 +168,7 @@ Measured 2026-10-08 on the OCI cluster before prd (`kubectl top`):
 | macOS + Tôn Chủ's applications | ≈ 5 GB |
 | Docker Desktop (holding 3.8 GiB) | 0: off while the cluster runs (L-6) |
 | `titan-k3s` (after R-2; 3 GiB until 2026-10-25, 4 GiB until 2026-11-13: the second control plane and chat pods, the metrics tier and the regression runner ran it out of RAM, [below](#ram-2026-11-13)) | 6 GiB, 3 CPU |
-| `titan-incus` (OS + Incus + OVN ≈ 1 GiB, the rest for customers) | 7 GiB |
+| `titan-incus` (OS + Incus + OVN ≈ 1 GiB, the rest for customers; 4 GiB on Ubuntu, [below](#ram-2026-11-17)) | 7 GiB |
 | **Total** | ≈ 19 GB, more than the Mac's 16 GB: macOS swaps when both VMs run at their ceilings (this table is measured on the Mac before 2026-11-13; the Mac is not measured at 6 GiB; Ubuntu below) |
 
 Lima's `memory` is a **ceiling**. Measured S-0 on `titan-incus` (phys_footprint of the Virtualization process):
@@ -203,7 +203,16 @@ Measured 2026-11-13 on the Ubuntu host (15407 MiB): `sudo k3s crictl stats -o js
 | 2 CPU · 4 GiB, modules `network`, `firewall`, `cleanup` of a release's dev pass | 3897 MiB (`titan-incus` 2219 MiB, read between 05:40 and 06:00Z, after the pass) | 145 containers 2141 MiB (Keycloak 444, control plane 241 + 197, Postgres 238, ArgoCD application controller 211, SeaweedFS 197, metrics tier 191), k3s-server 547 MiB; sampled 05:21–05:35Z while the runner ran its modules: available down to 45 MiB, memory PSI `full` avg10 up to 34.77 %, load up to 49.2; `network`, its rerun, `firewall` and a second `cleanup` failed on `fetch failed` or a sign-in page that did not load, and before that the probes of the worker, chat and admin portal pods timed out (05:18:33–05:18:57Z, read with `kubectl get events -n titan-dev` at 05:19Z) | 6688 MiB available, swap 2085 MiB used |
 | 3 CPU · 6 GiB, three passes of `network`, `firewall`, `network-lifecycle`, `cleanup` (`network` once, `network-lifecycle` in the third) | 6148 MiB (`titan-incus` 1359 MiB) | 158 containers 2104 MiB, k3s-server 634 MiB; over three passes available at least 2304 MiB, memory PSI `full` avg10 ≤ 0.01 %, load ≤ 6.2; `network`, `network-lifecycle` and `cleanup` passed, `firewall` too once its activity check counted only the run's own rows (a fix of the spec in `OpenViCloud/titan-regression`); `titan-db-1` did not restart | 5361 MiB available, swap 2965 MiB used |
 
-- Not measured: the Mac at 6 GiB; `titan-incus` while a regression pass runs its VMs; what the host swapped out.
+- Not measured: the Mac at 6 GiB; what the host swapped out.
+
+<a id="ram-2026-11-17"></a>
+Measured 2026-11-13 to 2026-11-17 on the Ubuntu host (15407 MiB), ceilings 6 GiB + 7 GiB:
+- A release's dev pass on 2026-11-16 (19 modules, 23:35–00:43Z, `free -m` every 30 s): host available down to 1191 MiB, swap used 3942 ⇒ 4095 of 4095 MiB.
+- 2026-11-17T03:01:36Z: the host's kernel OOM-killed the QEMU of one VM (`anon-rss` 6070920 kB). Both QEMUs ran in the systemd scope of the desktop app that had run `up.sh`, so systemd stopped that whole scope, and `limactl list` showed both VMs stopped afterwards (`journalctl`: `The kernel OOM killer killed some processes in this unit`, then `Failed with result 'oom-kill'` at 03:03:05Z).
+- After `up.sh` brought both back, read between the boot at 05:01:07Z and the panic below (`ps -o rss` of the two QEMUs, `free -m`, `/proc/meminfo` in `titan-k3s`): QEMU RSS 5650 MiB (`titan-k3s`) and 5478 MiB (`titan-incus`), host available 575 MiB, swap 126 MiB free; in `titan-k3s` 2.6 GiB anon and 2.6 GiB page cache. `titan-incus`'s kernel panicked 180 s after that boot (`Kernel panic - not syncing: Host injected async #PF in kernel mode`, its `serial.log`): the host had swapped the guest's memory out.
+- QEMU of `titan-incus` peaked at 2756 MiB over a whole dev pass on 2026-11-13 (19 modules with their VMs).
+
+So `titan-incus` on Ubuntu runs at 4 GiB from 2026-11-17 (`lima/ubuntu/titan-incus.yaml`); the Mac's file keeps 7 GiB, not measured there. With the table's 1 GiB for the OS, Incus and OVN, at most about 3 GiB is left for customer VMs on Ubuntu; a whole dev pass on 2026-11-13 peaked at 2756 MiB of QEMU (bullet above), under the 4096 MiB ceiling. That is one `s` VM at its full 2 GiB, or more that stay idle (about 185 MiB each, A-1 above); an `m` (4 GiB) cannot run at full size. Not measured yet: a dev pass at 4 GiB.
 
 **Cutting RAM (L-13)**
 - **R-1:** when unused, `limactl stop` both VMs. RAM goes to 0. Starting again takes about 1–2 minutes.
@@ -220,11 +229,11 @@ Measured 2026-11-13 on the Ubuntu host (15407 MiB): `sudo k3s crictl stats -o js
 Customer VMs by offering (`OpenViCloud/titan-control-plane:Titan.Infrastructure/Persistence/VmOfferingConfiguration.cs` `HasData`): `s` 2 GiB · `m` 4 GiB · `l` 8 GiB · `xl` 16 GiB.
 
 **Rules**
-- About 6 GiB is left for customers: **3 VMs `s`** at once, or **1 `m` + 1 `s`**.
+- About 6 GiB is left for customers on the Mac (7 GiB): **3 VMs `s`** at once, or **1 `m` + 1 `s`**. On Ubuntu (4 GiB) at most about 3 GiB: **1 `s`** at full size, more only while idle; no `m` ([above](#ram-2026-11-17)).
 - Templates that need `l` (`Alma-9-DB`, `Rocky-9-App`) **cannot run** on local.
-- Tenant quota on local is `MaxVms = 3`.
+- Tenant quota on local is `MaxVms = 3`. On Ubuntu that admits more than fits at full size.
 
-**Why.** When RAM runs out, macOS swaps. Then everything slows down, Tôn Chủ's own work session included.
+**Why.** When RAM runs out, macOS swaps. Then everything slows down, Tôn Chủ's own work session included. On Ubuntu the host OOM-kills a VM, or swaps the guest out until its kernel panics ([above](#ram-2026-11-17)).
 
 <a id="spike"></a>
 ## Spike: measure first, build after
@@ -360,7 +369,7 @@ Every question of the design was answered by Tôn Chủ on 2026-10-08 (L-1…L-1
 | Why the first reconcile after a push **without** a refresh sometimes reads the old commit ([§dev-sync](#dev-sync)): no control run yet; with a refresh it was not seen (one measurement, 2026-10-22) | Eos |
 | ~~`GOMEMLIMIT=512MiB` keeps k3s around 640 MiB over **many hours** (measured up to 12 minutes only)~~ — it kept RAM near there (Go's runtime memory 688.9 MB after 3 days), but the GC ran nonstop under it (measured 2026-11-13, [§ram-budget](#ram-budget)) | — |
 | `GOMEMLIMIT=1GiB` keeps k3s's GC and node CPU low over **days**, as the workload grows; Go's memory beyond the heap (fragmentation, stacks) leaves the default GC target under the limit; measured over 19 hours only (2026-11-14, [§ram-budget](#ram-budget)) | Eos |
-| **Accepted risk:** both VMs at their ceilings (6 + 7 GiB) on the Ubuntu host of 15 GB, or the 16 GB Mac, swap the host ([§ram-budget](#ram-budget)). Next trigger: the host swapping while a regression pass runs, or `titan-incus` near its ceiling with the regression's VMs (not measured yet) ⇒ revisit the budget | Eos |
+| **Accepted risk:** both VMs at their ceilings (6 + 7 GiB) on the 16 GB Mac swap the host ([§ram-budget](#ram-budget)). Next trigger: the Mac swapping while a regression pass runs ⇒ revisit its budget. On Ubuntu the trigger came 2026-11-17 (host OOM, then a guest kernel panic): `titan-incus` went to 4 GiB ([§ram-budget](#ram-budget)); a dev pass at 4 GiB is not measured yet | Eos |
 
 Measured in the LOCAL-CLUSTER iteration:
 - `titan-k3s` (3 GiB then; 6 GiB now) runs every app with no pod OOM-killed ([§ram-budget](#ram-budget)).
