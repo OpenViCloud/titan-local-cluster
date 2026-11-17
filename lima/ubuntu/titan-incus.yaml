@@ -6,7 +6,9 @@
 base: template:_images/debian-13
 vmType: qemu
 cpus: 4
-memory: 7GiB
+# 4 GiB on the 15 GB Ubuntu host, not the Mac's 7: with 7 the two VMs' ceilings left the host no room, it swapped
+# the guest out and the guest's kernel panicked (docs/topology.md#ram-budget).
+memory: 4GiB
 disk: 60GiB
 mounts: []
 containerd:

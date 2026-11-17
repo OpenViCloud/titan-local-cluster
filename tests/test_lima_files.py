@@ -5,7 +5,8 @@ branches of lima/scripts/host-os.sh, which lima/scripts/up.sh asks with `uname -
 
 What differs on Ubuntu (docs/network.md#vm-to-vm):
 no user-v2 network, so the Incus API and SeaweedFS's NodePort reach titan-k3s and titan-incus through the host's
-127.0.0.1, and Lima's host resolver answers dev's S3 name.
+127.0.0.1, and Lima's host resolver answers dev's S3 name. titan-incus's memory too: 4 GiB on the 15 GB Ubuntu host,
+7 GiB on the Mac (docs/topology.md#ram-2026-11-17).
 
 Run:  python3 tests/test_lima_files.py     (needs ruby: python's stdlib reads no YAML)
 """
@@ -65,6 +66,8 @@ class Layout(unittest.TestCase):
         for name in VMS:
             mac, ubuntu = vm("macos", name), vm("ubuntu", name)
             for key in ("cpus", "memory", "disk", "mounts"):
+                if (name, key) == ("titan-incus", "memory"):
+                    continue
                 self.assertEqual(mac.get(key), ubuntu.get(key), (name, key))
 
     def test_k3s_has_room_for_the_regression_runner(self):
@@ -84,6 +87,12 @@ class MacOS(unittest.TestCase):
 
 
 class Ubuntu(unittest.TestCase):
+    def test_incus_leaves_the_15_gb_host_room(self):
+        # At 7 GiB beside titan-k3s's 6 the host swapped the guest out and its kernel panicked
+        # (docs/topology.md#ram-2026-11-17).
+        self.assertEqual(vm("ubuntu", "titan-incus")["memory"], "4GiB")
+        self.assertEqual(vm("macos", "titan-incus")["memory"], "7GiB")
+
     def test_qemu_without_user_v2(self):
         # QEMU 10.2 aborts under load on user-v2's socket NIC (net_socket_send passes -1 on EWOULDBLOCK).
         for name in VMS:
