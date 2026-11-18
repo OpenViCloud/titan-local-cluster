@@ -54,7 +54,8 @@ for vm in titan-incus titan-k3s; do
     limactl list --json "$vm" | python3 "$here/scripts/ports-free.py"
     # Lima stops waiting for a first boot's provision after about 10 minutes, whatever --timeout says, and exits 1 with the
     # VM Running; the first provision of titan-incus (apt installs Incus and OVN) measured 689 s.
-    if ! limactl start "$vm" --tty=false; then
+    # In a scope of its own on Ubuntu, not the caller's (host-os.sh own_scope).
+    if ! own_scope "$(uname -s)" "$vm" limactl start "$vm" --tty=false; then
       [ "$(limactl list --format '{{.Status}}' "$vm")" = "Running" ] || exit 1
       echo "$vm is still provisioning; waiting for it (up to 30 minutes)."
     fi

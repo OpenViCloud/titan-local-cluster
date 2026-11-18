@@ -23,3 +23,16 @@ incus_endpoint() {
     *) return 1 ;;
   esac
 }
+
+# own_scope <uname -s> <vm> <command...>: runs the command, on Linux in a systemd user scope of its own (lima-<vm>-<time>),
+# so the QEMU that `limactl start` leaves behind is not in the caller's scope (a desktop app's, a terminal's): systemd
+# stops a whole scope when the kernel OOM-kills one process of it (docs/topology.md#ram-2026-11-17). macOS runs it as is.
+# The command's exit code is the function's.
+own_scope() {
+  local os=$1 vm=$2
+  shift 2
+  case "$os" in
+    Linux) systemd-run --user --scope --quiet --collect --unit="lima-$vm-$(date +%s)" "$@" ;;
+    *) "$@" ;;
+  esac
+}
