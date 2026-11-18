@@ -102,7 +102,7 @@ fi
 (source "$HERE/../scripts/host-os.sh"; FAKE_LOG="$WORK/darwin.log" PATH="$WORK/bin:$PATH" own_scope Darwin titan-k3s true)
 [ ! -s "$WORK/darwin.log" ] && ok "macOS: the command runs without systemd-run" || bad "systemd-run on macOS: $(cat "$WORK/darwin.log")"
 (source "$HERE/../scripts/host-os.sh"; FAKE_LOG="$WORK/rc.log" PATH="$WORK/bin:$PATH" own_scope Linux titan-k3s false)
-[ $? -eq 1 ] && ok "Linux: the command's exit code comes back through the scope" || bad "exit code lost in the scope"
+[ $? -eq 1 ] && grep -q '^systemd-run ' "$WORK/rc.log" && ok "Linux: the command runs in systemd-run and its exit code comes back" || bad "exit code lost in the scope, or no systemd-run: $(cat "$WORK/rc.log" 2>/dev/null)"
 
 run_up 0 "" "titan-incus titan-k3s"
 grep -q '^start ' "$WORK/log" && bad "a running VM was started" || ok "run again on running VMs: none is started"
