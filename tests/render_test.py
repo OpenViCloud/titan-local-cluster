@@ -840,6 +840,35 @@ class RunnerTrustsExtraCa(unittest.TestCase):
         self.assertLess(run_sh.index(guard), run_sh.index("npm install"))
 
 
+class WorkerTrustsExtraCa(unittest.TestCase):
+    """Behind a TLS-inspecting proxy the worker cannot download a template's image (x509: certificate signed by unknown
+    authority): it trusts only its image's store. Dev's command pods mount ConfigMap titan-extra-ca, optional, and Go reads
+    SSL_CERT_DIR besides its bundle file; without the ConfigMap the folder is empty and nothing changes. Prd's base gets none
+    (docs/topology.md#extra-ca)."""
+
+    def test_dev_command_pods_mount_the_ca_configmap_optional_and_read_only(self):
+        pod = first(render("incus-worker"), "Deployment", "incus-worker")["spec"]["template"]["spec"]
+        volumes = [v for v in pod["volumes"] if v["name"] == "extra-ca"]
+        self.assertEqual(volumes, [{"name": "extra-ca", "configMap": {"name": "titan-extra-ca", "optional": True}}])
+        container = pod["containers"][0]
+        mounts = [m for m in container["volumeMounts"] if m["name"] == "extra-ca"]
+        self.assertEqual(mounts, [{"name": "extra-ca", "mountPath": "/extra-ca", "readOnly": True}])
+        env = {e["name"]: e.get("value") for e in container["env"]}
+        self.assertEqual(env["SSL_CERT_DIR"], "/etc/ssl/certs:/extra-ca")
+
+    def test_a_patch_keeps_the_workers_own_volumes_and_env(self):
+        container = first(render("incus-worker"), "Deployment", "incus-worker")["spec"]["template"]["spec"]["containers"][0]
+        base = first(render("incus-worker", root=BASE), "Deployment", "incus-worker")["spec"]["template"]["spec"]["containers"][0]
+        self.assertLessEqual({e["name"] for e in base["env"]}, {e["name"] for e in container["env"]})
+        self.assertLessEqual({m["name"] for m in base.get("volumeMounts", [])}, {m["name"] for m in container["volumeMounts"]})
+
+    def test_prd_base_does_not_mount_it(self):
+        for deployment in [o for o in render("incus-worker", root=BASE) if o["kind"] == "Deployment"]:
+            pod = deployment["spec"]["template"]["spec"]
+            self.assertNotIn("extra-ca", [v["name"] for v in pod.get("volumes", [])])
+            self.assertNotIn("SSL_CERT_DIR", [e["name"] for c in pod["containers"] for e in c.get("env", [])])
+
+
 class NoFakeService(unittest.TestCase):
     def test_reads_the_applications(self):
         names = [name for _, name, _ in applications()]

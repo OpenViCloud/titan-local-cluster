@@ -1,0 +1,26 @@
+# Behind a TLS-inspecting proxy the worker cannot download a template's image (x509: certificate signed by unknown authority,
+# measured 2026-11-18): it trusts only its image's store. lima/scripts/trust-extra-ca.sh writes the host's CA into ConfigMap
+# titan-extra-ca of titan-dev; optional, so a host without the proxy gets an empty folder and nothing changes. Go reads its
+# bundle file and then every folder of SSL_CERT_DIR, which replaces its default folders: /etc/ssl/certs stays first for the S3
+# CA of patch-backup-bucket.yaml (docs/topology.md#extra-ca). Only the command pods download; the inventory pod reads Incus.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: incus-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: incus-worker
+          env:
+            - name: SSL_CERT_DIR
+              value: /etc/ssl/certs:/extra-ca
+          volumeMounts:
+            - name: extra-ca
+              mountPath: /extra-ca
+              readOnly: true
+      volumes:
+        - name: extra-ca
+          configMap:
+            name: titan-extra-ca
+            optional: true
