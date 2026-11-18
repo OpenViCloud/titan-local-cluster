@@ -66,10 +66,17 @@ print(json.dumps({"name": sys.argv[2], "cpus": cpus, "memory": gib * 1024 ** 3,
     esac ;;
 esac
 FAKE
+# systemd-run --scope runs the command after its options in a new scope and returns its exit code; logged, then run.
+cat > "$WORK/bin/systemd-run" <<'FAKE'
+#!/bin/bash
+printf 'systemd-run %s\n' "$*" >> "$FAKE_LOG"
+while [ "${1#--}" != "$1" ]; do shift; done
+exec "$@"
+FAKE
 printf '#!/bin/bash\nexit 1\n' > "$WORK/bin/docker"
 # Stops up.sh in the secrets bootstrap, at its first kubectl; what it writes before that stays in the test's HOME.
 printf '#!/bin/bash\nexit 1\n' > "$WORK/bin/kubectl"
-chmod +x "$WORK/bin/limactl" "$WORK/bin/docker" "$WORK/bin/kubectl"
+chmod +x "$WORK/bin/limactl" "$WORK/bin/systemd-run" "$WORK/bin/docker" "$WORK/bin/kubectl"
 
 run_up() {  # run_up START_RC UNPROVISIONED_VMS [RUNNING_VMS] [START_STOPS] [SMALL_VMS] [OLD_PROVISION_VMS]
   : > "$WORK/log"; rm -f "$WORK"/*.running "$WORK"/*.edited "$WORK"/*.edit
@@ -83,6 +90,19 @@ run_up 1 ""
 grep -q '^start titan-incus' "$WORK/log" && grep -q '^start titan-k3s' "$WORK/log" && ok "stopped VMs are started" || bad "no start: $(cat "$WORK/log")"
 grep -q 'cloud-init status --wait' "$WORK/log" && ok "start exits 1, VM Running: up.sh waits for cloud-init" || bad "no wait: $(cat "$WORK/log")"
 [ "$(provisioned titan-incus)" -ge 1 ] && [ "$(provisioned titan-k3s)" -ge 1 ] && ok "both VMs reach the provision check" || bad "stopped early: $OUT"
+
+# On Ubuntu each QEMU starts in a systemd scope of its own, not the caller's: an OOM kill stops a whole scope
+# (docs/topology.md#ram-2026-11-17). macOS has no systemd: limactl starts directly.
+if [ "$(uname -s)" = Linux ]; then
+  for v in titan-incus titan-k3s; do
+    grep -Eq "^systemd-run --user --scope (--[^ ]+ )*limactl start $v --tty=false$" "$WORK/log" \
+      && ok "$v starts in a scope of its own" || bad "$v not in its own scope: $(cat "$WORK/log")"
+  done
+fi
+(source "$HERE/../scripts/host-os.sh"; FAKE_LOG="$WORK/darwin.log" PATH="$WORK/bin:$PATH" own_scope Darwin titan-k3s true)
+[ ! -s "$WORK/darwin.log" ] && ok "macOS: the command runs without systemd-run" || bad "systemd-run on macOS: $(cat "$WORK/darwin.log")"
+(source "$HERE/../scripts/host-os.sh"; FAKE_LOG="$WORK/rc.log" PATH="$WORK/bin:$PATH" own_scope Linux titan-k3s false)
+[ $? -eq 1 ] && ok "Linux: the command's exit code comes back through the scope" || bad "exit code lost in the scope"
 
 run_up 0 "" "titan-incus titan-k3s"
 grep -q '^start ' "$WORK/log" && bad "a running VM was started" || ok "run again on running VMs: none is started"

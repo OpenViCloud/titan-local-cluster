@@ -214,6 +214,8 @@ Measured 2026-11-13 to 2026-11-17 on the Ubuntu host (15407 MiB), ceilings 6 GiB
 
 So `titan-incus` on Ubuntu runs at 4 GiB from 2026-11-17 (`lima/ubuntu/titan-incus.yaml`); the Mac's file keeps 7 GiB, not measured there. With the table's 1 GiB for the OS, Incus and OVN, at most about 3 GiB is left for customer VMs on Ubuntu; a whole dev pass on 2026-11-13 peaked at 2756 MiB of QEMU (bullet above), under the 4096 MiB ceiling. That is one `s` VM at its full 2 GiB, or more that stay idle (about 185 MiB each, A-1 above); an `m` (4 GiB) cannot run at full size. Not measured yet: a dev pass at 4 GiB.
 
+On Ubuntu `up.sh` starts each VM in a systemd user scope of its own (`lima-<vm>-<time>`, `own_scope` in `lima/scripts/host-os.sh`), so an OOM kill of one QEMU stops neither the other VM nor the program that ran `up.sh`. A VM already running stays in the scope it started in until it is stopped and started again: `cat /proc/<pid of its QEMU>/cgroup` names it.
+
 **Cutting RAM (L-13)**
 - **R-1:** when unused, `limactl stop` both VMs. RAM goes to 0. Starting again takes about 1–2 minutes.
 - **R-2:** trim the workload, patched in dev's overlay, prd unchanged:
