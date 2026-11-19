@@ -344,8 +344,9 @@ class WorkerRoles(unittest.TestCase):
 
 
 class WorkerRestore(unittest.TestCase):
-    """components/restore stops every worker loop and runs the restore once as a Job of the same image: the reconciler
-    must not see the reinstalled, empty host before the restore, or it records every VM lost and Titan forgets which ran
+    """components/workers-stopped stops every worker loop from the loss of the host; components/restore, added once the
+    host is reinstalled, runs the restore once as a Job of the same image. The reconciler must not see the reinstalled,
+    empty host before the restore, or it records every VM lost and Titan forgets which ran
     (titan-ops features/backup/design.md#cluster-restore)."""
 
     def overlay_with(self, *components):
@@ -360,7 +361,7 @@ class WorkerRestore(unittest.TestCase):
         return {e["name"]: e.get("value") for e in container.get("env", [])}
 
     def test_the_restore_job_runs_the_restore_role_once_with_the_workers_secrets_and_bucket_key(self):
-        objects = self.overlay_with("restore")
+        objects = self.overlay_with("workers-stopped", "restore")
         job = first(objects, "Job", "incus-worker-restore")["spec"]
         pod = job["template"]["spec"]
         container = pod["containers"][0]
@@ -374,12 +375,13 @@ class WorkerRestore(unittest.TestCase):
                          ["worker-secrets", "incus-worker-backup-credentials"])
         self.assertNotIn("optional", container["envFrom"][1]["secretRef"])
 
-    def test_the_restore_stops_the_single_worker(self):
-        objects = self.overlay_with("restore")
+    def test_workers_stopped_stops_the_single_worker_and_runs_no_job(self):
+        objects = self.overlay_with("workers-stopped")
         self.assertEqual(first(objects, "Deployment", "incus-worker")["spec"]["replicas"], 0)
+        self.assertEqual([o for o in objects if o["kind"] == "Job"], [])
 
-    def test_the_restore_stops_the_command_pods_and_the_inventory_pod(self):
-        objects = self.overlay_with("roles", "restore")
+    def test_workers_stopped_stops_the_command_pods_and_the_inventory_pod(self):
+        objects = self.overlay_with("roles", "workers-stopped")
         self.assertEqual(first(objects, "Deployment", "incus-worker")["spec"]["replicas"], 0)
         self.assertEqual(first(objects, "Deployment", "incus-worker-inventory")["spec"]["replicas"], 0)
 
