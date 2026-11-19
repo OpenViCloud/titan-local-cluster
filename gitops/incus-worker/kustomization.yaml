@@ -14,6 +14,9 @@ resources:
 components:
   - ../../base/incus-worker/components/roles
   - components/two-command-pods
+  # Cluster restore re-drill of titan-incus (titan-ops infra/oci/runbook.md#restore-cluster): every worker loop stopped
+  # from the host loss until the restore Job ends.
+  - ../../base/incus-worker/components/workers-stopped
 
 patches:
   - path: patch-backup-bucket.yaml
