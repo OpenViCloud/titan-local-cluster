@@ -17,10 +17,12 @@ components:
   # Cluster restore re-drill of titan-incus (titan-ops infra/oci/runbook.md#restore-cluster): every worker loop stopped
   # from the host loss until the restore Job ends.
   - ../../base/incus-worker/components/workers-stopped
+  - ../../base/incus-worker/components/restore
 
 patches:
   - path: patch-backup-bucket.yaml
   - path: patch-extra-ca.yaml
+  - path: patch-restore.yaml
 
 # Dev's own image: a commit OpenViCloud/titan-incus-worker published from main. Prd's name and tag move only by promotion in
 # titan-ops (titan-ops architecture/platform-infra.md#gitops-flow).
