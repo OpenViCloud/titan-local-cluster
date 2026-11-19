@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Stops every worker loop for as long as it is in an overlay: the first step of a cluster restore (titan-ops
+# features/backup/design.md#cluster-restore), added as soon as the Incus host is lost or its reinstall starts. A
+# reconciler that read the empty host before the restore would record every VM lost, and Titan would forget which ones
+# ran. Remove it, with components/restore, once the restore Job succeeded. Not for an overlay with
+# components/autoscale: its HPA keeps the command pods' count above zero.
+patches:
+  - target:
+      kind: Deployment
+      name: incus-worker
+    patch: |-
+      - op: add
+        path: /spec/replicas
+        value: 0
+  - target:
+      kind: Deployment
+      name: incus-worker-inventory
+    patch: |-
+      - op: add
+        path: /spec/replicas
+        value: 0

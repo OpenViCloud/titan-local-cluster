@@ -187,5 +187,15 @@ for ns in titan-auth-dev titan-dev; do
   [ "$RC" -ne 0 ] && printf '%s' "$OUT" | grep -q 'forbidden' && ok "stops and shows kubectl's error" || bad "rc=$RC $OUT"
 done
 
+echo "one VM named: a first provision that failed behind the proxy (up.sh trusts the CA in that VM, then boots it again)"
+rm -rf "$WORK/vm.log" "$WORK/vm/titan-incus/"* "$WORK/vm/titan-k3s/"* "$WORK/vm/argocd-tls.json" "$WORK/vm/"extra-ca-cm-*
+printf '%s\n' "$CERT" > "$CA"
+OUT=$(env HOME="$WORK/home" PATH="$WORK/bin:$PATH" FAKE_VM="$WORK/vm" bash "$SCRIPT" titan-incus 2>&1 </dev/null)
+RC=$?
+[ "$RC" -eq 0 ] && ok "exit 0" || bad "exit $RC: $OUT"
+[ -s "$WORK/vm/titan-incus/titan-extra-ca.crt" ] && ok "the named VM trusts the CA" || bad "titan-incus did not get the CA: $OUT"
+[ -z "$(ls "$WORK/vm/titan-k3s/")" ] && ok "the other VM is not touched (it may not exist yet)" || bad "titan-k3s was touched"
+grep -q '^kubectl' "$WORK/vm.log" && bad "kubectl ran: $(grep '^kubectl' "$WORK/vm.log")" || ok "neither ArgoCD nor a ConfigMap is touched"
+
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
