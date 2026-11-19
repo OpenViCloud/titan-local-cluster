@@ -29,4 +29,4 @@ images:
   # Matched by the name base/incus-worker gives the image (scripts/pull-images.py stops on any other).
   - name: incus-worker
     newName: ghcr.io/openvicloud/titan-incus-worker
-    newTag: "c1594d96ac3a2b45144430ea56f6a12521eb83d9"
+    newTag: "82ce8079662e89265b8fefe23bf7527757f604ae"
