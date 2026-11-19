@@ -14,8 +14,11 @@
 # (a new titan-k3s) ⇒ only the VMs change: up.sh runs the script again once ArgoCD's CRD is there. Behind such a proxy that
 # never happens on a new titan-k3s: its install job cannot fetch the chart (docs/topology.md#extra-ca). Namespaces titan-auth-dev
 # and titan-dev not there yet ⇒ their ConfigMaps wait for up.sh's run after bootstrap-secrets.sh.
-# With VM names as arguments, only those VMs get the CA and nothing else runs: up.sh does that for a VM whose first
-# provision failed behind the proxy, before it boots that VM again (docs/topology.md#extra-ca).
+# With VM names as arguments, only those VMs get the CA and nothing else runs, and the unit is never restarted here:
+# up.sh does that for a VM whose first provision failed behind the proxy, before it boots that VM again, so a fresh
+# service reads the store at start; Incus or k3s may not even be installed yet on that VM (docs/topology.md#extra-ca).
+# With no arguments, a VM is restarted only when its unit is installed: a maintenance run on a VM mid-provision must
+# not fail on "Unit not found" either.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(cd "$here/.." && pwd)
@@ -51,19 +54,43 @@ put() {
   fi
 }
 
+# unit is empty for a VM this script does not know how to restart (future vms=("$@") names).
+unit_of() {
+  case "$1" in
+    titan-incus) echo incus ;;
+    titan-k3s) echo k3s ;;
+  esac
+}
+
+# False for a unit file not installed yet: a VM named as an argument (below) may be rebooting into a provision that
+# never reached `apt install incus`/k3s's installer, and `systemctl restart` on a unit systemd has never heard of
+# fails the whole script (docs/topology.md#extra-ca).
+unit_installed() {
+  local vm=$1 unit=$2
+  [ -n "$unit" ] && in_vm "$vm" systemctl list-unit-files "$unit.service" --no-legend 2>/dev/null | grep -q .
+}
+
 ca=$(cat "$CA_CERT")
 vms=(titan-incus titan-k3s)
+retry=0
 if [ "$#" -gt 0 ]; then
   vms=("$@")
+  retry=1
 fi
 for vm in "${vms[@]}"; do
   if put "$vm" "$ca" "$TARGET"; then
     in_vm "$vm" update-ca-certificates >/dev/null
-    case "$vm" in
-      titan-incus) in_vm "$vm" systemctl restart incus ;;
-      titan-k3s) in_vm "$vm" systemctl restart k3s ;;
-    esac
-    echo "$vm trusts the extra CA; restarted"
+    unit=$(unit_of "$vm")
+    # A VM named as an argument is rebooted by up.sh right after this returns, and a fresh service reads the store at
+    # start, so restarting here would only risk the "Unit not found" failure above for no benefit.
+    if [ "$retry" -eq 1 ]; then
+      echo "$vm trusts the extra CA; up.sh reboots it next, so $unit is not restarted here"
+    elif unit_installed "$vm" "$unit"; then
+      in_vm "$vm" systemctl restart "$unit"
+      echo "$vm trusts the extra CA; restarted"
+    else
+      echo "$vm trusts the extra CA; $unit.service is not installed yet, so not restarted"
+    fi
   else
     echo "$vm already trusts the extra CA"
   fi

@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Fixed count, not components/autoscale: local runs without metrics-server (docs/topology.md#ram-budget R-2). Lives as
+# a component of its own, not the overlay's own patches, so components/workers-stopped (listed after it below) wins
+# when both are added: a kustomization's own top-level patches always apply after every component, regardless of
+# which is listed first (measured with `kubectl kustomize`).
+patches:
+  - target:
+      kind: Deployment
+      name: incus-worker
+    patch: |-
+      - op: add
+        path: /spec/replicas
+        value: 2
