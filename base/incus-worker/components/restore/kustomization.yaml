@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Rebuilds one Incus cluster on a reinstalled host from the backup bucket (titan-ops features/backup/design.md#cluster-restore):
+# add it to the overlay of the environment being restored, with a patch that sets RESTORE_CLUSTER_ID of the Job (and, for
+# a bucket over a private CA, the same endpoint, bucket and CA mounts the worker's Deployment has). It stops every worker
+# loop for as long as it is there: a reconciler that read the empty host before the restore would record every VM lost,
+# and Titan would forget which ones ran. Remove it once the Job succeeded; the workers start again. Not for an overlay
+# with components/autoscale: its HPA keeps the command pods' count above zero.
+resources:
+  - job.yaml
+
+patches:
+  - target:
+      kind: Deployment
+      name: incus-worker
+    patch: |-
+      - op: add
+        path: /spec/replicas
+        value: 0
+  - target:
+      kind: Deployment
+      name: incus-worker-inventory
+    patch: |-
+      - op: add
+        path: /spec/replicas
+        value: 0

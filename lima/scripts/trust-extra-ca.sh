@@ -14,6 +14,8 @@
 # (a new titan-k3s) ⇒ only the VMs change: up.sh runs the script again once ArgoCD's CRD is there. Behind such a proxy that
 # never happens on a new titan-k3s: its install job cannot fetch the chart (docs/topology.md#extra-ca). Namespaces titan-auth-dev
 # and titan-dev not there yet ⇒ their ConfigMaps wait for up.sh's run after bootstrap-secrets.sh.
+# With VM names as arguments, only those VMs get the CA and nothing else runs: up.sh does that for a VM whose first
+# provision failed behind the proxy, before it boots that VM again (docs/topology.md#extra-ca).
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(cd "$here/.." && pwd)
@@ -50,7 +52,11 @@ put() {
 }
 
 ca=$(cat "$CA_CERT")
-for vm in titan-incus titan-k3s; do
+vms=(titan-incus titan-k3s)
+if [ "$#" -gt 0 ]; then
+  vms=("$@")
+fi
+for vm in "${vms[@]}"; do
   if put "$vm" "$ca" "$TARGET"; then
     in_vm "$vm" update-ca-certificates >/dev/null
     case "$vm" in
@@ -62,6 +68,10 @@ for vm in titan-incus titan-k3s; do
     echo "$vm already trusts the extra CA"
   fi
 done
+
+if [ "$#" -gt 0 ]; then
+  exit 0
+fi
 
 hosts=$(grep -h 'repoURL:' "$repo"/gitops/apps/*.yaml | sed -E 's#.*repoURL: *https://([^/]+).*#\1#' | sort -u)
 patch="" live="" errors="" manifest=""

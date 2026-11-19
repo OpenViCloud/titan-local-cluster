@@ -24,6 +24,11 @@ fi
 # The folder titan-k3s mounts for SeaweedFS's data (titan-k3s.yaml): Lima does not make a missing one.
 mkdir -p "$HOME/.local/share/titan-local-cluster/s3"
 
+# The provision script's last line in the VM: "<vm>: ..." when it finished, else the failure Lima logged, or nothing.
+provision_word() {
+  limactl shell "$1" -- sudo grep -E "^$1: |Failed to execute /mnt/lima-cidata/provision" /var/log/cloud-init-output.log | tail -n 1
+}
+
 for vm in titan-incus titan-k3s; do
   status=$(limactl list --format '{{.Status}}' "$vm" 2>/dev/null || true)
   if [ -z "$status" ]; then
@@ -64,7 +69,20 @@ for vm in titan-incus titan-k3s; do
   # provisioned VM. The provision check below says whether it finished.
   limactl shell "$vm" -- sudo timeout 30m cloud-init status --wait >/dev/null || true
   # Lima says READY even when the provision script failed (acceptance S-0, K-1): read the script's own last word.
-  last=$(limactl shell "$vm" -- sudo grep -E "^$vm: |Failed to execute /mnt/lima-cidata/provision" /var/log/cloud-init-output.log | tail -n 1)
+  last=$(provision_word "$vm")
+  # A VM's first provision runs before the host's extra CA can reach it, and behind a TLS-inspecting proxy its apt fails;
+  # Lima runs the provision again at the next boot, so trust the CA in that VM and boot it once more (docs/topology.md#extra-ca).
+  if [[ "$last" != "$vm: "* ]] && [ -e "$HOME/.config/titan-local-cluster/extra-ca.crt" ]; then
+    echo "$vm: provisioning did not finish; trusting the host's extra CA in it and booting it again."
+    bash "$here/scripts/trust-extra-ca.sh" "$vm"
+    limactl stop "$vm"
+    if ! own_scope "$(uname -s)" "$vm" limactl start "$vm" --tty=false; then
+      [ "$(limactl list --format '{{.Status}}' "$vm")" = "Running" ] || exit 1
+      echo "$vm is still provisioning; waiting for it (up to 30 minutes)."
+    fi
+    limactl shell "$vm" -- sudo timeout 30m cloud-init status --wait >/dev/null || true
+    last=$(provision_word "$vm")
+  fi
   case "$last" in
     "$vm: "*) echo "$last" ;;
     *)

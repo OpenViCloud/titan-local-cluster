@@ -343,6 +343,47 @@ class WorkerRoles(unittest.TestCase):
         self.assertEqual([m["resource"]["name"] for m in hpa["metrics"]], ["memory"])
 
 
+class WorkerRestore(unittest.TestCase):
+    """components/restore stops every worker loop and runs the restore once as a Job of the same image: the reconciler
+    must not see the reinstalled, empty host before the restore, or it records every VM lost and Titan forgets which ran
+    (titan-ops features/backup/design.md#cluster-restore)."""
+
+    def overlay_with(self, *components):
+        with tempfile.TemporaryDirectory(dir=REPO) as overlay:
+            worker = os.path.relpath(BASE / "incus-worker", overlay)
+            listed = ", ".join("%s/components/%s" % (worker, c) for c in components)
+            pathlib.Path(overlay, "kustomization.yaml").write_text(
+                "resources: [%s]\ncomponents: [%s]\n" % (worker, listed))
+            return render("", root=pathlib.Path(overlay))
+
+    def env(self, container):
+        return {e["name"]: e.get("value") for e in container.get("env", [])}
+
+    def test_the_restore_job_runs_the_restore_role_once_with_the_workers_secrets_and_bucket_key(self):
+        objects = self.overlay_with("restore")
+        job = first(objects, "Job", "incus-worker-restore")["spec"]
+        pod = job["template"]["spec"]
+        container = pod["containers"][0]
+        worker = first(objects, "Deployment", "incus-worker")["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual((job["backoffLimit"], pod["restartPolicy"]), (0, "Never"))
+        self.assertGreater(job["activeDeadlineSeconds"], 0)
+        self.assertEqual(container["image"], worker["image"])
+        self.assertEqual(self.env(container)["WORKER_ROLE"], "restore")
+        self.assertIn("RESTORE_CLUSTER_ID", self.env(container))
+        self.assertEqual([s["secretRef"]["name"] for s in container["envFrom"]],
+                         ["worker-secrets", "incus-worker-backup-credentials"])
+        self.assertNotIn("optional", container["envFrom"][1]["secretRef"])
+
+    def test_the_restore_stops_the_single_worker(self):
+        objects = self.overlay_with("restore")
+        self.assertEqual(first(objects, "Deployment", "incus-worker")["spec"]["replicas"], 0)
+
+    def test_the_restore_stops_the_command_pods_and_the_inventory_pod(self):
+        objects = self.overlay_with("roles", "restore")
+        self.assertEqual(first(objects, "Deployment", "incus-worker")["spec"]["replicas"], 0)
+        self.assertEqual(first(objects, "Deployment", "incus-worker-inventory")["spec"]["replicas"], 0)
+
+
 class NatsJetStreamInMemory(unittest.TestCase):
     """JetStream on, memory only, for the chat cap's bucket (titan-ops features/public-site/design.md#chat-assistant)."""
 
