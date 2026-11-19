@@ -30,13 +30,23 @@ mkdir -p "$WORK/bin" "$WORK/vm/titan-incus" "$WORK/vm/titan-k3s" "$WORK/home/.co
 cat > "$WORK/bin/limactl" <<'FAKE'
 #!/bin/bash
 # limactl shell VM -- sudo CMD ARGS: records "VM CMD ARGS"; `cat FILE` and `tee FILE` read and write $FAKE_VM/VM/<basename>.
+# `systemctl list-unit-files UNIT.service --no-legend` prints one line unless FAKE_UNIT_MISSING names "VM:unit" (the real
+# systemd prints nothing for a unit it has never heard of, with exit 0).
 [ "$1 $3 $4" = "shell -- sudo" ] || { echo "unexpected: $*" >&2; exit 2; }
 vm=$2; shift 4
 printf '%s %s\n' "$vm" "$*" >> "$FAKE_VM.log"
 case "$1" in
   cat) cat "$FAKE_VM/$vm/$(basename "$2")" 2>/dev/null || { echo "cat: $2: No such file or directory" >&2; exit 1; } ;;
   tee) [ -z "${FAKE_TEE_FAILS:-}" ] || { echo "limactl: instance $vm is not running" >&2; exit 1; }; cat > "$FAKE_VM/$vm/$(basename "$2")" ;;
-  update-ca-certificates|systemctl) ;;
+  update-ca-certificates) ;;
+  systemctl)
+    case "$2" in
+      list-unit-files)
+        unit=${3%.service}
+        [ "${FAKE_UNIT_MISSING:-}" = "$vm:$unit" ] || printf '%s.service enabled\n' "$unit" ;;
+      restart) ;;
+      *) echo "unexpected: $*" >&2; exit 2 ;;
+    esac ;;
   *) echo "unexpected: $*" >&2; exit 2 ;;
 esac
 FAKE
@@ -187,15 +197,27 @@ for ns in titan-auth-dev titan-dev; do
   [ "$RC" -ne 0 ] && printf '%s' "$OUT" | grep -q 'forbidden' && ok "stops and shows kubectl's error" || bad "rc=$RC $OUT"
 done
 
-echo "one VM named: a first provision that failed behind the proxy (up.sh trusts the CA in that VM, then boots it again)"
+echo "no VM named, but a unit is not installed yet (a maintenance run reaches a VM still mid-provision)"
+rm -rf "$WORK/vm.log" "$WORK/vm/titan-incus/"* "$WORK/vm/titan-k3s/"* "$WORK/vm/argocd-tls.json" "$WORK/vm/"extra-ca-cm-*
+printf -- '-----BEGIN CERTIFICATE-----\nMIIthird\n-----END CERTIFICATE-----\n' > "$CA"
+run FAKE_UNIT_MISSING=titan-incus:incus
+[ "$RC" -eq 0 ] && ok "exit 0, not failing on a unit systemd has never heard of" || bad "exit $RC: $OUT"
+cmp -s "$CA" "$WORK/vm/titan-incus/titan-extra-ca.crt" && ok "titan-incus still gets the CA" || bad "titan-incus did not get the CA"
+grep -q '^titan-incus update-ca-certificates$' "$WORK/vm.log" && ok "titan-incus: the system store is rebuilt anyway" || bad "no update-ca-certificates: $(cat "$WORK/vm.log")"
+grep -q '^titan-incus systemctl restart incus$' "$WORK/vm.log" && bad "restarted a unit that is not installed: $(cat "$WORK/vm.log")" || ok "titan-incus: incus is not restarted"
+grep -q '^titan-k3s systemctl restart k3s$' "$WORK/vm.log" && ok "titan-k3s: k3s is installed there, so it still restarts" || bad "titan-k3s not restarted: $(cat "$WORK/vm.log")"
+printf '%s' "$OUT" | grep -q 'incus.service is not installed yet, so not restarted' && ok "says why it did not restart incus" || bad "no word about incus: $OUT"
+
+echo "one VM named: a first provision that failed behind the proxy, before Incus or k3s was even installed (up.sh trusts the CA in that VM, then boots it again)"
 rm -rf "$WORK/vm.log" "$WORK/vm/titan-incus/"* "$WORK/vm/titan-k3s/"* "$WORK/vm/argocd-tls.json" "$WORK/vm/"extra-ca-cm-*
 printf '%s\n' "$CERT" > "$CA"
-OUT=$(env HOME="$WORK/home" PATH="$WORK/bin:$PATH" FAKE_VM="$WORK/vm" bash "$SCRIPT" titan-incus 2>&1 </dev/null)
+OUT=$(env HOME="$WORK/home" PATH="$WORK/bin:$PATH" FAKE_VM="$WORK/vm" FAKE_UNIT_MISSING=titan-incus:incus bash "$SCRIPT" titan-incus 2>&1 </dev/null)
 RC=$?
 [ "$RC" -eq 0 ] && ok "exit 0" || bad "exit $RC: $OUT"
 [ -s "$WORK/vm/titan-incus/titan-extra-ca.crt" ] && ok "the named VM trusts the CA" || bad "titan-incus did not get the CA: $OUT"
 [ -z "$(ls "$WORK/vm/titan-k3s/")" ] && ok "the other VM is not touched (it may not exist yet)" || bad "titan-k3s was touched"
 grep -q '^kubectl' "$WORK/vm.log" && bad "kubectl ran: $(grep '^kubectl' "$WORK/vm.log")" || ok "neither ArgoCD nor a ConfigMap is touched"
+grep -q 'systemctl' "$WORK/vm.log" && bad "systemctl ran: $(grep systemctl "$WORK/vm.log")" || ok "incus is not restarted here; up.sh reboots the VM next"
 
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

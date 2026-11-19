@@ -14,6 +14,7 @@ import json
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -329,6 +330,24 @@ class WorkerRoles(unittest.TestCase):
         self.assertEqual(inventory["spec"]["template"]["spec"]["containers"][0]["image"],
                          commands["spec"]["template"]["spec"]["containers"][0]["image"])
         self.assertEqual(inventory["spec"]["selector"]["matchLabels"], {"app": "incus-worker-inventory"})
+
+    def test_local_overlay_plus_workers_stopped_plus_restore_renders_zero_replicas_and_the_job(self):
+        # A restore drill appends components/workers-stopped (then components/restore) to this real overlay's own
+        # components list, by hand, the way the drill does it (titan-ops features/backup/design.md#cluster-restore).
+        # A copy one directory below REPO, same depth as gitops/incus-worker, so its own "../../base/..." paths
+        # still resolve.
+        with tempfile.TemporaryDirectory(dir=REPO) as tmp:
+            overlay = pathlib.Path(tmp, "incus-worker")
+            shutil.copytree(GITOPS / "incus-worker", overlay)
+            kfile = overlay / "kustomization.yaml"
+            added = "  - ../../base/incus-worker/components/workers-stopped\n  - ../../base/incus-worker/components/restore\n"
+            text, count = re.subn(r"\npatches:", "\n" + added + "\npatches:", kfile.read_text(), count=1)
+            self.assertEqual(count, 1, "components: block not found before patches:")
+            kfile.write_text(text)
+            objects = render("", root=overlay)
+        self.assertEqual(first(objects, "Deployment", "incus-worker")["spec"]["replicas"], 0)
+        self.assertEqual(first(objects, "Deployment", "incus-worker-inventory")["spec"]["replicas"], 0)
+        self.assertEqual(first(objects, "Job", "incus-worker-restore")["metadata"]["name"], "incus-worker-restore")
 
     def test_autoscale_owns_the_command_pods_count_by_memory(self):
         # An overlay as prd's will be once it takes both components; kustomize loads them by relative path only.
