@@ -3,7 +3,8 @@
 # until STOP_FILE exists, appending to LOG (docs/topology.md#host-memory). It only reads; a STOP_FILE left from an earlier
 # run is removed at start. A new LOG starts with one `# <command> · <where> · <UTC>` line; every sample starts with
 # `== <UTC>`, and the loop ends with `== stop <UTC>`. The guest read has a timeout, so a stalled guest leaves a line
-# saying so instead of stopping the loop; the stop file is read once per sample, so stopping takes up to one interval.
+# saying so instead of stopping the loop; the stop file is read before each sample, so stopping takes up to one
+# interval plus one sample (at most about a minute at the defaults).
 # RAM_SAMPLE_LIMACTL and RAM_SAMPLE_TIMEOUT stand in for limactl and the 20 s timeout (lima/tests/ram-sample_test.sh).
 set -uo pipefail
 
