@@ -1,8 +1,9 @@
 #!/bin/bash
 # Starts the local cluster (docs/topology.md#layout): both Lima VMs, created on first use and brought to their Lima
-# file's cpus and memory (docs/topology.md#ram-budget) and provision scripts (docs/topology.md#provision-sync), then an
-# extra CA of the host if it has one (docs/topology.md#extra-ca; the VMs first, ArgoCD once it is up, the ConfigMaps of the
-# regression runner and the worker once their namespaces are made), the secrets, the S3 CA, cluster local joined to
+# file's cpus and memory (docs/topology.md#ram-budget) and provision scripts (docs/topology.md#provision-sync), a check
+# that titan-incus's thin pool is active (lima/scripts/incus-thinpool.sh), then an extra CA of the host if it has one
+# (docs/topology.md#extra-ca; the VMs first, ArgoCD once it is up, the ConfigMaps of the regression runner and the worker
+# once their namespaces are made), the secrets, the S3 CA, cluster local joined to
 # titan-incus, the metrics certificate VictoriaMetrics reads Incus with (lima/scripts/incus-metrics.sh), and ArgoCD's root
 # application (and the Applications of the names before 2026-10-27 dropped). Safe to run again.
 set -euo pipefail
@@ -92,6 +93,8 @@ for vm in titan-incus titan-k3s; do
   esac
 done
 
+# A broken thin pool still lets provision finish; only a customer VM's start fails (docs/topology.md#runbook).
+bash "$here/scripts/incus-thinpool.sh"
 # Behind a TLS-inspecting proxy the VMs reach no https site until they trust its CA (docs/topology.md#extra-ca).
 bash "$here/scripts/trust-extra-ca.sh"
 bash "$here/scripts/bootstrap-secrets.sh"

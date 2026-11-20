@@ -62,6 +62,7 @@ print(json.dumps({"name": sys.argv[2], "cpus": cpus, "memory": gib * 1024 ** 3,
   shell)
     case "$*" in
       *"cloud-init status --wait"*) exit 2 ;;
+      *" lvs "*) echo '{"report": [{"lv": [{"lv_name": "IncusThinPool", "lv_active": "active"}]}]}' ;;
       *grep*) case " $FAKE_UNPROVISIONED " in *" $vm "*) ;; *) echo "$vm: done" ;; esac ;;
     esac ;;
 esac

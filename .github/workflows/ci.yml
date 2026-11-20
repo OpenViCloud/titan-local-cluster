@@ -52,6 +52,12 @@ jobs:
       - name: OVN uplink
         run: bash lima/tests/incus-uplink_test.sh
 
+      - name: IPv6 of ovnbr after every start of Incus
+        run: bash lima/tests/ovnbr-ipv6_test.sh
+
+      - name: Thin pool of titan-incus active
+        run: bash lima/tests/incus-thinpool_test.sh
+
       - name: S3 CA on titan-incus
         run: bash lima/tests/trust-s3-ca_test.sh
 

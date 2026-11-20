@@ -2,11 +2,11 @@
 # incus-uplink_test.sh — the OVN uplink that provision/incus.sh builds on titan-incus for public IPv6.
 #
 # WHY this file exists: a network asking for public IPv6 goes on the uplink ovnup, and Incus refuses its IPv4 CIDR when
-# the uplink does not route it. Nothing on the host runs this script before a boot of titan-incus, and a wrong uplink only
-# shows when a network create gives up (docs/network.md#uplink). The checks read the
-# section cut out of provision/incus.sh: its shape (singapore01's, written out in the checks), then the section itself
-# run against a fake `incus`, `ip` and `sysctl` for a fresh machine, an old bridge ovnup with and without networks on
-# it, a second run, and a failed read.
+# the uplink does not route it. Nothing on the host runs this script before a boot of titan-incus, and a wrong uplink
+# only shows when a network create gives up (docs/network.md#uplink). The checks read the section cut out of
+# provision/incus.sh: its shape (singapore01's, written out in the checks), then the section itself run against a fake
+# `incus` (and an `ip` and `sysctl` that only record) for a fresh machine, an old bridge ovnup with and without networks
+# on it, a second run, and a failed read.
 #
 # Run:  bash lima/tests/incus-uplink_test.sh     (from the repo root; macOS bash 3.2 and python3)
 
@@ -88,26 +88,20 @@ fi
 host=$(python3 - "$SECTION" <<'PY'
 import re, sys
 lines = [l.strip() for l in open(sys.argv[1]).read().splitlines() if l.strip() and not l.strip().startswith("#")]
-def at(pattern):
-    return next((i for i, l in enumerate(lines) if re.search(pattern, l)), -1)
-sysctl = at(r"^sysctl -qw net\.ipv6\.conf\.ovnbr\.disable_ipv6=0$")
-gateway = at(r"^ip -6 addr replace \$\{IPV6_BLOCK_PREFIX\}00::1/64 dev ovnbr$")
-route = at(r'^ip -6 route replace "\$\{IPV6_BLOCK_PREFIX\}\$\{hex\}::/64" via "\$\{IPV6_BLOCK_PREFIX\}00::1\$\{hex\}" dev ovnbr$')
-uplink = at(r"^incus network create ovnup ")
 problems = []
-if -1 in (sysctl, gateway, route):
-    problems.append("missing: IPv6 on ovnbr (%d), the gateway on ovnbr (%d), the /64 routes via ovnbr (%d)" % (sysctl, gateway, route))
-elif not sysctl < gateway < route:
-    problems.append("IPv6 must be on before the gateway, the gateway before the routes")
+# The host's address and routes on ovnbr are the section "IPv6 on ovnbr" (lima/tests/ovnbr-ipv6_test.sh): a unit sets
+# them again after every start of Incus, which a line here would not.
+if any(re.match(r"(ip|sysctl) ", l) for l in lines):
+    problems.append("the uplink section sets the host side itself; that is the section IPv6 on ovnbr")
 if any(re.search(r"\bdev ovnup\b", l) for l in lines):
     problems.append("a host address or route still on ovnup, which is no longer a host interface")
 print("; ".join(problems))
 PY
 ) || host="python3 exited $?: $host"
 if [ -z "$host" ]; then
-  ok "host: IPv6 on ovnbr, then the gateway ::1/64 on it, then the 255 routes via ovnbr"
+  ok "host: no address or route on ovnup, and the host side of ovnbr left to the section IPv6 on ovnbr"
 else
-  bad "host side of ovnbr: $host"
+  bad "host side: $host"
 fi
 
 echo "== the section run against a fake incus =="
@@ -155,10 +149,10 @@ calls_of() { grep -c -E "$2" "$WORK/$1/calls" 2>/dev/null || true; }
 mkdir -p "$WORK/fresh"; : > "$WORK/fresh/calls"
 rc=$(run_section fresh)
 if [ "$rc" = 0 ] && [ "$(cat "$WORK/fresh/ovnbr" 2>/dev/null)" = bridge ] && [ "$(cat "$WORK/fresh/ovnup" 2>/dev/null)" = physical ] \
-   && [ "$(calls_of fresh '^incus network delete')" = 0 ] && [ "$(calls_of fresh '^ip -6 route replace .* dev ovnbr$')" = 255 ]; then
-  ok "fresh machine: ovnbr then a physical ovnup, nothing deleted, 255 routes via ovnbr"
+   && [ "$(calls_of fresh '^incus network delete')" = 0 ] && [ "$(calls_of fresh '^(ip|sysctl) ')" = 0 ]; then
+  ok "fresh machine: ovnbr then a physical ovnup, nothing deleted, nothing set on the host"
 else
-  bad "fresh machine: exit=$rc ovnbr=$(cat "$WORK/fresh/ovnbr" 2>/dev/null) ovnup=$(cat "$WORK/fresh/ovnup" 2>/dev/null) routes=$(calls_of fresh '^ip -6 route replace .* dev ovnbr$') — $(tail -3 "$WORK/fresh/out")"
+  bad "fresh machine: exit=$rc ovnbr=$(cat "$WORK/fresh/ovnbr" 2>/dev/null) ovnup=$(cat "$WORK/fresh/ovnup" 2>/dev/null) host calls=$(calls_of fresh '^(ip|sysctl) ') — $(tail -3 "$WORK/fresh/out")"
 fi
 
 mkdir -p "$WORK/old-unused"; : > "$WORK/old-unused/calls"
@@ -184,8 +178,8 @@ mkdir -p "$WORK/again"; : > "$WORK/again/calls"
 echo bridge > "$WORK/again/ovnbr"; echo 0 > "$WORK/again/ovnbr.users"
 echo physical > "$WORK/again/ovnup"; echo 3 > "$WORK/again/ovnup.users"
 rc=$(run_section again)
-if [ "$rc" = 0 ] && [ "$(calls_of again '^incus network (create|delete)')" = 0 ] && [ "$(calls_of again '^ip -6 addr replace .* dev ovnbr$')" = 1 ]; then
-  ok "second run on a physical ovnup in use: no network created or deleted, the host gateway set again"
+if [ "$rc" = 0 ] && [ "$(calls_of again '^incus network (create|delete)')" = 0 ]; then
+  ok "second run on a physical ovnup in use: no network created or deleted"
 else
   bad "second run: exit=$rc network calls=$(calls_of again '^incus network (create|delete)') — $(tail -3 "$WORK/again/out")"
 fi

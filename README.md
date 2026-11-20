@@ -63,7 +63,7 @@ Ubuntu also 8443 and 30833) another cluster or program already holds, and names 
 The bootstrap keeps the values it generates in `~/.config/titan-local-cluster/` (`secrets.env`, the S3 CA and SeaweedFS's certificate, Titan's client identity `titan-client.crt`/`.key`, the metrics certificate `incus-metrics.crt`/`.key`; keys mode 600; and, on a host behind a TLS-inspecting proxy, its CA as `extra-ca.crt`, [docs/topology.md#extra-ca](docs/topology.md#extra-ca)), so a rebuilt cluster gets them again; keep that folder. Behind a TLS-inspecting proxy a new titan-k3s gets no ArgoCD: build or rebuild it off the proxy ([docs/topology.md#extra-ca](docs/topology.md#extra-ca)). Backups go to SeaweedFS in titan-k3s (`gitops/seaweedfs`), over TLS at `https://lima-titan-k3s.internal:30833`, with its data in `~/.local/share/titan-local-cluster/s3` on the host, which outlives the VM. Docker must not be running.
 
 ```sh
-bash lima/scripts/up.sh      # creates the VMs on first run, brings a VM to its Lima file's cpus, memory and provision scripts (stopping it if it runs), starts them, trusts an extra CA if present (the VMs first, ArgoCD once it is up), applies secrets, trusts the S3 CA, joins cluster local to titan-incus, has titan-incus trust the metrics certificate, applies root-local, drops the Applications of the old names
+bash lima/scripts/up.sh      # creates the VMs on first run, brings a VM to its Lima file's cpus, memory and provision scripts (stopping it if it runs), starts them, stops if titan-incus's thin pool is not active, trusts an extra CA if present (the VMs first, ArgoCD once it is up), applies secrets, trusts the S3 CA, joins cluster local to titan-incus, has titan-incus trust the metrics certificate, applies root-local, drops the Applications of the old names
 bash lima/scripts/down.sh    # stops both VMs; disks stay (guest VMs in titan-incus stop too, see below)
 ```
 
@@ -97,7 +97,8 @@ writes Secret `incus-metrics` in namespace `monitoring` for VictoriaMetrics, res
 
 `down.sh` stops the guest VMs in titan-incus with it, and `up.sh` does not start them again: start them again through Titan (the VM's start).
 Once, after `down.sh` with a guest VM running, Incus's LVM pool failed its check at boot ("Manual repair required!") and
-no guest VM could start. The repair that brought it back, inside titan-incus:
+no guest VM could start. `up.sh` now stops when the pool is not active and prints the repair that brought it back,
+inside titan-incus:
 
 ```sh
 limactl shell titan-incus -- sudo systemctl stop incus.service incus.socket
@@ -147,6 +148,8 @@ python3 tests/test_keycloak_theme.py && python3 scripts/keycloak-theme.py --chec
 bash tests/sweeper_test.sh            # network and gh signed in (titan-ops's template on GitHub)
 bash lima/tests/incus-log-sweeper_test.sh
 bash lima/tests/incus-uplink_test.sh
+bash lima/tests/ovnbr-ipv6_test.sh
+bash lima/tests/incus-thinpool_test.sh
 bash lima/tests/bootstrap-secrets_test.sh
 bash lima/tests/trust-s3-ca_test.sh
 bash lima/tests/trust-extra-ca_test.sh
