@@ -5,8 +5,8 @@
 #
 # Prints one line, HOST_MEMORY=<word> ..., and exits:
 #   0  OK, or SKIPPED on macOS (no /proc/meminfo)
-#   1  LOW: MemAvailable under 2048 MiB, or swap in use above 75 (a whole percent, rounded down)
-#   2  ERROR: the meminfo file cannot be read or has no MemAvailable
+#   1  LOW: MemAvailable under 2048 MiB, or swap in use above 75% (a whole percent, rounded down)
+#   2  ERROR: the meminfo file cannot be read, or has no MemAvailable or a non-numeric one
 # HOST_MEMINFO and HOST_OS stand in for /proc/meminfo and `uname -s` (lima/tests/host-memory_test.sh).
 set -euo pipefail
 
@@ -27,6 +27,9 @@ fields=$(awk '
   END { print (available == "" ? "-" : available), total + 0, free + 0 }
 ' "$meminfo" 2>/dev/null) || fields="-"
 read -r available_kib swap_total_kib swap_free_kib <<< "$fields"
+case "$available_kib" in
+  "" | *[!0-9]*) available_kib="-" ;;
+esac
 if [ "$available_kib" = "-" ]; then
   echo "HOST_MEMORY=ERROR cannot read MemAvailable from $meminfo"
   exit 2

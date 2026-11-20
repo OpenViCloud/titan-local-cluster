@@ -3,7 +3,7 @@
 #
 # WHY this file exists: on 2026-11-20 the Ubuntu host's swap filled up and titan-incus's guest stalled for nine hours
 # while every pod looked healthy (docs/topology.md#ram-2026-11-20). The check says LOW before a pass writes to the
-# cluster. It runs against fake /proc/meminfo files; up.sh is read, not run.
+# cluster. It runs against fake /proc/meminfo files; of up.sh only its call line is run.
 #
 # Run:  bash lima/tests/host-memory_test.sh     (from the repo root)
 
@@ -49,6 +49,8 @@ meminfo 8388608 0 0
 check "no swap at all: OK" 0 "HOST_MEMORY=OK available=8192MiB swap_used=0%"
 printf 'MemTotal: 1 kB\n' > "$WORK/meminfo"
 check "no MemAvailable: ERROR, not OK" 2 "HOST_MEMORY=ERROR cannot read MemAvailable"
+printf 'MemAvailable:   abc kB\n' > "$WORK/meminfo"
+check "non-numeric MemAvailable: ERROR, not OK" 2 "HOST_MEMORY=ERROR cannot read MemAvailable"
 rm -f "$WORK/meminfo"
 check "no meminfo file: ERROR, not OK" 2 "HOST_MEMORY=ERROR cannot read MemAvailable"
 out=$(HOST_OS=Darwin bash "$SCRIPT")
