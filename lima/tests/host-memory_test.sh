@@ -51,6 +51,10 @@ printf 'MemTotal: 1 kB\n' > "$WORK/meminfo"
 check "no MemAvailable: ERROR, not OK" 2 "HOST_MEMORY=ERROR cannot read MemAvailable"
 printf 'MemAvailable:   abc kB\n' > "$WORK/meminfo"
 check "non-numeric MemAvailable: ERROR, not OK" 2 "HOST_MEMORY=ERROR cannot read MemAvailable"
+printf 'MemAvailable:   8388608 kB\nSwapTotal:      abc kB\nSwapFree:       0 kB\n' > "$WORK/meminfo"
+check "non-numeric SwapTotal: ERROR, not OK" 2 "HOST_MEMORY=ERROR cannot read"
+meminfo 8388608 4194300 5000000
+check "SwapFree above SwapTotal reads as 0%" 0 "HOST_MEMORY=OK available=8192MiB swap_used=0%"
 rm -f "$WORK/meminfo"
 check "no meminfo file: ERROR, not OK" 2 "HOST_MEMORY=ERROR cannot read MemAvailable"
 out=$(HOST_OS=Darwin bash "$SCRIPT")
@@ -59,8 +63,7 @@ if [ "$code" -eq 0 ] && [[ "$out" == "HOST_MEMORY=SKIPPED Darwin"* ]]; then ok "
 
 echo "up.sh"
 call=$(grep -n 'scripts/host-memory.sh' "$UP" | grep -v '^[0-9]*:[[:space:]]*#' || true)
-if [ "$(printf '%s\n' "$call" | grep -c .)" -ne 1 ]; then bad "up.sh: want one call, got: ${call:-none}"; fi
-if [ -n "$call" ] && [[ "$call" == *'|| echo "WARNING:'* ]]; then ok "up.sh runs the check and only warns"; else bad "up.sh call: ${call:-none}"; fi
+if [ "$(printf '%s\n' "$call" | grep -c .)" -eq 1 ] && [[ "$call" == *'|| echo "WARNING:'* ]]; then ok "up.sh runs the check once and only warns"; else bad "up.sh call: ${call:-none}"; fi
 last_step=$(grep -n 'drop-old-applications.sh"$' "$UP" | cut -d: -f1)
 call_line=${call%%:*}
 if [ -n "$call_line" ] && [ -n "$last_step" ] && [ "$call_line" -gt "$last_step" ]; then ok "up.sh checks after both VMs and root are up"; else bad "up.sh checks at line ${call_line:-?}, last step at ${last_step:-?}"; fi

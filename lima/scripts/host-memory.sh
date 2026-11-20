@@ -4,9 +4,9 @@
 # before a pass that writes to the cluster and goes on only on OK or SKIPPED; up.sh runs it last and only warns.
 #
 # Prints one line, HOST_MEMORY=<word> ..., and exits:
-#   0  OK, or SKIPPED on macOS (no /proc/meminfo)
+#   0  OK (no swap counts as 0%), or SKIPPED on any OS but Linux (macOS: no /proc/meminfo)
 #   1  LOW: MemAvailable under 2048 MiB, or swap in use above 75% (a whole percent, rounded down)
-#   2  ERROR: the meminfo file cannot be read, or has no MemAvailable or a non-numeric one
+#   2  ERROR: the meminfo file cannot be read, has no MemAvailable, or has a field that is not a number
 # HOST_MEMINFO and HOST_OS stand in for /proc/meminfo and `uname -s` (lima/tests/host-memory_test.sh).
 set -euo pipefail
 
@@ -24,14 +24,16 @@ fields=$(awk '
   /^MemAvailable:/ { available = $2 }
   /^SwapTotal:/ { total = $2 }
   /^SwapFree:/ { free = $2 }
-  END { print (available == "" ? "-" : available), total + 0, free + 0 }
+  END { print (available == "" ? "-" : available), (total == "" ? 0 : total), (free == "" ? 0 : free) }
 ' "$meminfo" 2>/dev/null) || fields="-"
 read -r available_kib swap_total_kib swap_free_kib <<< "$fields"
-case "$available_kib" in
-  "" | *[!0-9]*) available_kib="-" ;;
-esac
+for value in "$available_kib" "${swap_total_kib:-}" "${swap_free_kib:-}"; do
+  case "$value" in
+    "" | *[!0-9]*) available_kib="-" ;;
+  esac
+done
 if [ "$available_kib" = "-" ]; then
-  echo "HOST_MEMORY=ERROR cannot read MemAvailable from $meminfo"
+  echo "HOST_MEMORY=ERROR cannot read MemAvailable, SwapTotal and SwapFree as numbers from $meminfo"
   exit 2
 fi
 
@@ -39,6 +41,7 @@ available_mib=$((available_kib / 1024))
 swap_used_percent=0
 if [ "$swap_total_kib" -gt 0 ]; then
   swap_used_percent=$(((swap_total_kib - swap_free_kib) * 100 / swap_total_kib))
+  [ "$swap_used_percent" -ge 0 ] || swap_used_percent=0
 fi
 reading="available=${available_mib}MiB swap_used=${swap_used_percent}%"
 

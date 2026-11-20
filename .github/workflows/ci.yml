@@ -84,3 +84,6 @@ jobs:
 
       - name: Host memory check
         run: bash lima/tests/host-memory_test.sh
+
+      - name: RAM sampler of a dev pass
+        run: bash lima/tests/ram-sample_test.sh
