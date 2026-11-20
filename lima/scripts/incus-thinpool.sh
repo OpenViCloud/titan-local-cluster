@@ -7,8 +7,9 @@ set -euo pipefail
 
 POOL=default/IncusThinPool
 
-if ! report=$(limactl shell titan-incus -- sudo lvs --reportformat json -o lv_name,lv_active "$POOL" 2>&1); then
-  echo "ERROR: could not read $POOL in titan-incus: $report" >&2
+# stderr stays out of the report: a warning of LVM there would break the JSON.
+if ! report=$(limactl shell titan-incus -- sudo lvs --reportformat json -o lv_name,lv_active "$POOL"); then
+  echo "ERROR: could not read $POOL in titan-incus (lvs failed, its message above)" >&2
   exit 1
 fi
 if ! active=$(python3 -c '

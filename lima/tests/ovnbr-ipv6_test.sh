@@ -51,9 +51,10 @@ for line in open(sys.argv[1]).read().splitlines():
 want = {
     # Ordered after Incus, so it runs once Incus has brought ovnbr up (IPv6 off).
     ("Unit", "After"): "incus.service",
-    # A stop or restart of incus.service stops or restarts this unit too: without it the unit stays active from the last
-    # start and a start of Incus would not run it again.
+    # A stop or restart job of incus.service stops or restarts this unit too, and incusd exiting by itself stops it:
+    # without them the unit stays active from the last start and a start of Incus would not run it again.
     ("Unit", "PartOf"): "incus.service",
+    ("Unit", "BindsTo"): "incus.service",
     # Every start of incus.service starts this unit: a restart, socket activation, the boot.
     ("Install", "WantedBy"): "incus.service",
     ("Service", "Type"): "oneshot",
@@ -68,7 +69,7 @@ for (section, key), value in want.items():
 print("; ".join(problems))
 PY
 ) || unit="python3 exited $?: $unit"
-[ -z "$unit" ] && ok "runs the script once after every start of incus.service, and is stopped and restarted with it" \
+[ -z "$unit" ] && ok "runs the script once after every start of incus.service, and goes inactive whenever Incus does" \
   || bad "unit: $unit"
 
 echo "== the section installs, enables and starts it =="

@@ -27,6 +27,7 @@ cat > "$WORK/bin/limactl" <<'FAKE'
 # limactl shell titan-incus -- sudo lvs …: prints $FAKE_LVS and exits $FAKE_LVS_RC; anything else is unexpected.
 printf '%s\n' "$*" >> "$FAKE_LOG"
 [ "$1 $2 $3 $4 $5" = "shell titan-incus -- sudo lvs" ] || { echo "unexpected: $*" >&2; exit 2; }
+[ -z "${FAKE_LVS_WARN:-}" ] || echo "$FAKE_LVS_WARN" >&2
 printf '%s' "$FAKE_LVS"
 exit "${FAKE_LVS_RC:-0}"
 FAKE
@@ -47,6 +48,12 @@ run "$(lvs_json active)"
 [ "$RC" -eq 0 ] && ok "exit 0" || bad "exit $RC: $OUT"
 grep -q -- '--reportformat json' "$WORK/log" && grep -q 'default/IncusThinPool' "$WORK/log" && grep -q 'lv_active' "$WORK/log" \
   && ok "reads lv_active of default/IncusThinPool as JSON" || bad "lvs call: $(cat "$WORK/log")"
+
+echo "an active pool, with a warning of LVM on stderr"
+: > "$WORK/log"
+OUT=$(FAKE_LOG="$WORK/log" FAKE_LVS="$(lvs_json active)" FAKE_LVS_WARN="  WARNING: Sum of all thin volume sizes exceeds the size of thin pools." \
+  PATH="$WORK/bin:$PATH" bash "$SCRIPT" 2>/dev/null </dev/null); RC=$?
+[ "$RC" -eq 0 ] && ok "exit 0: stderr is not read as part of the report" || bad "exit $RC: $OUT"
 
 echo "a pool that is not active (the broken pool after a stop)"
 run "$(lvs_json '')"

@@ -151,7 +151,7 @@ cat > /usr/local/sbin/titan-ovnbr-ipv6 <<'OVNBR'
 set -euo pipefail
 IPV6_BLOCK_PREFIX=2001:db8:0:d4
 NET_ROOT=${OVNBR_NET_ROOT:-/sys/class/net}
-# Incus up before provision made ovnbr (a first boot): provision runs this again once it has.
+# No ovnbr (provision makes it): nothing to set, and a start of Incus is not failed for it.
 if [ ! -d "$NET_ROOT/ovnbr" ]; then
   echo "titan-ovnbr-ipv6: no ovnbr yet; nothing to do"
   exit 0
@@ -168,12 +168,14 @@ done
 echo "titan-ovnbr-ipv6: ovnbr has ${IPV6_BLOCK_PREFIX}00::1/64 and 255 routes"
 OVNBR
 chmod 755 /usr/local/sbin/titan-ovnbr-ipv6
-# PartOf: a stop or restart of Incus stops or restarts the unit too, else it stays active from the last start and the
-# next start of Incus would not run it. WantedBy: every start of Incus starts it (boot, restart, socket activation).
+# The unit must go inactive whenever Incus does, else it stays active from the last start and the next start of Incus
+# would not run it again: PartOf carries a stop or restart job of incus.service over to it, BindsTo also stops it when
+# incusd exits by itself. WantedBy: every start of Incus starts it (boot, restart, socket activation).
 cat > /etc/systemd/system/titan-ovnbr-ipv6.service <<'UNIT'
 [Unit]
 Description=IPv6 gateway and routes of ovnbr after Incus starts
 After=incus.service
+BindsTo=incus.service
 PartOf=incus.service
 
 [Service]
