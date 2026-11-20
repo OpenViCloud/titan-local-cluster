@@ -137,7 +137,7 @@ if routes != want:
     problems.append("routes: %d calls, first differing %r" % (len(routes), next((r for r, w in zip(routes, want) if r != w), routes[255:256])))
 print("; ".join(problems))
 PY
-)
+) || seq_ok="python3 exited $?: $seq_ok"
 if [ "$rc" = 0 ] && [ -z "$seq_ok" ]; then
   ok "IPv6 on for ovnbr, then the gateway ::1/64, then /64 n via router ::1nn for n = 1..255"
 else
