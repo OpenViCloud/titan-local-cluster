@@ -151,7 +151,7 @@ cat > /usr/local/sbin/titan-ovnbr-ipv6 <<'OVNBR'
 set -euo pipefail
 IPV6_BLOCK_PREFIX=2001:db8:0:d4
 NET_ROOT=${OVNBR_NET_ROOT:-/sys/class/net}
-# No ovnbr (provision makes it): nothing to set, and a start of Incus is not failed for it.
+# No ovnbr (provision makes it): nothing to set, and the unit does not show failed for it.
 if [ ! -d "$NET_ROOT/ovnbr" ]; then
   echo "titan-ovnbr-ipv6: no ovnbr yet; nothing to do"
   exit 0

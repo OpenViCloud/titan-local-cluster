@@ -154,7 +154,7 @@ new_case no-bridge
 rmdir "$WORK/no-bridge/net/ovnbr"
 rc=$(run_script no-bridge)
 [ "$rc" = 0 ] && [ ! -s "$WORK/no-bridge/calls" ] && grep -q 'no ovnbr' "$WORK/no-bridge/out" \
-  && ok "no ovnbr yet: exit 0, nothing set, says so (a start of Incus does not fail on it)" \
+  && ok "no ovnbr yet: exit 0, nothing set, says so (the unit does not show failed for it)" \
   || bad "no ovnbr: exit=$rc calls=$(wc -l < "$WORK/no-bridge/calls") — $(cat "$WORK/no-bridge/out")"
 
 new_case ip-fails
