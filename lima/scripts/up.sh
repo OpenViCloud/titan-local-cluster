@@ -122,9 +122,9 @@ kubectl --kubeconfig "$kubeconfig" --request-timeout=30s wait --for=condition=Es
 bash "$here/scripts/trust-extra-ca.sh"
 kubectl --kubeconfig "$kubeconfig" --request-timeout=30s apply -f "$repo/gitops/apps/root.yaml"
 bash "$here/scripts/drop-old-applications.sh"
-# Both VMs are up and hold their RAM now. Only a warning: a pass that writes to the cluster runs this check itself and
-# stops on LOW (docs/topology.md#host-memory).
-bash "$here/scripts/host-memory.sh" || echo "WARNING: the host is short of RAM (the HOST_MEMORY line above)." >&2
+# Both VMs are up and hold their RAM now. Only a warning here: before a pass that writes to the cluster, the session
+# runs the check itself and stops unless it says OK or SKIPPED (docs/topology.md#host-memory).
+bash "$here/scripts/host-memory.sh" || echo "WARNING: host-memory.sh exited $? (1 LOW, 2 ERROR: the HOST_MEMORY line above)." >&2
 
 cat <<URLS
 Local cluster up (kubectl: KUBECONFIG=$kubeconfig):

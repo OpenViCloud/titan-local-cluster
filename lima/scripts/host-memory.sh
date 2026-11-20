@@ -1,10 +1,12 @@
 #!/bin/bash
 # host-memory.sh: is there room on the host for the local cluster to work (docs/topology.md#host-memory)? On Ubuntu a
-# host whose swap fills up stalls a VM's guest until its Incus stops answering, with no error anywhere. Run before a pass
-# that writes to the cluster (a regression pass, a dev pull); up.sh runs it and only warns.
+# host whose swap fills up stalls a VM's guest until its Incus stops answering, with no error anywhere. A session runs it
+# before a pass that writes to the cluster and goes on only on OK or SKIPPED; up.sh runs it last and only warns.
 #
-# Prints one line and exits 0 for HOST_MEMORY=OK or SKIPPED, 1 for HOST_MEMORY=LOW. LOW: MemAvailable under 2048 MiB, or
-# more than 75% of the swap in use. macOS has no /proc/meminfo: SKIPPED.
+# Prints one line, HOST_MEMORY=<word> ..., and exits:
+#   0  OK, or SKIPPED on macOS (no /proc/meminfo)
+#   1  LOW: MemAvailable under 2048 MiB, or swap in use above 75 (a whole percent, rounded down)
+#   2  ERROR: the meminfo file cannot be read or has no MemAvailable
 # HOST_MEMINFO and HOST_OS stand in for /proc/meminfo and `uname -s` (lima/tests/host-memory_test.sh).
 set -euo pipefail
 
@@ -18,14 +20,15 @@ if [ "$os" != "Linux" ]; then
   exit 0
 fi
 
-read -r available_kib swap_total_kib swap_free_kib < <(awk '
+fields=$(awk '
   /^MemAvailable:/ { available = $2 }
   /^SwapTotal:/ { total = $2 }
   /^SwapFree:/ { free = $2 }
   END { print (available == "" ? "-" : available), total + 0, free + 0 }
-' "$meminfo")
+' "$meminfo" 2>/dev/null) || fields="-"
+read -r available_kib swap_total_kib swap_free_kib <<< "$fields"
 if [ "$available_kib" = "-" ]; then
-  echo "ERROR: no MemAvailable in $meminfo" >&2
+  echo "HOST_MEMORY=ERROR cannot read MemAvailable from $meminfo"
   exit 2
 fi
 
