@@ -139,8 +139,24 @@ if ! incus network show ovnup >/dev/null 2>&1; then
     ipv4.routes.anycast=true \
     ovn.ingress_mode=routed
 fi
-# This host is the gateway ::1 of the first /64, as OVH's router is for singapore01. Incus creates ovnbr with IPv6 off
-# (ipv6.address=none), so it is turned on before the address goes on.
+
+# ── IPv6 on ovnbr ─────────────────────────────────────────────────────────────
+# Incus brings ovnbr up with IPv6 off (ipv6.address=none) each time it starts, which drops the host's address and routes
+# on it: a unit runs the script after every start of incus.service, not only at boot (docs/network.md#ipv6).
+# lima/tests/ovnbr-ipv6_test.sh tests this text.
+cat > /usr/local/sbin/titan-ovnbr-ipv6 <<'OVNBR'
+#!/bin/bash
+# The host's side of the uplink ovnup on ovnbr (docs/network.md#ipv6): IPv6 on, the gateway ::1 of the first /64, a route
+# for every other /64. Run by titan-ovnbr-ipv6.service after each start of Incus.
+set -euo pipefail
+IPV6_BLOCK_PREFIX=2001:db8:0:d4
+NET_ROOT=${OVNBR_NET_ROOT:-/sys/class/net}
+# Incus up before provision made ovnbr (a first boot): provision runs this again once it has.
+if [ ! -d "$NET_ROOT/ovnbr" ]; then
+  echo "titan-ovnbr-ipv6: no ovnbr yet; nothing to do"
+  exit 0
+fi
+# This host is the gateway ::1 of the first /64, as OVH's router is for singapore01. IPv6 goes on before the address.
 sysctl -qw net.ipv6.conf.ovnbr.disable_ipv6=0
 ip -6 addr replace ${IPV6_BLOCK_PREFIX}00::1/64 dev ovnbr
 # /64 number n goes to router ::(0x100 + n) of the first /64 (titan-ops infra/incus/design.md#ipv6-address-plan): the
@@ -149,6 +165,28 @@ for n in $(seq 1 255); do
   hex=$(printf '%02x' "$n")
   ip -6 route replace "${IPV6_BLOCK_PREFIX}${hex}::/64" via "${IPV6_BLOCK_PREFIX}00::1${hex}" dev ovnbr
 done
+echo "titan-ovnbr-ipv6: ovnbr has ${IPV6_BLOCK_PREFIX}00::1/64 and 255 routes"
+OVNBR
+chmod 755 /usr/local/sbin/titan-ovnbr-ipv6
+# PartOf: a stop or restart of Incus stops or restarts the unit too, else it stays active from the last start and the
+# next start of Incus would not run it. WantedBy: every start of Incus starts it (boot, restart, socket activation).
+cat > /etc/systemd/system/titan-ovnbr-ipv6.service <<'UNIT'
+[Unit]
+Description=IPv6 gateway and routes of ovnbr after Incus starts
+After=incus.service
+PartOf=incus.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/titan-ovnbr-ipv6
+
+[Install]
+WantedBy=incus.service
+UNIT
+systemctl daemon-reload
+systemctl enable titan-ovnbr-ipv6.service
+systemctl restart titan-ovnbr-ipv6.service
 
 # ── ipv4.address=auto on this VM ──────────────────────────────────────────────
 # Incus also skips a 10.x subnet whose .1 or .254 address answers ping or TCP 22. Every 10.x address tried got a ping
