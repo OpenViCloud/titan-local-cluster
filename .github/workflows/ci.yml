@@ -81,3 +81,9 @@ jobs:
 
       - name: First start outlasts Lima's wait
         run: bash lima/tests/first-start_test.sh
+
+      - name: Host memory check
+        run: bash lima/tests/host-memory_test.sh
+
+      - name: RAM sampler of a dev pass
+        run: bash lima/tests/ram-sample_test.sh

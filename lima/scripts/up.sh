@@ -5,7 +5,8 @@
 # (docs/topology.md#extra-ca; the VMs first, ArgoCD once it is up, the ConfigMaps of the regression runner and the worker
 # once their namespaces are made), the secrets, the S3 CA, cluster local joined to
 # titan-incus, the metrics certificate VictoriaMetrics reads Incus with (lima/scripts/incus-metrics.sh), and ArgoCD's root
-# application (and the Applications of the names before 2026-10-27 dropped). Safe to run again.
+# application (and the Applications of the names before 2026-10-27 dropped), then a warning when the host is short of RAM
+# (lima/scripts/host-memory.sh). Safe to run again.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(cd "$here/.." && pwd)
@@ -121,6 +122,9 @@ kubectl --kubeconfig "$kubeconfig" --request-timeout=30s wait --for=condition=Es
 bash "$here/scripts/trust-extra-ca.sh"
 kubectl --kubeconfig "$kubeconfig" --request-timeout=30s apply -f "$repo/gitops/apps/root.yaml"
 bash "$here/scripts/drop-old-applications.sh"
+# Both VMs are up and hold their RAM now. Only a warning here: before a pass that writes to the cluster, the session
+# runs the check itself and stops unless it says OK or SKIPPED (docs/topology.md#host-memory).
+bash "$here/scripts/host-memory.sh" || echo "WARNING: host-memory.sh exited $? (1 LOW, 2 ERROR: the HOST_MEMORY line above)." >&2
 
 cat <<URLS
 Local cluster up (kubectl: KUBECONFIG=$kubeconfig):
