@@ -25,12 +25,13 @@ if [ "$(uname -s)" != "Linux" ]; then
   exit 0
 fi
 
-printf '#!/bin/bash\necho "Mem: 5919 3961 362 321 2217 1958"\necho "full avg10=0.00"\n' > "$WORK/limactl-ok"
+printf '#!/bin/bash\n[ "$1 $2" = "shell titan-k3s" ] || { echo "wrong call: $*"; exit 3; }\necho "Mem: 5919 3961 362 321 2217 1958"\necho "full avg10=0.00"\n' > "$WORK/limactl-ok"
+printf '#!/bin/bash\nexit 1\n' > "$WORK/limactl-down"
 printf '#!/bin/bash\nsleep 5\n' > "$WORK/limactl-stalled"
-chmod +x "$WORK/limactl-ok" "$WORK/limactl-stalled"
+chmod +x "$WORK/limactl-ok" "$WORK/limactl-stalled" "$WORK/limactl-down"
 
-run() {  # run FAKE LOG: samples every second, makes the stop file after about 2.5 s, waits for the loop to end
-  local stop="$WORK/stop-$RANDOM"
+run() {  # run FAKE LOG [STOP]: samples every second, makes the stop file after about 2.5 s, waits for the loop to end
+  local stop=${3:-"$WORK/stop-$RANDOM"}
   RAM_SAMPLE_LIMACTL="$WORK/$1" RAM_SAMPLE_TIMEOUT=1 bash "$SCRIPT" "$2" "$stop" 1 &
   local pid=$!
   sleep 2.5
@@ -46,14 +47,28 @@ first=$(head -n 1 "$log")
 [ "$code" -eq 0 ] && ok "ends with exit 0 once the stop file exists" || bad "exit $code"
 [[ "$first" == "# bash lima/scripts/ram-sample.sh "*" · host "*" and VM titan-k3s · "* ]] && ok "first line is the evidence header" || bad "first line: $first"
 [ "$(grep -c '^== 20' "$log")" -ge 2 ] && ok "at least two samples" || bad "samples: $(grep -c '^== 20' "$log")"
-grep -q '^HOST_MEMORY=' "$log" && ok "each sample has the host check" || bad "no HOST_MEMORY line"
-grep -q '^Mem: 5919' "$log" && ok "each sample has the guest's free -m" || bad "no guest reading"
+samples=$(grep -c '^== 20' "$log")
+[ "$(grep -c '^HOST_MEMORY=' "$log")" -eq "$samples" ] && ok "each sample has the host check" || bad "HOST_MEMORY lines vs $samples samples"
+[ "$(grep -c '^Mem: 5919' "$log")" -eq "$samples" ] && ok "each sample has the guest's free -m, asked of titan-k3s" || bad "guest readings vs $samples samples: $(grep -m1 'wrong call' "$log")"
 [[ "$(tail -n 1 "$log")" == "== stop "* ]] && ok "last line says the loop stopped" || bad "last line: $(tail -n 1 "$log")"
 
 log2="$WORK/stalled.log"
 run limactl-stalled "$log2"
-grep -q '^titan-k3s: no answer within 1 s' "$log2" && ok "a stalled guest leaves a line and the loop goes on" || bad "stalled guest: $(cat "$log2")"
+[ "$(grep -c '^titan-k3s: no answer within 1 s' "$log2")" -ge 2 ] && ok "a stalled guest leaves a line and the loop goes on" || bad "stalled guest: $(cat "$log2")"
 [[ "$(tail -n 1 "$log2")" == "== stop "* ]] && ok "the stalled run still stops" || bad "stalled last line: $(tail -n 1 "$log2")"
+
+log3="$WORK/down.log"
+run limactl-down "$log3"
+grep -q '^titan-k3s: limactl exited 1' "$log3" && ! grep -q 'no answer' "$log3" && ok "a stopped VM is not reported as a stalled guest" || bad "stopped VM: $(cat "$log3")"
+
+touch "$WORK/old-stop"
+run limactl-ok "$WORK/old-stop.log" "$WORK/old-stop"
+[ "$(grep -c '^== 20' "$WORK/old-stop.log")" -ge 2 ] && ok "a stop file left from an earlier run does not end the new one" || bad "stale stop file: $(cat "$WORK/old-stop.log")"
+
+for every in 0 abc; do
+  bash "$SCRIPT" "$WORK/bad.log" "$WORK/bad.stop" "$every" >/dev/null 2>&1
+  [ $? -eq 2 ] && ok "SECONDS=$every: exit 2" || bad "SECONDS=$every accepted"
+done
 
 echo "existing" > "$WORK/kept.log"
 run limactl-ok "$WORK/kept.log"
