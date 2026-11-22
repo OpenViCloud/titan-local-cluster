@@ -2,7 +2,8 @@
 # backup-now_test.sh — lima/scripts/backup-now.sh runs one vm.backup or volume.backup on dev now.
 #
 # WHY this file exists: a backup is asked once a day per VM and volume, so a measurement of a backup on dev waited for
-# the next day's hourly pass. The script drops today's Done row of one resource and runs the control plane's schedule job at once. It runs against a fake `kubectl` that keeps one row.
+# the next day's hourly pass. The script drops today's Done row of one resource and runs the control plane's schedule
+# job at once. It runs against a fake `kubectl` that keeps one row.
 #
 # Run:  bash lima/tests/backup-now_test.sh     (from the repo root)
 
@@ -37,7 +38,7 @@ case "$verb" in
   create)
     if [ ! -f "$FAKE_ROW" ] && [ -z "${FAKE_NO_ROW:-}" ]; then echo "Pending|0|" > "$FAKE_ROW"; fi
     # The schedule reopens a Failed row (ProviderCommand.Reopen: Pending, no attempts, no error).
-    if grep -q '^Failed' "$FAKE_ROW" 2>/dev/null; then echo "Pending|0|" > "$FAKE_ROW"; fi
+    if [ -z "${FAKE_NO_REOPEN:-}" ] && grep -q '^Failed' "$FAKE_ROW" 2>/dev/null; then echo "Pending|0|" > "$FAKE_ROW"; fi
     ;;
   wait|delete) ;;
   exec)
@@ -123,6 +124,11 @@ row "Pending|0|"
 FAKE_END="Done|1|" FAKE_POLLS=1 run vm "$VM"
 [ "$RC" -eq 0 ] && ok "exit 0: waits for it" || bad "exit $RC: $OUT"
 grep -q "delete from\|create job" "$WORK/kubectl.log" && bad "touched a queued row: $(cat "$WORK/kubectl.log")" || ok "no delete, no job"
+
+echo "a Failed row the schedule does not reopen (Incus no longer holds the resource)"
+row "Failed|5|volume x is not in project p"
+FAKE_NO_REOPEN=1 run vm "$VM"
+[ "$RC" -eq 1 ] && [[ "$OUT" == *"BACKUP_NOW=NOT_QUEUED key=$KEY"* ]] && ok "exit 1, NOT_QUEUED, not the old error as a new result" || bad "exit $RC: $OUT"
 
 echo "a leased row is waited for too"
 row "Leased|1|"

@@ -7,8 +7,8 @@
 # It drops today's row of that one resource from core.provider_commands when the row is Done (a Failed row the schedule
 # reopens itself; a Pending or Leased row is left alone and waited for), runs the control plane's backup-schedule job from
 # its CronJob, and reads the row until it ends. The pass asks every VM and volume that has no row today, not only this one
-# (a resource Incus does not hold gets none: NOT_QUEUED), and it reopens every Failed row of today, so those rows lose
-# their last_error and attempts. Dev only: it writes to the dev database and reads kubeconfig of titan-k3s.
+# (a resource Incus does not hold gets none: NOT_QUEUED, also when its row is a Failed one the pass did not reopen), and it
+# reopens every Failed backup row of today (VM, volume and cluster config), so those rows lose their last_error and attempts. Dev only: it writes to the dev database and reads kubeconfig of titan-k3s.
 #
 # Exits, and says why on its last line:
 #   0  BACKUP_NOW=Done key=<key> attempts=<n> seconds=<s>; seconds counts from the first read of the row, so it includes
@@ -58,7 +58,7 @@ while [ $# -gt 0 ]; do
 done
 
 day=${BACKUP_NOW_DAY:-$(date -u +%Y%m%d)}
-[[ "$day" =~ ^[0-9]{8}$ ]] || usage
+[[ "$day" =~ ^[0-9]{8}$ ]] || { echo "ERROR: BACKUP_NOW_DAY must be yyyymmdd" >&2; exit 2; }
 
 if ! memory=$("$HOST_MEMORY" --strict); then
   echo "$memory"
@@ -85,6 +85,7 @@ row() { sql "select status || '|' || attempts || '|' || coalesce(last_error, '')
 
 started=$SECONDS
 state=$(row) || exit 2
+before=$state
 status=${state%%|*}
 case "$status" in
   Pending | Leased)
@@ -102,8 +103,8 @@ case "$status" in
     }
     k delete job -n "$APP_NAMESPACE" "$job" > /dev/null || true
     state=$(row) || exit 2
-    if [ -z "$state" ]; then
-      echo "BACKUP_NOW=NOT_QUEUED key=$key (the schedule queued nothing: does Incus hold this $kind?)"
+    if [ -z "$state" ] || { [ "$status" = "Failed" ] && [ "$state" = "$before" ]; }; then
+      echo "BACKUP_NOW=NOT_QUEUED key=$key (the schedule queued nothing new: does Incus hold this $kind?)"
       exit 1
     fi
     ;;
@@ -115,7 +116,6 @@ while true; do
   rest=${state#*|}
   attempts=${rest%%|*}
   error=${rest#*|}
-  [ "$status" = "$state" ] && { attempts=""; error=""; }
   case "$status" in
     Done)
       echo "BACKUP_NOW=Done key=$key attempts=$attempts seconds=$((SECONDS - started))"
