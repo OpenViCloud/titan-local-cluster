@@ -6,12 +6,32 @@
 # Prints one line, HOST_MEMORY=<word> ..., and exits:
 #   0  OK (no swap counts as 0%), or SKIPPED on any OS but Linux (macOS: no /proc/meminfo)
 #   1  LOW: MemAvailable under 2048 MiB, or swap in use above 75% (a whole percent, rounded down)
-#   2  ERROR: the meminfo file cannot be read, has no MemAvailable, or has a field that is not a number
+#   2  ERROR: the meminfo file cannot be read, has no MemAvailable, or has a field that is not a number, or an argument
+#      other than --strict
+#
+# --strict is for a job that loads the host's memory itself, a backup of a large disk (backup-now.sh): LOW is MemAvailable
+# under 4096 MiB or swap in use above 25%. The plain check said OK at 3163 MiB and 54% swap, then titan-incus's guest
+# stalled for two minutes under a 10 GiB volume export (2026-11-21). One reading: the limits are a hypothesis, not a
+# measured threshold (docs/topology.md#host-memory).
 # HOST_MEMINFO and HOST_OS stand in for /proc/meminfo and `uname -s` (lima/tests/host-memory_test.sh).
 set -euo pipefail
 
 min_available_mib=2048
 max_swap_used_percent=75
+mode=""
+for argument in "$@"; do
+  case "$argument" in
+    --strict)
+      min_available_mib=4096
+      max_swap_used_percent=25
+      mode=" strict"
+      ;;
+    *)
+      echo "HOST_MEMORY=ERROR unknown argument $argument"
+      exit 2
+      ;;
+  esac
+done
 os=${HOST_OS:-$(uname -s)}
 meminfo=${HOST_MEMINFO:-/proc/meminfo}
 
@@ -46,7 +66,7 @@ fi
 reading="available=${available_mib}MiB swap_used=${swap_used_percent}%"
 
 if [ "$available_mib" -lt "$min_available_mib" ] || [ "$swap_used_percent" -gt "$max_swap_used_percent" ]; then
-  echo "HOST_MEMORY=LOW $reading (wants available >= ${min_available_mib}MiB and swap_used <= ${max_swap_used_percent}%; free RAM on the host first: docs/topology.md#host-memory)"
+  echo "HOST_MEMORY=LOW $reading (${mode:+strict: }wants available >= ${min_available_mib}MiB and swap_used <= ${max_swap_used_percent}%; free RAM on the host first: docs/topology.md#host-memory)"
   exit 1
 fi
 echo "HOST_MEMORY=OK $reading"

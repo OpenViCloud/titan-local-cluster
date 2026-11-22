@@ -87,3 +87,6 @@ jobs:
 
       - name: RAM sampler of a dev pass
         run: bash lima/tests/ram-sample_test.sh
+
+      - name: Backup now on dev
+        run: bash lima/tests/backup-now_test.sh
