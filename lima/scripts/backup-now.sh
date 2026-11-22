@@ -8,7 +8,10 @@
 # reopens itself; a Pending or Leased row is left alone and waited for), runs the control plane's backup-schedule job from
 # its CronJob, and reads the row until it ends. The pass asks every VM and volume that has no row today, not only this one
 # (a resource Incus does not hold gets none: NOT_QUEUED, also when its row is a Failed one the pass did not reopen), and it
-# reopens the Failed rows of today of every VM and volume Incus holds, so those rows lose their last_error and attempts. Dev only: it writes to the dev database and reads kubeconfig of titan-k3s.
+# reopens the Failed rows of today of every VM and volume Incus holds (and the cluster config's row once every disk of
+# that cluster has ended), so those rows lose their last_error and attempts. A reopened command that fails again at
+# once with the same attempts and error before the row is read is told as NOT_QUEUED (same exit 1). Dev only: it writes
+# to the dev database and reads the kubeconfig of titan-k3s.
 #
 # Exits, and says why on its last line:
 #   0  BACKUP_NOW=Done key=<key> attempts=<n> seconds=<s>; seconds counts from the first read of the row, so it includes

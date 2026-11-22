@@ -175,7 +175,7 @@ unset FAKE_MEMORY
 
 echo "bad arguments reach nothing"
 BACKUP_NOW_DAY="20261122'; select 1; --" run vm "$VM"
-if [ "$RC" -eq 2 ] && [ ! -s "$WORK/kubectl.log" ]; then ok "exit 2, nothing called: SQL inside the day"; else bad "SQL in the day: exit $RC, log: $(cat "$WORK/kubectl.log")"; fi
+if [ "$RC" -eq 2 ] && [ ! -s "$WORK/kubectl.log" ] && [[ "$OUT" == *"BACKUP_NOW_DAY must be yyyymmdd"* ]]; then ok "exit 2, nothing called, says why: SQL inside the day"; else bad "SQL in the day: exit $RC, log: $(cat "$WORK/kubectl.log")"; fi
 row "Done|1|"
 for args in "vm" "disk $VM" "vm not-an-id" "vm $VM'; drop table core.vms; --" "vm $VM --timeout abc" "vm $VM --unknown"; do
   # shellcheck disable=SC2086
