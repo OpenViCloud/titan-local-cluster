@@ -4,15 +4,21 @@
 #
 #   backup-now.sh vm|volume <titan id> [--timeout SECONDS]
 #
-# It drops today's row of that one resource from core.provider_commands when the row is Done or Failed (a Pending or Leased
-# row is left alone and waited for), runs the control plane's backup-schedule job from its CronJob, and reads the row
-# until it ends. The pass asks every VM and volume that has no row today, not only this one; a resource Incus does not hold
-# gets none, and the script says NOT_QUEUED. Dev only: it writes to the dev database and reads kubeconfig of titan-k3s.
+# It drops today's row of that one resource from core.provider_commands when the row is Done (a Failed row the schedule
+# reopens itself; a Pending or Leased row is left alone and waited for), runs the control plane's backup-schedule job from
+# its CronJob, and reads the row until it ends. The pass asks every VM and volume that has no row today, not only this one
+# (a resource Incus does not hold gets none: NOT_QUEUED), and it reopens every Failed row of today, so those rows lose
+# their last_error and attempts. Dev only: it writes to the dev database and reads kubeconfig of titan-k3s.
 #
-# Prints one last line, BACKUP_NOW=<word> key=<key> ..., and exits:
-#   0  Done        1  Failed (error= has the last error) or NOT_QUEUED
-#   2  usage, or the cluster could not be read   3  host memory LOW (host-memory.sh --strict; nothing was asked of the cluster)
-#   4  TIMEOUT: the row did not end in time; the command is still queued or running
+# Exits, and says why on its last line:
+#   0  BACKUP_NOW=Done key=<key> attempts=<n> seconds=<s>; seconds counts from the first read of the row, so it includes
+#      the wait for the schedule job and the reading interval, not only the worker's run
+#   1  BACKUP_NOW=Failed key=<key> attempts=<n> error=<last error, one line> · BACKUP_NOW=NOT_QUEUED key=<key>
+#   2  usage, the cluster or the database could not be read, or the schedule job did not complete in 600 s (the row of a
+#      Done command is gone by then; the hourly pass asks it again)
+#   3  HOST_MEMORY=LOW or ERROR from host-memory.sh --strict, printed instead; nothing was asked of the cluster
+#   4  BACKUP_NOW=TIMEOUT key=<key> status=<s> attempts=<n> error=<last error>: the row did not end in --timeout seconds
+#      (counted like seconds=); the command is still queued or running
 # BACKUP_NOW_HOST_MEMORY, BACKUP_NOW_DAY (yyyymmdd, UTC) and BACKUP_NOW_POLL_SECONDS stand in for the host check, today and
 # the reading interval (lima/tests/backup-now_test.sh runs it against a fake kubectl).
 set -uo pipefail
@@ -51,6 +57,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+day=${BACKUP_NOW_DAY:-$(date -u +%Y%m%d)}
+[[ "$day" =~ ^[0-9]{8}$ ]] || usage
+
 if ! memory=$("$HOST_MEMORY" --strict); then
   echo "$memory"
   exit 3
@@ -71,7 +80,6 @@ sql() {
   k exec -n "$DB_NAMESPACE" "$primary" -c postgres -- psql -U postgres -d titan -At -v ON_ERROR_STOP=1 -c "$1"
 }
 
-day=${BACKUP_NOW_DAY:-$(date -u +%Y%m%d)}
 key="$kind-backup-$id-$day"
 row() { sql "select status || '|' || attempts || '|' || coalesce(last_error, '') from core.provider_commands where key = '$key'"; }
 
@@ -83,13 +91,13 @@ case "$status" in
     echo "the row of today is $status already: waiting for it"
     ;;
   *)
-    if [ -n "$status" ]; then
-      sql "delete from core.provider_commands where key = '$key' and status in ('Done','Failed')" > /dev/null || exit 2
+    if [ "$status" = "Done" ]; then
+      sql "delete from core.provider_commands where key = '$key' and status = 'Done'" > /dev/null || exit 2
     fi
     job="backup-now-$(date -u +%s)"
     k create job -n "$APP_NAMESPACE" "$job" --from=cronjob/control-plane-job-backup-schedule > /dev/null || exit 2
-    k wait -n "$APP_NAMESPACE" --for=condition=complete --timeout=180s "job/$job" > /dev/null || {
-      echo "ERROR: the schedule job $job did not complete in 180 s (kubectl -n $APP_NAMESPACE logs job/$job)" >&2
+    k wait -n "$APP_NAMESPACE" --for=condition=complete --timeout=600s "job/$job" > /dev/null || {
+      echo "ERROR: the schedule job $job did not complete in 600 s (the CronJob's own deadline; the command may be queued anyway, read its row: kubectl -n $APP_NAMESPACE logs job/$job)" >&2
       exit 2
     }
     k delete job -n "$APP_NAMESPACE" "$job" > /dev/null || true
@@ -107,18 +115,19 @@ while true; do
   rest=${state#*|}
   attempts=${rest%%|*}
   error=${rest#*|}
+  [ "$status" = "$state" ] && { attempts=""; error=""; }
   case "$status" in
     Done)
       echo "BACKUP_NOW=Done key=$key attempts=$attempts seconds=$((SECONDS - started))"
       exit 0
       ;;
     Failed)
-      echo "BACKUP_NOW=Failed key=$key attempts=$attempts error=$error"
+      echo "BACKUP_NOW=Failed key=$key attempts=$attempts error=${error//$'\n'/ }"
       exit 1
       ;;
   esac
   if [ $((SECONDS - started)) -ge "$timeout_seconds" ]; then
-    echo "BACKUP_NOW=TIMEOUT key=$key status=${status:-none} (the command is still queued or running)"
+    echo "BACKUP_NOW=TIMEOUT key=$key status=${status:-none} attempts=${attempts:-0} error=${error//$'\n'/ } (the command is still queued or running)"
     exit 4
   fi
   sleep "$POLL_SECONDS"
