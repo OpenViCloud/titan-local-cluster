@@ -61,6 +61,36 @@ out=$(HOST_OS=Darwin bash "$SCRIPT")
 code=$?
 if [ "$code" -eq 0 ] && [[ "$out" == "HOST_MEMORY=SKIPPED Darwin"* ]]; then ok "macOS: SKIPPED"; else bad "macOS (exit $code: $out)"; fi
 
+echo "host-memory.sh --strict (before a backup of a large disk)"
+checks() {  # checks NAME WANT_EXIT WANT_PREFIX   (like check, with --strict)
+  local out code
+  out=$(HOST_OS=Linux HOST_MEMINFO="$WORK/meminfo" bash "$SCRIPT" --strict 2>&1)
+  code=$?
+  if [ "$code" -eq "$2" ] && [[ "$out" == "$3"* ]]; then ok "$1"; else bad "$1 (exit $code: $out)"; fi
+}
+# The reading of 2026-11-21 at 13:08Z, before a 10 GiB volume export stalled titan-incus's guest for two minutes
+# (docs/topology.md#host-memory): the plain check said OK.
+meminfo 3238912 4194300 1920000
+check "the reading before the 2026-11-21 stall: OK without --strict" 0 "HOST_MEMORY=OK available=3163MiB swap_used=54%"
+checks "the reading before the 2026-11-21 stall: LOW with --strict" 1 "HOST_MEMORY=LOW available=3163MiB swap_used=54% (strict:"
+meminfo 4194304 4194300 3145725
+checks "4096 MiB available and 25% swap used: OK" 0 "HOST_MEMORY=OK available=4096MiB swap_used=25%"
+meminfo 4193280 4194300 4194300
+checks "4095 MiB available: LOW" 1 "HOST_MEMORY=LOW available=4095MiB swap_used=0%"
+meminfo 8388608 4194300 3101000
+checks "26% swap used: LOW" 1 "HOST_MEMORY=LOW available=8192MiB swap_used=26%"
+meminfo 8388608 0 0
+checks "no swap at all: OK" 0 "HOST_MEMORY=OK available=8192MiB swap_used=0%"
+printf 'MemTotal: 1 kB\n' > "$WORK/meminfo"
+checks "no MemAvailable: ERROR, not OK" 2 "HOST_MEMORY=ERROR cannot read MemAvailable"
+out=$(HOST_OS=Darwin bash "$SCRIPT" --strict)
+code=$?
+if [ "$code" -eq 0 ] && [[ "$out" == "HOST_MEMORY=SKIPPED Darwin"* ]]; then ok "--strict on macOS: SKIPPED"; else bad "--strict on macOS (exit $code: $out)"; fi
+meminfo 8388608 4194300 4194300
+out=$(HOST_OS=Linux HOST_MEMINFO="$WORK/meminfo" bash "$SCRIPT" --loose 2>&1)
+code=$?
+if [ "$code" -eq 2 ] && [[ "$out" == "HOST_MEMORY=ERROR unknown argument --loose"* ]]; then ok "an unknown argument is an ERROR, not OK"; else bad "unknown argument (exit $code: $out)"; fi
+
 echo "up.sh"
 call=$(grep -n 'scripts/host-memory.sh' "$UP" | grep -v '^[0-9]*:[[:space:]]*#' || true)
 if [ "$(printf '%s\n' "$call" | grep -c .)" -eq 1 ] && [[ "$call" == *'|| echo "WARNING:'* ]]; then ok "up.sh runs the check once and only warns"; else bad "up.sh call: ${call:-none}"; fi
