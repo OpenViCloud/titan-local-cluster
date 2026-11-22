@@ -130,6 +130,11 @@ row "Failed|5|volume x is not in project p"
 FAKE_NO_REOPEN=1 run vm "$VM"
 [ "$RC" -eq 1 ] && [[ "$OUT" == *"BACKUP_NOW=NOT_QUEUED key=$KEY"* ]] && ok "exit 1, NOT_QUEUED, not the old error as a new result" || bad "exit $RC: $OUT"
 
+echo "a Failed row reopened that fails again at once with the same attempts and error"
+row "Failed|1|boom"
+FAKE_END="Failed|1|boom" FAKE_POLLS=0 run vm "$VM"
+[ "$RC" -eq 1 ] && [[ "$OUT" == *"BACKUP_NOW=NOT_QUEUED key=$KEY"* ]] && ok "exit 1, NOT_QUEUED (as the header says)" || bad "exit $RC: $OUT"
+
 echo "a leased row is waited for too"
 row "Leased|1|"
 FAKE_END="Done|1|" FAKE_POLLS=1 run vm "$VM"
