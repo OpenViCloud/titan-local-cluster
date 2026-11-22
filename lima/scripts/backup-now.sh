@@ -8,14 +8,14 @@
 # reopens itself; a Pending or Leased row is left alone and waited for), runs the control plane's backup-schedule job from
 # its CronJob, and reads the row until it ends. The pass asks every VM and volume that has no row today, not only this one
 # (a resource Incus does not hold gets none: NOT_QUEUED, also when its row is a Failed one the pass did not reopen), and it
-# reopens every Failed backup row of today (VM, volume and cluster config), so those rows lose their last_error and attempts. Dev only: it writes to the dev database and reads kubeconfig of titan-k3s.
+# reopens the Failed rows of today of every VM and volume Incus holds, so those rows lose their last_error and attempts. Dev only: it writes to the dev database and reads kubeconfig of titan-k3s.
 #
 # Exits, and says why on its last line:
 #   0  BACKUP_NOW=Done key=<key> attempts=<n> seconds=<s>; seconds counts from the first read of the row, so it includes
 #      the wait for the schedule job and the reading interval, not only the worker's run
 #   1  BACKUP_NOW=Failed key=<key> attempts=<n> error=<last error, one line> · BACKUP_NOW=NOT_QUEUED key=<key>
-#   2  usage, the cluster or the database could not be read, or the schedule job did not complete in 600 s (the row of a
-#      Done command is gone by then; the hourly pass asks it again)
+#   2  usage (a BACKUP_NOW_DAY that is not yyyymmdd too), the cluster or the database could not be read, or the schedule
+#      job did not complete in 600 s (the row of a Done command is gone by then; the hourly pass asks it again)
 #   3  HOST_MEMORY=LOW or ERROR from host-memory.sh --strict, printed instead; nothing was asked of the cluster
 #   4  BACKUP_NOW=TIMEOUT key=<key> status=<s> attempts=<n> error=<last error>: the row did not end in --timeout seconds
 #      (counted like seconds=); the command is still queued or running
