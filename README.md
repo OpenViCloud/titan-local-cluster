@@ -161,6 +161,7 @@ bash lima/tests/first-start_test.sh
 bash lima/tests/host-memory_test.sh
 bash lima/tests/ram-sample_test.sh
 bash lima/tests/backup-now_test.sh
+bash lima/tests/dev-resource_test.sh
 ```
 
 CI runs all of these but `sweeper_test.sh` on every push to `main` and every pull request into it.
