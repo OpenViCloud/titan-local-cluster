@@ -90,3 +90,6 @@ jobs:
 
       - name: Backup now on dev
         run: bash lima/tests/backup-now_test.sh
+
+      - name: A VM and a volume on dev without the portal
+        run: bash lima/tests/dev-resource_test.sh

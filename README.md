@@ -21,7 +21,7 @@ Design, rules and runbook of the dev cluster: [docs/topology.md](docs/topology.m
 
 | Path | What |
 |---|---|
-| `lima/` | What both deployments share: `provision/` of the two VMs; `scripts/`: `up.sh` · `down.sh`, the secrets bootstrap, a Terraform acceptance token for dev; `tests/` of the provisioning; the regression runner overlay |
+| `lima/` | What both deployments share: `provision/` of the two VMs; `scripts/`: `up.sh` · `down.sh`, the secrets bootstrap, a Terraform acceptance token for dev, a VM and volume of `beta-user` without the portal (`dev-resource.sh`); `tests/` of the provisioning; the regression runner overlay |
 | `lima/macos/` · `lima/ubuntu/` | The two Lima VM files of each OS, and a link to `lima/provision` (Lima refuses `..` in a provision path); `up.sh` picks the folder by `uname -s` |
 | `gitops/apps/` | ArgoCD app-of-apps: `root-local` and one Application per app |
 | `base/` | The manifests every environment shares; prd builds on them from titan-ops |
@@ -161,6 +161,7 @@ bash lima/tests/first-start_test.sh
 bash lima/tests/host-memory_test.sh
 bash lima/tests/ram-sample_test.sh
 bash lima/tests/backup-now_test.sh
+bash lima/tests/dev-resource_test.sh
 ```
 
 CI runs all of these but `sweeper_test.sh` on every push to `main` and every pull request into it.
