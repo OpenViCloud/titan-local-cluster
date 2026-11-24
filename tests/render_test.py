@@ -781,7 +781,8 @@ class ScheduledJobs(unittest.TestCase):
     (titan-ops architecture/background-jobs.md#background-jobs)."""
 
     JOBS = {"meter", "backup-schedule", "backup-status", "template-sync-never-asked", "idempotency-cleanup",
-            "provider-command-retention", "vm-metric-retention", "usage-record-retention", "wallet-sweep"}
+            "provider-command-retention", "vm-metric-retention", "usage-record-retention", "wallet-sweep",
+            "default-network-backfill"}
 
     @staticmethod
     def job_of(cronjob):
@@ -854,6 +855,13 @@ class ScheduledJobs(unittest.TestCase):
             cronjob = self.cronjobs(root)["control-plane-job-wallet-sweep"]
             self.assertEqual(self.minutes_between_runs(cronjob["spec"]["schedule"]) * 60, interval, root)
             self.assertLess(cronjob["spec"]["jobTemplate"]["spec"]["activeDeadlineSeconds"], interval, root)
+
+    def test_only_the_default_network_backfill_is_suspended(self):
+        # Run by hand once at release with kubectl create job --from=cronjob/...; no schedule ever runs it
+        # (titan-ops features/network/design.md#default-network).
+        for root in (BASE, GITOPS):
+            suspended = {name for name, cronjob in self.cronjobs(root).items() if cronjob["spec"].get("suspend")}
+            self.assertEqual(suspended, {"control-plane-job-default-network-backfill"}, root)
 
     def test_the_ipv6_route_seed_runs_after_every_sync(self):
         job = first(render("control-plane"), "Job", "control-plane-ipv6-route-seed")
