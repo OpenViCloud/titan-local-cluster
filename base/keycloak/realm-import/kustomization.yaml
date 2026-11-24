@@ -25,6 +25,6 @@ configMapGenerator:
       - login__resources__fonts__be-vietnam-pro-vietnamese-400-normal.woff2=theme/openvicloud/login/resources/fonts/be-vietnam-pro-vietnamese-400-normal.woff2
       - login__resources__fonts__be-vietnam-pro-vietnamese-600-normal.woff2=theme/openvicloud/login/resources/fonts/be-vietnam-pro-vietnamese-600-normal.woff2
       - login__resources__fonts__be-vietnam-pro-vietnamese-700-normal.woff2=theme/openvicloud/login/resources/fonts/be-vietnam-pro-vietnamese-700-normal.woff2
-      - login__resources__img__favicon.svg=theme/openvicloud/login/resources/img/favicon.svg
+      - login__resources__img__icon.png=theme/openvicloud/login/resources/img/icon.png
       - login__template.ftl=theme/openvicloud/login/template.ftl
       - login__theme.properties=theme/openvicloud/login/theme.properties
