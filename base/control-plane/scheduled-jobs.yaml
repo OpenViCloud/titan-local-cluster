@@ -413,3 +413,50 @@ spec:
                   memory: 16Mi
                 limits:
                   memory: 64Mi
+---
+# The default network every tenant that never had one gets (titan-ops features/network/design.md#default-network):
+# suspended, so no schedule runs it; run once by hand at release, kubectl create job --from=cronjob/<this name>.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: control-plane-job-default-network-backfill
+spec:
+  schedule: "0 0 1 1 *"
+  suspend: true
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          priorityClassName: titan-platform
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.0
+              env:
+                - name: INTERNAL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: control-plane-secrets
+                      key: Internal__Token
+              command:
+                - sh
+                - -c
+                - >
+                  curl --fail-with-body -sS --max-time 540 -X POST
+                  http://control-plane/internal/jobs/default-network-backfill
+                  -H "X-Internal-Token: $INTERNAL_TOKEN"
+                  -H "Content-Type: application/json"
+                  -d '{}'
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi
