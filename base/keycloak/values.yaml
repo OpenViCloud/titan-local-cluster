@@ -52,7 +52,7 @@ extraEnv: |
 # Restarts Keycloak when the login theme changes: production mode caches themes
 # (titan-ops architecture/platform-infra.md#keycloak-theme). Value: python3 scripts/keycloak-theme.py --print
 podAnnotations:
-  checksum/openvicloud-theme: "6a3887c01af1b8fefa33face1ba1e0e4ca7c9c780dabec82380f6c7848fce72d"
+  checksum/openvicloud-theme: "7fdd5cdf824b0e87e1f62df1217108dbf8f2c898206ec295019897150e3924a9"
 
 extraVolumes: |
   - name: theme-openvicloud
@@ -79,8 +79,8 @@ extraVolumes: |
           path: login/resources/fonts/be-vietnam-pro-vietnamese-600-normal.woff2
         - key: login__resources__fonts__be-vietnam-pro-vietnamese-700-normal.woff2
           path: login/resources/fonts/be-vietnam-pro-vietnamese-700-normal.woff2
-        - key: login__resources__img__favicon.svg
-          path: login/resources/img/favicon.svg
+        - key: login__resources__img__icon.png
+          path: login/resources/img/icon.png
         - key: login__template.ftl
           path: login/template.ftl
         - key: login__theme.properties

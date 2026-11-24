@@ -117,14 +117,12 @@ body.ovc {
   white-space: nowrap;
 }
 
+/* The OpenViCloud icon (titan-ops features/public-site/design.md#brand-icon). */
 .ovc-brand-mark {
   width: 32px;
   height: 32px;
   border-radius: 9px;
-  background: var(--ovc-primary);
-  color: var(--ovc-primary-fg);
-  display: grid;
-  place-items: center;
+  flex-shrink: 0;
 }
 
 .ovc-locale {

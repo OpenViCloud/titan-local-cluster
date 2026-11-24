@@ -38,7 +38,7 @@
         </#list>
     </#if>
     <title>${msg("loginTitle",(realm.displayName!''))}</title>
-    <link rel="icon" href="${url.resourcesPath}/img/favicon.svg?v=${properties.ovcAssetsVersion!}" type="image/svg+xml" />
+    <link rel="icon" href="${url.resourcesPath}/img/icon.png?v=${properties.ovcAssetsVersion!}" type="image/png" />
     <#if properties.stylesCommon?has_content>
         <#list properties.stylesCommon?split(' ') as style>
             <link href="${url.resourcesCommonPath}/${style}" rel="stylesheet" />
@@ -140,9 +140,7 @@
 <div class="ovc-side">
 <header id="kc-header" class="ovc-top">
   <div id="kc-header-wrapper" class="ovc-brand">
-    <span class="ovc-brand-mark" aria-hidden="true">
-      <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><rect x="2" y="2.5" width="12" height="4.5" rx="1.2" stroke="currentColor" stroke-width="1.6"/><rect x="2" y="9" width="12" height="4.5" rx="1.2" stroke="currentColor" stroke-width="1.6"/><circle cx="4.8" cy="4.75" r="0.9" fill="currentColor"/><circle cx="4.8" cy="11.25" r="0.9" fill="currentColor"/></svg>
-    </span>
+    <img class="ovc-brand-mark" src="${url.resourcesPath}/img/icon.png?v=${properties.ovcAssetsVersion!}" width="32" height="32" alt="" />
     <span class="ovc-brand-name">${realm.displayName!''}</span>
   </div>
   <#if realm.internationalizationEnabled  && locale.supported?size gt 1>
