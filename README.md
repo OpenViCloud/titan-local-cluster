@@ -31,7 +31,7 @@ Design, rules and runbook of the dev cluster: [docs/topology.md](docs/topology.m
 
 ## Run
 
-Needs, on either OS: 16 GB (the two VMs' ceilings, 6 + 7 GiB on macOS and 6 + 4 GiB on Ubuntu (4 GiB not yet measured under a whole pass), and the host's own share add up to more than 16 GB on macOS, so the host may swap: [docs/topology.md#ram-budget](docs/topology.md#ram-budget)), [Lima](https://lima-vm.io/) (measured with 2.2.1), `kubectl`, `openssl` and `python3`. No account and no token: the
+Needs, on either OS: 16 GB (the two VMs' ceilings, 6 + 7 GiB on macOS and 5 + 4 GiB on Ubuntu (5 GiB not yet measured under a whole pass), and the host's own share add up to more than 16 GB on macOS, so the host may swap: [docs/topology.md#ram-budget](docs/topology.md#ram-budget)), [Lima](https://lima-vm.io/) (measured with 2.2.1), `kubectl`, `openssl` and `python3`. No account and no token: the
 repositories and the images (linux/arm64 and linux/amd64) are public. titan-incus runs KVM guests, so it needs nested virtualization:
 - macOS: an Apple M3 or later.
 - Ubuntu: x86_64 with KVM (`/dev/kvm` writable by your user) and nesting on (`cat /sys/module/kvm_intel/parameters/nested` says `Y`,

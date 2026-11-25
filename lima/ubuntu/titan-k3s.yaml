@@ -5,7 +5,9 @@
 base: template:_images/ubuntu-24.04
 vmType: qemu
 cpus: 3
-memory: 6GiB
+# 5 GiB on the 15 GB Ubuntu host, not the Mac's 6: at 6 + 4 the host still swapped titan-incus's guest out under a disk
+# export or import, and its kernel panicked (docs/topology.md#ram-2026-11-25).
+memory: 5GiB
 disk: 30GiB
 # SeaweedFS's data (gitops/seaweedfs) lives on the host, so it outlives `limactl delete titan-k3s`; up.sh makes the folder.
 # A fixed mountPoint, because the manifest's hostPath cannot name the user's home.
