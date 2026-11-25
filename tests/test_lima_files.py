@@ -5,8 +5,9 @@ branches of lima/scripts/host-os.sh, which lima/scripts/up.sh asks with `uname -
 
 What differs on Ubuntu (docs/network.md#vm-to-vm):
 no user-v2 network, so the Incus API and SeaweedFS's NodePort reach titan-k3s and titan-incus through the host's
-127.0.0.1, and Lima's host resolver answers dev's S3 name. titan-incus's memory too: 4 GiB on the 15 GB Ubuntu host,
-7 GiB on the Mac (docs/topology.md#ram-2026-11-17).
+127.0.0.1, and Lima's host resolver answers dev's S3 name. Both VMs' memory too: on the 15 GB Ubuntu host titan-incus
+has 4 GiB, 7 on the Mac (docs/topology.md#ram-2026-11-17), and titan-k3s 5 GiB, 6 on the Mac
+(docs/topology.md#ram-2026-11-25).
 
 Run:  python3 tests/test_lima_files.py     (needs ruby: python's stdlib reads no YAML)
 """
@@ -66,7 +67,7 @@ class Layout(unittest.TestCase):
         for name in VMS:
             mac, ubuntu = vm("macos", name), vm("ubuntu", name)
             for key in ("cpus", "memory", "disk", "mounts"):
-                if (name, key) == ("titan-incus", "memory"):
+                if key == "memory":
                     continue
                 self.assertEqual(mac.get(key), ubuntu.get(key), (name, key))
 
@@ -74,8 +75,8 @@ class Layout(unittest.TestCase):
         # The regression runner beside two control plane pods, two chat pods and the metrics tier needs this much
         # (docs/topology.md#ram-budget); both VMs on one host hold their ceilings, so the size is a budget, not a guess.
         for os_dir in ("macos", "ubuntu"):
-            spec = vm(os_dir, "titan-k3s")
-            self.assertEqual((spec["cpus"], spec["memory"]), (3, "6GiB"), os_dir)
+            self.assertEqual(vm(os_dir, "titan-k3s")["cpus"], 3, os_dir)
+        self.assertEqual(vm("macos", "titan-k3s")["memory"], "6GiB")
 
 
 class MacOS(unittest.TestCase):
@@ -92,6 +93,11 @@ class Ubuntu(unittest.TestCase):
         # (docs/topology.md#ram-2026-11-17).
         self.assertEqual(vm("ubuntu", "titan-incus")["memory"], "4GiB")
         self.assertEqual(vm("macos", "titan-incus")["memory"], "7GiB")
+
+    def test_k3s_leaves_the_15_gb_host_room(self):
+        # At 6 GiB beside titan-incus's 4 the host still swapped titan-incus's guest out under a disk export or import,
+        # and its kernel panicked (docs/topology.md#ram-2026-11-25).
+        self.assertEqual(vm("ubuntu", "titan-k3s")["memory"], "5GiB")
 
     def test_qemu_without_user_v2(self):
         # QEMU 10.2 aborts under load on user-v2's socket NIC (net_socket_send passes -1 on EWOULDBLOCK).
