@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # ram-sample_test.sh — lima/scripts/ram-sample.sh.
 #
-# WHY this file exists: ram-sample.sh reads the peak RAM of titan-k3s over a whole dev pass; the peak it read at 6 GiB
-# chose 5 GiB on Ubuntu (docs/topology.md#ram-2026-11-22). The sampler must keep going when the guest stops answering
-# (as it did on 2026-11-20), write a log the release record accepts (first line `#`), and end when the stop file
-# appears. It runs here against a fake limactl.
+# WHY this file exists: ram-sample.sh reads the peak RAM of titan-k3s over a whole dev pass, the reading that sizes the
+# VM: the peak at 6 GiB chose 5 GiB on Ubuntu (docs/topology.md#ram-2026-11-22), and a pass at 5 GiB measured that size
+# (docs/topology.md#ram-2026-11-25). The sampler must keep going when the guest stops answering (as it did on
+# 2026-11-20), start its log with a `#` header line, and end when the stop file appears. It runs here against a fake
+# limactl.
 #
 # Run:  bash lima/tests/ram-sample_test.sh     (from the repo root)
 
