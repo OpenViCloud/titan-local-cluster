@@ -25,4 +25,4 @@ images:
   # Matched by the name base/site gives the image (scripts/pull-images.py stops on any other).
   - name: site
     newName: ghcr.io/openvicloud/titan-landing
-    newTag: "3a8743f"
+    newTag: "5db54b8"
