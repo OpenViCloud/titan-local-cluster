@@ -1,0 +1,7 @@
+# No load balancer on this host (servicelb is off) and Kourier needs no address outside the cluster: ClusterIP,
+# which the host reaches through kube-proxy's rules (function/verify.sh).
+apiVersion: v1
+kind: Service
+metadata: {name: kourier, namespace: kourier-system}
+spec:
+  type: ClusterIP

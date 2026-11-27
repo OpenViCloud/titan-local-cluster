@@ -1,0 +1,7 @@
+# runtimeclassname: a function's pod must run on kata-fc. The template's securityContext is container-level only, which
+# Knative accepts without a flag (titan-ops features/ovc-function/design.md#k8s-templates).
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: config-features, namespace: knative-serving}
+data:
+  kubernetes.podspec-runtimeclassname: "enabled"

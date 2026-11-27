@@ -27,7 +27,8 @@ Design, rules and runbook of the dev cluster: [docs/topology.md](docs/topology.m
 | `base/` | The manifests every environment shares; prd builds on them from titan-ops |
 | `gitops/<app>/` | Dev's overlay of each app, on `../../base/<app>` |
 | `scripts/pull-images.py` | Moves dev to the images other repositories published from main |
-| `tests/` | Render checks of the overlays, the Lima files and the resize of an existing VM, the pull script, the Keycloak theme check, and the guest-log sweeper compared with titan-ops's template |
+| `function/` | The function cluster on the Ubuntu host (Kata `fc`, Knative, a registry): a second k3s outside `gitops/` and `base/`, applied by `function/up.sh`, not by ArgoCD; [function/README.md](function/README.md) |
+| `tests/` | Render checks of the overlays, the Lima files and the resize of an existing VM, the pull script, the Keycloak theme check, the function cluster's render, pins and script gates (`test_function_cluster.py`), and the guest-log sweeper compared with titan-ops's template |
 
 ## Run
 
@@ -144,6 +145,7 @@ python3 tests/test_lima_files.py      # ruby
 python3 tests/test_vm_size.py         # ruby
 python3 tests/test_vm_provision.py    # ruby
 python3 tests/test_pull_images.py
+python3 tests/test_function_cluster.py   # kubectl, ruby and network (Knative's release manifests)
 python3 tests/test_keycloak_theme.py && python3 scripts/keycloak-theme.py --check
 bash tests/sweeper_test.sh            # network and gh signed in (titan-ops's template on GitHub)
 bash lima/tests/incus-log-sweeper_test.sh

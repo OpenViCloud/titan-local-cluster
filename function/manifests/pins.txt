@@ -1,0 +1,5 @@
+# SHA-256 of each release manifest the kustomizations in this directory download (sha256sum format). tests/test_function_cluster.py
+# downloads every URL and compares; a tag moved after the fact, or a URL changed without its digest, turns it red.
+85dfaab78eb0032e920f754198ee9f2c7e94d1ae6d3583768b0ba910646f5f36  https://github.com/knative/serving/releases/download/knative-v1.24.0/serving-crds.yaml
+04535dccf8f7bc615e7a21e9cbf73bb133daef3047e91488f203900ba81fb2c3  https://github.com/knative/serving/releases/download/knative-v1.24.0/serving-core.yaml
+60c7f7a1c1d503075f653e58e2a5b48d0417da5659f0d2be988b8fa1c2b165f8  https://github.com/knative-extensions/net-kourier/releases/download/knative-v1.24.0/kourier.yaml

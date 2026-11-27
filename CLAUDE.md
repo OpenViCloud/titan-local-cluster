@@ -24,6 +24,6 @@ private), such as `titan-ops architecture/platform-infra.md#gitops-flow`. Change
   `--wait <repo>@<merge commit>` right after a merge only waits for that repository's push runs), not by hand.
   Dev runs no image built from a branch. A tag set by hand on the cluster does not stay: ArgoCD syncs it back to git.
   After a push or a merge to main: hard-refresh ArgoCD's Applications (README, "Move dev to main").
-- Before a push: `python3 tests/render_test.py`, `python3 tests/test_lima_files.py`, `python3 tests/test_pull_images.py`, `python3 tests/test_keycloak_theme.py`,
+- Before a push: `python3 tests/render_test.py`, `python3 tests/test_lima_files.py`, `python3 tests/test_pull_images.py`, `python3 tests/test_function_cluster.py`, `python3 tests/test_keycloak_theme.py`,
   `python3 scripts/keycloak-theme.py --check`, `bash tests/sweeper_test.sh`, and
   `for t in lima/tests/*.sh; do bash "$t" || break; done`. CI runs all of them but the sweeper test (reads titan-ops, private), which runs on any machine signed in to `gh` as an org member.

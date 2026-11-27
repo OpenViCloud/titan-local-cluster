@@ -1,0 +1,20 @@
+# The function cluster on dev: Knative Serving 1.24.0 + net-kourier 1.24.0 (release assets, SHA-256 in ../pins.txt),
+# our RuntimeClass `kata-fc` and the registry. Applied by function/up.sh after ../crds.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/knative/serving/releases/download/knative-v1.24.0/serving-core.yaml
+  - https://github.com/knative-extensions/net-kourier/releases/download/knative-v1.24.0/kourier.yaml
+  - runtimeclass.yaml
+  - registry.yaml
+
+# net-kourier 1.24.0 names docker.io/envoyproxy/envoy:v1.37-latest, a tag that moves.
+images:
+  - name: docker.io/envoyproxy/envoy
+    digest: sha256:7765ad61185fca9c9a770c9e2cad640d085d708ae9c22f3741345e88331472a4   # the index of v1.37-latest on 2026-11-27
+
+patches:
+  - path: config-network.yaml
+  - path: config-domain.yaml
+  - path: config-features.yaml
+  - path: kourier-service.yaml
