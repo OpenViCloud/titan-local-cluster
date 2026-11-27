@@ -21,7 +21,7 @@ It runs **on the host**, not in a Lima VM: a VM would nest KVM, and the cold sta
 sudo bash function/host/install.sh      # once: thin pool, k3s (--secrets-encryption), kata-deploy (shim fc, devmapper)
 bash function/up.sh                     # Knative 1.24.0, net-kourier, RuntimeClass kata-fc, registry; run again: changes none of them
 bash function/verify.sh                 # a sample function through the registry and Knative; PASS/FAIL per line
-bash function/runtimes-verify.sh <sha>  # the runtime images of OpenViCloud/titan-function-runtimes (python3.15, nodejs26, go) at commit <sha>, run as Knative Services and CronJobs
+bash function/runtimes-verify.sh <sha>  # the runtime images of OpenViCloud/titan-function-runtimes (python3.15, nodejs26, go) at the full 40-hex commit <sha>, run as Knative Services and CronJobs
 ```
 
 The last step of `install.sh` runs `systemctl disable k3s`, so k3s does not start at boot (the RAM belongs to the Lima VMs

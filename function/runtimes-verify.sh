@@ -6,15 +6,20 @@
 # titan-ops features/ovc-function/design.md#k8s-templates) and as a CronJob (the cron template) on kata-fc pods.
 # One line per check, PASS or FAIL, exit 1 if any FAIL. No sudo.
 #
-#   bash function/runtimes-verify.sh <commit sha of titan-function-runtimes that CI pushed>
+#   bash function/runtimes-verify.sh <full 40-hex commit sha of titan-function-runtimes that CI pushed>
 #
-# Needs: the cluster up (function/verify.sh), `go` on PATH (the go sample is built against the public library at that sha,
-# as a customer would), network to ghcr.io and github.com. It leaves namespace `fn-runtimes` behind so a second run is fast;
-# delete it with `kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml delete ns fn-runtimes`.
+# Needs: the cluster up (function/up.sh; function/verify.sh checks it), `go` on PATH (the go sample is built against the
+# public library at that sha, as a customer would; the library's go.mod names a Go version, and GOPROXY=direct means a host
+# `go` older than that cannot fetch a toolchain), network to ghcr.io and github.com.
+# What it writes: namespace `fn-runtimes` on the function cluster (Knative Services fn-<language>, CronJobs fn-<language>-cron and
+# Jobs fn-<language>-cronfail, which it deletes at the end and on exit; the Services and the namespace stay, so a second run is
+# fast: delete them with `kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml delete ns fn-runtimes`), and the cluster registry
+# (127.0.0.1:5100: runtime/<name>:<sha> and fn/runtimes/<language>:<sha>, never deleted).
 # FN_KUBECONFIG as in up.sh. RUNTIMES_SOURCE overrides the GHCR path (default ghcr.io/openvicloud/titan-function-runtimes).
 set -uo pipefail
 
-sha=${1:?usage: runtimes-verify.sh <commit sha of titan-function-runtimes>}
+sha=${1:?usage: runtimes-verify.sh <full 40-hex commit sha of titan-function-runtimes>}
+[[ $sha =~ ^[0-9a-f]{40}$ ]] || { echo "ERROR: '$sha' is not a full 40-hex commit sha (CI tags the images with github.sha, in full)" >&2; exit 1; }
 here=$(cd "$(dirname "$0")" && pwd)
 kubeconfig=${FN_KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}
 kc=(kubectl --kubeconfig "$kubeconfig")
@@ -28,12 +33,18 @@ pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1"; fails=$((fails + 1)); }
 
 echo "cluster: $("${kc[@]}" config view --minify -o 'jsonpath={.clusters[0].cluster.server}')"
-grep -Eq "server:[[:space:]]*['\"]?https://127\.0\.0\.1:6444" "$kubeconfig" || { echo "ERROR: $kubeconfig is not the function cluster" >&2; exit 1; }
+[ -r "$kubeconfig" ] || { echo "ERROR: cannot read $kubeconfig" >&2; exit 1; }
+# the server kubectl will use (the current context of the file), not just a line somewhere in it
+[ "$("${kc[@]}" config view --minify -o 'jsonpath={.clusters[0].cluster.server}')" = https://127.0.0.1:6444 ] || { echo "ERROR: $kubeconfig does not point at the function cluster (https://127.0.0.1:6444): refusing to write to another cluster" >&2; exit 1; }
 curl -fsS "$REGISTRY/v2/" >/dev/null || { echo "ERROR: registry $REGISTRY does not answer" >&2; exit 1; }
-work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+work=$(mktemp -d)
+# the CronJobs fire every minute: do not leave them behind when the run stops early
+cleanup() { for l in python node go; do "${kc[@]}" -n "$NS" delete cronjob "fn-$l-cron" --ignore-not-found >/dev/null 2>&1; "${kc[@]}" -n "$NS" delete job "fn-$l-cronfail" --ignore-not-found >/dev/null 2>&1; done; rm -rf "$work"; }
+trap cleanup EXIT
 "${kc[@]}" create namespace "$NS" --dry-run=client -o yaml | "${kc[@]}" apply -f - >/dev/null
 
-# the pod of one function, as the design's templates have it (labels, env, probe, security context); $1 trigger, $2 image, $3 handler
+# the pod of one function, as the design's templates have it (labels, env, probe, security context); $1 trigger, $2 image, $3 handler,
+# $4 the value of SAMPLE_CRON ("fail" makes the sample's cron function throw)
 podspec() {
   cat <<Y
           runtimeClassName: kata-fc
@@ -50,7 +61,7 @@ podspec() {
             - {name: TITAN_VERSION_ID, value: "v-sample"}
             - {name: TITAN_TIMEOUT_SECONDS, value: "30"}
             - {name: TITAN_SCHEDULE, value: "* * * * *"}
-            - {name: SAMPLE_CRON, value: "${SAMPLE_CRON:-}"}
+            - {name: SAMPLE_CRON, value: "${4:-}"}
             resources:
               requests: {memory: 256Mi, cpu: 250m}
               limits: {memory: 256Mi, cpu: "1"}
@@ -67,7 +78,7 @@ podspec() {
 Y
 }
 
-declare -A DIGEST HOSTS
+declare -A DIGEST
 kourier=$("${kc[@]}" -n kourier-system get svc kourier -o jsonpath='{.spec.clusterIP}')
 
 echo "# images: GHCR -> the cluster registry -> a composed function image"
@@ -118,7 +129,8 @@ for entry in $RUNTIMES; do
   IFS=: read -r name lang handler <<<"$entry"
   [ -n "${DIGEST[$lang]:-}" ] || continue
   img="localhost:5100/fn/runtimes/$lang@${DIGEST[$lang]}"
-  "${kc[@]}" -n "$NS" delete cronjob "fn-$lang-cron" job "fn-$lang-cronfail" --ignore-not-found >/dev/null
+  "${kc[@]}" -n "$NS" delete cronjob "fn-$lang-cron" --ignore-not-found >/dev/null
+  "${kc[@]}" -n "$NS" delete job "fn-$lang-cronfail" --ignore-not-found >/dev/null   # `delete cronjob A job B` reads B as a cronjob
   {
     cat <<Y
 apiVersion: batch/v1
@@ -156,7 +168,7 @@ spec:
     spec:
       restartPolicy: Never
 Y
-    SAMPLE_CRON=fail podspec cron "$img" "$handler" | sed 's/^    //'   # a Job's pod spec sits one level higher than a CronJob's
+    podspec cron "$img" "$handler" fail | sed 's/^    //'   # a Job's pod spec sits one level higher than a CronJob's
   } | "${kc[@]}" apply -f - >/dev/null || fail "$name: CronJob and Job applied"
 done
 
@@ -214,10 +226,10 @@ for entry in $RUNTIMES; do
   IFS=: read -r name lang handler <<<"$entry"
   [ -n "${DIGEST[$lang]:-}" ] || continue
   for _ in $(seq 1 60); do
-    [ "$("${kc[@]}" -n "$NS" get pods -l "serving.knative.dev/service=fn-$lang" --no-headers 2>/dev/null | grep -c .)" = 0 ] && break
+    pods=$("${kc[@]}" -n "$NS" get pods -l "serving.knative.dev/service=fn-$lang" -o name 2>&1) && [ -z "$pods" ] && break   # a failing command is not "no pods"
     sleep 5
   done
-  [ "$("${kc[@]}" -n "$NS" get pods -l "serving.knative.dev/service=fn-$lang" --no-headers 2>/dev/null | grep -c .)" = 0 ] && pass "$name: no pod left after idle (the adapter ended on SIGTERM)" || fail "$name: no pod left after idle"
+  pods=$("${kc[@]}" -n "$NS" get pods -l "serving.knative.dev/service=fn-$lang" -o name 2>&1) && [ -z "$pods" ] && pass "$name: no pod left after idle (scaled to zero; how fast the adapter ends on SIGTERM is measured apart)" || fail "$name: no pod left after idle"
   host=$("${kc[@]}" -n "$NS" get ksvc "fn-$lang" -o jsonpath='{.status.url}' | sed 's#http://##')
   out=$(curl -sS -m 60 -H "Host: $host" "http://$kourier/")
   case "$out" in "hello $lang kernel="*) pass "$name: cold request answered" ;; *) fail "$name: cold request answered: '$out'" ;; esac
@@ -256,6 +268,7 @@ sys.exit(0 if sorted(e) == ['schedule', 'scheduledTime', 'trigger'] and e['trigg
   code=$("${kc[@]}" -n "$NS" get pod "$pod" -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}' 2>/dev/null)
   [ "$code" = 1 ] && "${kc[@]}" -n "$NS" logs "$pod" -c function 2>&1 | grep -q "sample cron failure" && pass "$name: exit code 1, the error in the pod log" || fail "$name: exit code 1, the error in the pod log (exit $code)"
   "${kc[@]}" -n "$NS" delete cronjob "fn-$lang-cron" --ignore-not-found >/dev/null
+  "${kc[@]}" -n "$NS" delete job "fn-$lang-cronfail" --ignore-not-found >/dev/null
 done
 
 [ "$fails" -eq 0 ] && echo "RUNTIMES_VERIFY_RESULT=OK" || { echo "RUNTIMES_VERIFY_RESULT=FAIL ($fails)"; exit 1; }

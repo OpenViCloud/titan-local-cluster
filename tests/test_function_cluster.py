@@ -175,22 +175,53 @@ class ScriptTest(unittest.TestCase):
         text = RUNTIMES_VERIFY.read_text()
         self.assertRegex(text, r"kc=\(kubectl --kubeconfig \"\$kubeconfig\"\)")
         for number, line in enumerate(text.splitlines(), 1):
-            if line.lstrip().startswith("#"):
+            code = line.split("   #")[0]  # a trailing comment may name kubectl
+            if code.lstrip().startswith("#"):
                 continue
-            self.assertNotRegex(line, r"(?<![\w\[\"{$-])kubectl (?!--kubeconfig)(?!&)(?!>)", f"runtimes-verify.sh:{number}: {line}")
-        self.assertIn("https://127\\.0\\.0\\.1:6444", text, "it refuses a kubeconfig that is not the function cluster's")
+            self.assertNotRegex(code, r"(?<![\w\[\"{$-])kubectl (?!--kubeconfig)(?!&)(?!>)", f"runtimes-verify.sh:{number}: {line}")
+        self.assertIn("jsonpath={.clusters[0].cluster.server}')\" = https://127.0.0.1:6444", text, "it compares the server kubectl will use with the function cluster's")
         self.assertNotRegex(text, r"\bsudo\b(?!\.)", "no sudo")
 
-    def test_the_runtime_samples_answer_alike(self):
-        # runtimes-verify.sh reads one body shape from all three
+    def test_the_runtime_samples_answer_in_the_shape_the_script_reads(self):
+        # runtimes-verify.sh matches one body shape (`case` patterns on `kernel=`, ` uid=1000 `, ` fnwrite=denied tmpwrite=ok `,
+        # ` path=/some/path fn=f-sample version=v-sample left=<digits>`): each sample says these fields in this order
+        order = ("hello ", "kernel=", " uid=", " fnwrite=", " tmpwrite=", " path=", " fn=", " version=", " left=")
         for lang, name in (("python", "main.py"), ("node", "index.mjs"), ("go", "main.go")):
             text = (FUNCTION / "sample" / "runtimes" / lang / name).read_text()
-            for needle in ("hello " + lang, "kernel=", "uid=", "fnwrite=", "tmpwrite=", "path=", "fn=", "version=", "left=",
-                           "CRON-EVENT ", "sample failure", "sample cron failure", "x-runtime"):
+            body = text[text.index("hello " + lang):]
+            at = [body.index(token.replace("hello ", "hello " + lang) if token == "hello " else token) for token in order]
+            self.assertEqual(at, sorted(at), f"{lang}/{name}: fields out of order")
+            for needle in ("CRON-EVENT ", "sample failure", "sample cron failure", "x-runtime"):
                 self.assertIn(needle, text, f"{lang}/{name}: {needle}")
+        script = RUNTIMES_VERIFY.read_text()
+        for pattern in ('"hello $lang kernel="*', '*" uid=1000 "*', '*" fnwrite=denied tmpwrite=ok "*', '" path=/some/path fn=f-sample version=v-sample left="'):
+            self.assertIn(pattern, script)
 
-    def test_copy_image_reads_ghcr_and_docker_hub(self):
+    def test_runtimes_verify_wants_a_full_sha(self):
+        for sha in ("main", "c9a2d77", "../x", "a b", "x&scope=repository:o/r:pull", "C9A2D7746BD30C418F7BC0AFB2FD61AF16F3F7B1"):
+            out = subprocess.run(["bash", str(RUNTIMES_VERIFY), sha], capture_output=True, text=True)
+            self.assertEqual(out.returncode, 1, sha)
+            self.assertIn("40-hex", out.stderr, sha)
+
+    def test_runtimes_verify_refuses_a_kubeconfig_that_points_elsewhere(self):
+        with tempfile.TemporaryDirectory() as work:
+            bad = pathlib.Path(work, "kubeconfig")
+            bad.write_text("apiVersion: v1\nkind: Config\ncurrent-context: c\nclusters:\n- name: c\n  cluster: {server: 'https://127.0.0.1:6443'}\n"
+                           "contexts:\n- name: c\n  context: {cluster: c, user: u}\nusers:\n- name: u\n  user: {}\n")
+            out = subprocess.run(["bash", str(RUNTIMES_VERIFY), "a" * 40], capture_output=True, text=True, env={**os.environ, "FN_KUBECONFIG": str(bad)})
+            self.assertEqual(out.returncode, 1)
+            self.assertIn("does not point at the function cluster", out.stderr)
+
+    def test_the_cronjob_and_the_job_are_deleted_by_separate_commands(self):
+        # `kubectl delete cronjob A job B` reads B as a cronjob and leaves the Job: a second run then finds a stale one
+        for number, line in enumerate(RUNTIMES_VERIFY.read_text().splitlines(), 1):
+            code = line.split("   #")[0]
+            if "delete" in code and not code.lstrip().startswith("#"):
+                self.assertFalse(re.search(r"delete cronjob \S+ job\b", code), f"runtimes-verify.sh:{number}")
+
+    def test_copy_image_checks_digests_without_assert_and_reads_both_registries(self):
         text = (FUNCTION / "sample" / "copy_image.py").read_text()
+        self.assertNotRegex(text, r"(?m)^\s*assert\b", "python -O strips asserts: a digest check must not be one")
         self.assertIn("https://ghcr.io/token", text)
         self.assertIn("auth.docker.io", text)
 

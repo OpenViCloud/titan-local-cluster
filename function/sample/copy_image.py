@@ -28,10 +28,13 @@ if "manifests" in m:
     d = next(x for x in m["manifests"] if x.get("platform", {}).get("architecture") == "amd64"
              and x["platform"].get("os") == "linux")
     _, _, body = http("GET", f"{hub}/manifests/{d['digest']}", headers={**H, "Accept": ACC})
+    if sha256(body) != d["digest"]:
+        raise SystemExit(f"manifest {d['digest']} came back as {sha256(body)}")
     m = json.loads(body)
 for b in [m["config"]] + m["layers"]:
     _, _, blob = http("GET", f"{hub}/blobs/{b['digest']}", headers=H)
-    assert sha256(blob) == b["digest"], b["digest"]
+    if sha256(blob) != b["digest"]:  # not an assert: python -O strips those
+        raise SystemExit(f"blob {b['digest']} came back as {sha256(blob)}")
     push_blob(reg, dst_repo, blob)
-http("PUT", f"{reg}/v2/{dst_repo}/manifests/{dst_tag}", data=body, headers={"Content-Type": m["mediaType"]})
-print(f"COPIED {src} -> {dst} manifest={sha256(body)} layers={len(m['layers'])} mediaType={m['mediaType']}")
+http("PUT", f"{reg}/v2/{dst_repo}/manifests/{dst_tag}", data=body, headers={"Content-Type": m.get("mediaType", "application/vnd.oci.image.manifest.v1+json")})
+print(f"COPIED {src} -> {dst} manifest={sha256(body)} layers={len(m['layers'])} mediaType={m.get('mediaType')}")
