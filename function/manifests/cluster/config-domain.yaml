@@ -1,0 +1,6 @@
+# fn<26>.fn.localhost: the URL shape of the design (fn<26>.fn.<domain>), on the dev machine's own name.
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: config-domain, namespace: knative-serving}
+data:
+  fn.localhost: ""

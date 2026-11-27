@@ -1,0 +1,30 @@
+# CNCF Distribution as the code registry of dev: it takes cross-repository mounts (HTTP 201), which an image
+# function relies on. On the node's own network at 127.0.0.1:5100, so containerd pulls from `localhost:5100`
+# (registries.yaml, function/host/install.sh). Not a Service: nothing outside the host reaches it.
+apiVersion: v1
+kind: Namespace
+metadata: {name: registry}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: registry, namespace: registry}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: registry}}
+  template:
+    metadata: {labels: {app: registry}}
+    spec:
+      hostNetwork: true
+      containers:
+        - name: registry
+          image: docker.io/library/registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+          env:
+            - {name: REGISTRY_HTTP_ADDR, value: "127.0.0.1:5100"}
+          resources:
+            requests: {cpu: 20m, memory: 32Mi}
+            limits: {memory: 256Mi}
+          volumeMounts: [{name: data, mountPath: /var/lib/registry}]
+      volumes:
+        - name: data
+          hostPath: {path: /var/lib/fn-cluster/registry, type: DirectoryOrCreate}

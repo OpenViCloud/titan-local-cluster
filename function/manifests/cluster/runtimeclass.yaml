@@ -1,0 +1,12 @@
+# Our RuntimeClass for the Kata shim `fc`. kata-deploy's own (250m CPU, 130Mi per pod) is off in function/host/install.sh:
+# the scheduler adds the overhead to every pod's request, and 250m allowed 11 pods on 6 CPUs.
+# Overhead: an idle sandbox costs the host 167 MiB (Firecracker) + 33 MiB (Kata shim) = 200 MiB and about 7m CPU, mean of 5
+# sandboxes after 60 s, 6-core desktop (docs/topology.md#function-cluster); rounded up.
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata: {name: kata-fc}
+handler: kata-fc
+overhead:
+  podFixed: {cpu: 10m, memory: 210Mi}
+scheduling:
+  nodeSelector: {katacontainers.io/kata-runtime: "true"}

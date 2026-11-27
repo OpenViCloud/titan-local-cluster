@@ -37,6 +37,9 @@ jobs:
       - name: Provision scripts of an existing VM brought to its Lima file's
         run: python3 tests/test_vm_provision.py
 
+      - name: Function cluster (render, pins, gates)
+        run: python3 tests/test_function_cluster.py
+
       - name: Pull script
         run: python3 tests/test_pull_images.py
 
