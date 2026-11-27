@@ -334,7 +334,7 @@ class ScriptTest(unittest.TestCase):
 
 
 class RuntimesVerifyHarness(unittest.TestCase):
-    """runtimes-verify.sh run against stubs of kubectl, curl and python3 (the stub python3 only fakes the two image scripts),
+    """runtimes-verify.sh run against stubs of kubectl, curl, go and python3 (the stub python3 only fakes the two image scripts),
     so what it does to the cluster is what the test reads from the stub's log: no cluster is touched."""
 
     def setUp(self):
@@ -412,11 +412,11 @@ esac
 
     def test_the_throwing_cron_job_gets_sample_cron_fail_and_the_plain_cronjob_does_not(self):
         proc = self.start()
-        self.stop_when(proc, lambda: len(list(self.work.glob("apply-*.yaml"))) >= 4, seconds=120)   # the namespace, then a CronJob and a Job per runtime (one apply each)
+        self.stop_when(proc, lambda: len(list(self.work.glob("apply-*.yaml"))) >= 4, seconds=120)   # the namespace, then one apply per runtime that carries its CronJob and its Job
         rendered = "\n---\n".join(f.read_text() for f in sorted(self.work.glob("apply-*.yaml")))
         cron = [d for d in rendered.split("\n---\n") if "kind: CronJob" in d]
         jobs = [d for d in rendered.split("\n---\n") if "kind: Job" in d]
-        self.assertTrue(cron and jobs, rendered[:500])
+        self.assertEqual((len(cron), len(jobs)), (3, 3), rendered[:500])
         for d in cron:
             self.assertIn('{name: SAMPLE_CRON, value: ""}', d)
         for d in jobs:
@@ -454,23 +454,25 @@ class CopyImageDigests(unittest.TestCase):
                 mock.patch("compose_image.push_blob", lambda *a: pushed.append(("blob", a[-1]))), \
                 mock.patch("builtins.print"):
             sys.modules.pop("compose_image", None)
+            self.addCleanup(sys.modules.pop, "compose_image", None)   # the fake http must not outlive the test
             import compose_image  # noqa: F401
             compose_image.http, compose_image.push_blob = fake_http, lambda *a: pushed.append(("blob", a[-1]))
             return pushed, runpy.run_path(str(FUNCTION / "sample" / "copy_image.py"))
 
     def test_a_good_manifest_and_blobs_are_copied(self):
         pushed, _ = self.run_copy(None, None)
-        self.assertTrue(pushed)
+        self.assertTrue([p for p in pushed if p[0] == "blob"], "the blobs are pushed")
+        self.assertTrue([p for p in pushed if p[0] == "PUT" and "/manifests/" in p[1]], "and then the manifest")
 
     def test_a_child_manifest_that_does_not_hash_to_its_digest_is_refused(self):
         with self.assertRaises(SystemExit) as raised:
             self.run_copy(b"{}", None)
-        self.assertIn("came back as", str(raised.exception))
+        self.assertIn("manifest sha256:", str(raised.exception))
 
     def test_a_blob_that_does_not_hash_to_its_digest_is_refused(self):
         with self.assertRaises(SystemExit) as raised:
             self.run_copy(None, b"tampered")
-        self.assertIn("came back as", str(raised.exception))
+        self.assertIn("blob sha256:", str(raised.exception))
 
 
 if __name__ == "__main__":
