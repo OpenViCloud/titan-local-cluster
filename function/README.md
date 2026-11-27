@@ -21,6 +21,7 @@ It runs **on the host**, not in a Lima VM: a VM would nest KVM, and the cold sta
 sudo bash function/host/install.sh      # once: thin pool, k3s (--secrets-encryption), kata-deploy (shim fc, devmapper)
 bash function/up.sh                     # Knative 1.24.0, net-kourier, RuntimeClass kata-fc, registry; run again: changes none of them
 bash function/verify.sh                 # a sample function through the registry and Knative; PASS/FAIL per line
+bash function/runtimes-verify.sh <sha>  # the runtime images of OpenViCloud/titan-function-runtimes (python3.15, nodejs26, go) at commit <sha>, run as Knative Services and CronJobs
 ```
 
 The last step of `install.sh` runs `systemctl disable k3s`, so k3s does not start at boot (the RAM belongs to the Lima VMs
@@ -37,9 +38,9 @@ sudo bash function/host/uninstall.sh
 - `manifests/crds`, `manifests/cluster`: kustomize. Knative and net-kourier are not copied here: the kustomizations download
   their release assets (tag-pinned) and `manifests/pins.txt` holds each file's SHA-256. `tests/test_function_cluster.py` (CI)
   checks it; `up.sh` does not, so a tag moved after the fact changes what `up.sh` applies and only CI turns red. net-kourier names `envoy:v1.37-latest`; the kustomization replaces it with a digest.
-- `sample/`: a function (`hello/`) and the two stdlib-only scripts that turn it into an image: `copy_image.py` puts a runtime
-  image (amd64) into the registry (anonymous pull from Docker Hub, which rate-limits), `compose_image.py` turns a zip into an image whose layers are the runtime's, mounted from
+- `sample/`: a function (`hello/`), one sample function per runtime image of `titan-function-runtimes` (`runtimes/python`, `runtimes/node`, `runtimes/go`: `runtimes-verify.sh` zips and composes them) and the two stdlib-only scripts that turn a function into an image: `copy_image.py` puts a runtime
+  image (amd64) into the registry (anonymous pull from Docker Hub, which rate-limits, or from `ghcr.io`, where the runtime packages are public), `compose_image.py` turns a zip into an image whose layers are the runtime's, mounted from
   its repository (HTTP 201, nothing copied), plus one layer with the zip's files under `/function`.
 - `tests/test_function_cluster.py` (CI): render, pins, ports, and the gates of the scripts.
 
-Network it uses: `get.k3s.io` and `github.com` (k3s installer and binary, Knative and net-kourier release assets), `ghcr.io` (kata-deploy chart, job image), `quay.io` (kata-deploy and kubectl images; the kubectl one is `latest`), `gcr.io` (Knative images), `docker.io` (k3s's mirrored system images, Envoy, `registry:2`, and `verify.sh`'s anonymous pull of `python:3.12-slim`). Nothing is signed in.
+Network it uses: `get.k3s.io` and `github.com` (k3s installer and binary, Knative and net-kourier release assets), `ghcr.io` (kata-deploy chart, job image), `quay.io` (kata-deploy and kubectl images; the kubectl one is `latest`), `gcr.io` (Knative images), `docker.io` (k3s's mirrored system images, Envoy, `registry:2`, and `verify.sh`'s anonymous pull of `python:3.12-slim`), and for `runtimes-verify.sh` `ghcr.io` (the runtime images) and `github.com` (the Go sample is built against the public library at the given commit). Nothing is signed in.

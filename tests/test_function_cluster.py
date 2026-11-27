@@ -30,6 +30,7 @@ INSTALL = FUNCTION / "host" / "install.sh"
 UNINSTALL = FUNCTION / "host" / "uninstall.sh"
 UP = FUNCTION / "up.sh"
 VERIFY = FUNCTION / "verify.sh"
+RUNTIMES_VERIFY = FUNCTION / "runtimes-verify.sh"
 
 # Host ports of Lima's two VMs (docs/topology.md#network), and 5000, which another program held when this was measured.
 LIMA_PORTS = {6443, 10250, 10255, 8080, 8443, 9100, 8472, 5000}
@@ -141,7 +142,7 @@ class PinsTest(unittest.TestCase):
 
 class ScriptTest(unittest.TestCase):
     def test_scripts_exist_and_parse(self):
-        for script in (INSTALL, UNINSTALL, UP, VERIFY):
+        for script in (INSTALL, UNINSTALL, UP, VERIFY, RUNTIMES_VERIFY):
             self.assertTrue(script.exists(), script)
             subprocess.run(["bash", "-n", str(script)], check=True)
 
@@ -168,6 +169,30 @@ class ScriptTest(unittest.TestCase):
                     seen += 1
                     self.assertIn("--kubeconfig /etc/rancher/k3s/k3s.yaml", line, f"{script.name}:{number}")
         self.assertGreaterEqual(seen, 8)
+
+    def test_runtimes_verify_talks_to_the_function_cluster_only(self):
+        # the cluster's own kubeconfig is in `kc`; a bare kubectl would follow the default context, which is titan-k3s's
+        text = RUNTIMES_VERIFY.read_text()
+        self.assertRegex(text, r"kc=\(kubectl --kubeconfig \"\$kubeconfig\"\)")
+        for number, line in enumerate(text.splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            self.assertNotRegex(line, r"(?<![\w\[\"{$-])kubectl (?!--kubeconfig)(?!&)(?!>)", f"runtimes-verify.sh:{number}: {line}")
+        self.assertIn("https://127\\.0\\.0\\.1:6444", text, "it refuses a kubeconfig that is not the function cluster's")
+        self.assertNotRegex(text, r"\bsudo\b(?!\.)", "no sudo")
+
+    def test_the_runtime_samples_answer_alike(self):
+        # runtimes-verify.sh reads one body shape from all three
+        for lang, name in (("python", "main.py"), ("node", "index.mjs"), ("go", "main.go")):
+            text = (FUNCTION / "sample" / "runtimes" / lang / name).read_text()
+            for needle in ("hello " + lang, "kernel=", "uid=", "fnwrite=", "tmpwrite=", "path=", "fn=", "version=", "left=",
+                           "CRON-EVENT ", "sample failure", "sample cron failure", "x-runtime"):
+                self.assertIn(needle, text, f"{lang}/{name}: {needle}")
+
+    def test_copy_image_reads_ghcr_and_docker_hub(self):
+        text = (FUNCTION / "sample" / "copy_image.py").read_text()
+        self.assertIn("https://ghcr.io/token", text)
+        self.assertIn("auth.docker.io", text)
 
     def test_scripts_replace_an_old_log(self):
         # a log left by an earlier run may belong to the user: root cannot write over it in /tmp (fs.protected_regular)

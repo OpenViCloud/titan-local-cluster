@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
-"""Copy one linux/amd64 image from Docker Hub into the function cluster's registry, stdlib only.
+"""Copy one linux/amd64 image from Docker Hub or GHCR into the function cluster's registry, stdlib only.
 Usage: copy_image.py library/python:3.12-slim http://127.0.0.1:5100 runtime/python:3.12-slim
-Docker Hub serves an index; the amd64 manifest is pushed as a single-platform manifest (compose_image.py needs that)."""
+       copy_image.py ghcr.io/openvicloud/titan-function-runtimes/python3.15:<sha> http://127.0.0.1:5100 runtime/python3.15:<sha>
+Docker Hub (the default) and GHCR are read anonymously; GHCR serves a public package without a login. An index is resolved to
+its amd64 manifest, which is pushed as a single-platform manifest (compose_image.py needs that)."""
 import json, sys, urllib.request
 from compose_image import http, push_blob, sha256
 
 src, reg, dst = sys.argv[1], sys.argv[2].rstrip("/"), sys.argv[3]
-repo, tag = src.rsplit(":", 1)
 dst_repo, dst_tag = dst.rsplit(":", 1)
-tok = json.load(urllib.request.urlopen(
-    f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:{repo}:pull"))["token"]
+if src.startswith("ghcr.io/"):
+    src = src[len("ghcr.io/"):]
+    repo, tag = src.rsplit(":", 1)
+    tok = json.load(urllib.request.urlopen(f"https://ghcr.io/token?scope=repository:{repo}:pull"))["token"]
+    hub = f"https://ghcr.io/v2/{repo}"
+else:
+    repo, tag = src.rsplit(":", 1)
+    tok = json.load(urllib.request.urlopen(
+        f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:{repo}:pull"))["token"]
+    hub = f"https://registry-1.docker.io/v2/{repo}"
 H = {"Authorization": f"Bearer {tok}"}
 ACC = ("application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, "
        "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json")
-hub = f"https://registry-1.docker.io/v2/{repo}"
 _, _, body = http("GET", f"{hub}/manifests/{tag}", headers={**H, "Accept": ACC})
 m = json.loads(body)
 if "manifests" in m:
