@@ -14,7 +14,7 @@
 # What it writes: namespace `fn-runtimes` on the function cluster (Knative Services fn-<language>, CronJobs fn-<language>-cron and
 # Jobs fn-<language>-cronfail, which it deletes at the end and on exit; the Services and the namespace stay, so a second run is
 # fast: delete them with `kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml delete ns fn-runtimes`), and the cluster registry
-# (127.0.0.1:5100: runtime/<name>:<sha> and fn/runtimes/<language>:<sha>, never deleted).
+# (127.0.0.1:5100: runtime/<name>:<sha> and fn/runtimes/<language>:<sha>, never deleted), and the host's Go module cache (`go get`).
 # FN_KUBECONFIG as in up.sh. RUNTIMES_SOURCE overrides the GHCR path (default ghcr.io/openvicloud/titan-function-runtimes).
 set -uo pipefail
 

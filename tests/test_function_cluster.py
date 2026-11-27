@@ -199,7 +199,9 @@ class ScriptTest(unittest.TestCase):
 
     def test_runtimes_verify_wants_a_full_sha(self):
         for sha in ("main", "c9a2d77", "../x", "a b", "x&scope=repository:o/r:pull", "C9A2D7746BD30C418F7BC0AFB2FD61AF16F3F7B1"):
-            out = subprocess.run(["bash", str(RUNTIMES_VERIFY), sha], capture_output=True, text=True)
+            # a kubeconfig that is not there: if the sha guard ever regressed, this must not go on against the real cluster
+            out = subprocess.run(["bash", str(RUNTIMES_VERIFY), sha], capture_output=True, text=True,
+                                 env={**os.environ, "FN_KUBECONFIG": "/nonexistent/kubeconfig"})
             self.assertEqual(out.returncode, 1, sha)
             self.assertIn("40-hex", out.stderr, sha)
 
@@ -329,6 +331,146 @@ class ScriptTest(unittest.TestCase):
             self.assertIn("--server-side", line)
         for line in calls.splitlines():
             self.assertIn(str(kubeconfig), line, "every call names the function cluster's kubeconfig, never the default")
+
+
+class RuntimesVerifyHarness(unittest.TestCase):
+    """runtimes-verify.sh run against stubs of kubectl, curl and python3 (the stub python3 only fakes the two image scripts),
+    so what it does to the cluster is what the test reads from the stub's log: no cluster is touched."""
+
+    def setUp(self):
+        self.work = pathlib.Path(tempfile.mkdtemp(prefix="rv-harness-"))
+        self.addCleanup(lambda: __import__("shutil").rmtree(self.work, ignore_errors=True))
+        self.bin = self.work / "bin"
+        self.bin.mkdir()
+        self.log = self.work / "kubectl.log"
+        real_python = __import__("shutil").which("python3")
+        stubs = {
+            "kubectl": f'''#!/bin/bash
+echo "$*" >> {self.log}
+case "$*" in
+  *"config view"*) echo https://127.0.0.1:6444 ;;
+  *"apply -f -"*) cat > {self.work}/apply-$(date +%s%N).yaml ;;
+  *"get svc kourier"*) echo 10.0.0.1 ;;
+  *"create namespace"*) echo "apiVersion: v1" ;;
+esac
+exit 0
+''',
+            "curl": '''#!/bin/bash
+case "$*" in
+  *"/v2/"|*"/v2/ "*) exit 0 ;;
+  *"/manifests/"*) echo '{"config": {"digest": "sha256:cfg"}}' ;;
+  *"/blobs/"*) echo '{"os": "linux", "architecture": "amd64", "config": {"User": "1000:1000"}}' ;;
+esac
+''',
+            "go": "#!/bin/bash\ntouch bootstrap   # `go build -o bootstrap` leaves the file the script zips\nexit 0\n",
+            "python3": f'''#!/bin/bash
+case "$*" in
+  *copy_image.py*) touch {self.work}/copy-started; echo "COPIED x -> y manifest=sha256:abcdef012345 layers=1 mediaType=application/vnd.oci.image.manifest.v1+json"; sleep ${{STUB_COPY_SLEEP:-0}} ;;
+  *compose_image.py*) echo "MANIFEST_DIGEST=sha256:" ;;
+  *) exec {real_python} "$@" ;;
+esac
+''',
+        }
+        for name, body in stubs.items():
+            f = self.bin / name
+            f.write_text(body)
+            f.chmod(0o755)
+        self.kubeconfig = self.work / "kubeconfig"
+        self.kubeconfig.write_text("apiVersion: v1\nkind: Config\ncurrent-context: c\nclusters:\n- name: c\n  cluster: {server: 'https://127.0.0.1:6444'}\n"
+                                   "contexts:\n- name: c\n  context: {cluster: c, user: u}\nusers:\n- name: u\n  user: {}\n")
+
+    def start(self, **extra):
+        env = {**os.environ, "PATH": f"{self.bin}:{os.environ['PATH']}", "FN_KUBECONFIG": str(self.kubeconfig), **extra}
+        return subprocess.Popen(["bash", str(RUNTIMES_VERIFY), "a" * 40], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, start_new_session=True)
+
+    def stop_when(self, proc, condition, seconds=60):
+        """Wait for condition(), then stop the script the way Ctrl-C would (its cleanup trap runs)."""
+        import signal, time
+        for _ in range(int(seconds * 10)):
+            if condition() or proc.poll() is not None:
+                break
+            time.sleep(0.1)
+        if proc.poll() is None:
+            os.killpg(proc.pid, signal.SIGTERM)
+        proc.communicate(timeout=60)
+
+    def test_the_server_guard_lets_the_function_cluster_through(self):
+        # the positive case of the refusal test: a 6444 kubeconfig gets past the guard (the stub kubectl then sees its commands)
+        proc = self.start()
+        self.stop_when(proc, lambda: self.log.exists() and "create namespace" in self.log.read_text())
+        self.assertIn("create namespace", self.log.read_text())
+
+    def test_the_cleanup_trap_deletes_the_cronjobs_and_jobs_when_the_run_is_stopped(self):
+        proc = self.start(STUB_COPY_SLEEP="30")
+        self.stop_when(proc, lambda: (self.work / "copy-started").exists())
+        deletes = [l for l in self.log.read_text().splitlines() if " delete " in l]
+        want = {f"-n fn-runtimes delete {kind} fn-{lang}-{suffix} --ignore-not-found"
+                for lang in ("python", "node", "go") for kind, suffix in (("cronjob", "cron"), ("job", "cronfail"))}
+        self.assertEqual({d.split("--kubeconfig ")[-1].split(" ", 1)[1] if "--kubeconfig " in d else d for d in deletes} & want, want, deletes)
+        self.assertTrue(all("-n fn-runtimes" in d for d in deletes), deletes)
+
+    def test_the_throwing_cron_job_gets_sample_cron_fail_and_the_plain_cronjob_does_not(self):
+        proc = self.start()
+        self.stop_when(proc, lambda: len(list(self.work.glob("apply-*.yaml"))) >= 4, seconds=120)   # the namespace, then a CronJob and a Job per runtime (one apply each)
+        rendered = "\n---\n".join(f.read_text() for f in sorted(self.work.glob("apply-*.yaml")))
+        cron = [d for d in rendered.split("\n---\n") if "kind: CronJob" in d]
+        jobs = [d for d in rendered.split("\n---\n") if "kind: Job" in d]
+        self.assertTrue(cron and jobs, rendered[:500])
+        for d in cron:
+            self.assertIn('{name: SAMPLE_CRON, value: ""}', d)
+        for d in jobs:
+            self.assertIn('{name: SAMPLE_CRON, value: "fail"}', d)
+
+
+class CopyImageDigests(unittest.TestCase):
+    """copy_image.py against a fake registry: a manifest or blob that does not hash to its digest stops the copy."""
+
+    def run_copy(self, child_body, blob_body):
+        import hashlib, io, json, runpy, sys, unittest.mock as mock
+        sample = str(FUNCTION / "sample")
+        sha = lambda b: "sha256:" + hashlib.sha256(b).hexdigest()
+        blob = b"layer"
+        child = json.dumps({"config": {"digest": sha(b"cfg"), "mediaType": "c"}, "layers": [{"digest": sha(blob)}],
+                            "mediaType": "application/vnd.oci.image.manifest.v1+json"}).encode()
+        index = json.dumps({"manifests": [{"digest": sha(child), "platform": {"architecture": "amd64", "os": "linux"}}]}).encode()
+        pushed = []
+
+        def fake_http(method, url, data=None, headers=None, ok=(200, 201, 202)):
+            if method == "GET" and "/manifests/sha256:" in url:
+                return 200, {}, child_body if child_body is not None else child
+            if method == "GET" and "/manifests/" in url:
+                return 200, {}, index
+            if method == "GET" and "/blobs/" in url:
+                return 200, {}, blob_body if blob_body is not None else (b"cfg" if sha(b"cfg") in url else blob)
+            pushed.append((method, url))
+            return 201, {"Location": "/x"}, b""
+
+        token = io.BytesIO(b'{"token": "t"}')
+        with mock.patch.object(sys, "dont_write_bytecode", True), mock.patch.object(sys, "argv", ["copy_image.py", "ghcr.io/o/r/p:t", "http://127.0.0.1:1", "runtime/p:t"]), \
+                mock.patch.object(sys, "path", [sample] + sys.path), \
+                mock.patch("urllib.request.urlopen", return_value=token), \
+                mock.patch("compose_image.http", fake_http, create=True), \
+                mock.patch("compose_image.push_blob", lambda *a: pushed.append(("blob", a[-1]))), \
+                mock.patch("builtins.print"):
+            sys.modules.pop("compose_image", None)
+            import compose_image  # noqa: F401
+            compose_image.http, compose_image.push_blob = fake_http, lambda *a: pushed.append(("blob", a[-1]))
+            return pushed, runpy.run_path(str(FUNCTION / "sample" / "copy_image.py"))
+
+    def test_a_good_manifest_and_blobs_are_copied(self):
+        pushed, _ = self.run_copy(None, None)
+        self.assertTrue(pushed)
+
+    def test_a_child_manifest_that_does_not_hash_to_its_digest_is_refused(self):
+        with self.assertRaises(SystemExit) as raised:
+            self.run_copy(b"{}", None)
+        self.assertIn("came back as", str(raised.exception))
+
+    def test_a_blob_that_does_not_hash_to_its_digest_is_refused(self):
+        with self.assertRaises(SystemExit) as raised:
+            self.run_copy(None, b"tampered")
+        self.assertIn("came back as", str(raised.exception))
 
 
 if __name__ == "__main__":

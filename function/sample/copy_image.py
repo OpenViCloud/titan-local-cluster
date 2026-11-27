@@ -37,4 +37,4 @@ for b in [m["config"]] + m["layers"]:
         raise SystemExit(f"blob {b['digest']} came back as {sha256(blob)}")
     push_blob(reg, dst_repo, blob)
 http("PUT", f"{reg}/v2/{dst_repo}/manifests/{dst_tag}", data=body, headers={"Content-Type": m.get("mediaType", "application/vnd.oci.image.manifest.v1+json")})
-print(f"COPIED {src} -> {dst} manifest={sha256(body)} layers={len(m['layers'])} mediaType={m.get('mediaType')}")
+print(f"COPIED {src} -> {dst} manifest={sha256(body)} layers={len(m['layers'])} mediaType={m.get('mediaType', 'application/vnd.oci.image.manifest.v1+json')}")
