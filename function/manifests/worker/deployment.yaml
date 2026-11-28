@@ -25,6 +25,13 @@ spec:
             - {name: CP_BASE_URL, value: "http://api.localhost:8080"}
             - {name: FUNCTION_CLUSTER_ID, value: local-function}
             - {name: HEALTH_ADDR, value: "0.0.0.0:10390"}
+            # The ranges a tenant's pod may not reach (template 1's tenant-egress): pods and services of function/host/install.sh
+            # (dual stack), and the host's networks. The IPv6 /64 is the one the LAN's router hands out (SLAAC, read with
+            # `ip -6 addr` on 2026-11-28): if the router's prefix changes, this line must follow it, or the API server and
+            # the kubelet answer a tenant's pod on the host's new IPv6 address.
+            - {name: POD_CIDRS, value: "10.42.0.0/16,fd42:42::/56"}
+            - {name: SERVICE_CIDRS, value: "10.43.0.0/16,fd43:43::/112"}
+            - {name: NODE_CIDRS, value: "192.168.0.0/24,2001:ee0:4f02:4960::/64"}
           envFrom:
             - secretRef: {name: function-worker-secrets}
           livenessProbe:

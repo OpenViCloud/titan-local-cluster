@@ -1,5 +1,8 @@
-# Only what the worker's commands use today: read the nodes and the images their kubelets report, and run the pull
-# pods in its own namespace (function-runtime.sync). Each new command adds its own rule here.
+# Only what the worker's commands use: read the nodes and the images their kubelets report, and run the pull pods in its
+# own namespace (function-runtime.sync, function.deploy); write a tenant's namespace and what isolates it (template 1), a
+# version's Secret and a function's Knative Service (template 2), and read the Service's revisions (function.deploy,
+# function.delete, the reconciler). Tenant namespaces are made on the fly, so those rules are cluster-wide
+# (titan-ops features/ovc-function/design.md#k8s-templates). Each new command adds its own rule here.
 apiVersion: v1
 kind: ServiceAccount
 metadata: {name: function-worker, namespace: titan-function-system}
@@ -11,6 +14,26 @@ rules:
   - apiGroups: [""]
     resources: [nodes]
     verbs: [list]
+  # Server-side apply creates (create) or changes (patch) and reads back (get) each object of template 1 and the Secret.
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, create, patch]
+  - apiGroups: [""]
+    resources: [serviceaccounts, resourcequotas, limitranges]
+    verbs: [get, create, patch]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, create, patch]
+  # deletecollection: a function's Secrets go by label when it is deleted.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, create, patch, deletecollection]
+  - apiGroups: [serving.knative.dev]
+    resources: [services]
+    verbs: [get, create, patch, delete]
+  - apiGroups: [serving.knative.dev]
+    resources: [revisions]
+    verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

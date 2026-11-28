@@ -15,20 +15,47 @@ spec:
             # (METER_INTERVAL_MINUTES, regression-runner/kustomization.yaml); prd keeps the default.
             - name: BillingMeter__IntervalMinutes
               value: "1"
-            # Dev's S3, SeaweedFS of gitops/seaweedfs, over TLS with the CA of lima/scripts/bootstrap-secrets.sh (patch-s3-ca.yaml);
-            # the key pair is the Secret control-plane-backup-credentials that the same script writes. SeaweedFS ignores
-            # the region, the S3 client needs one.
             # The daily restore drill (titan-ops features/backup/design.md#restore-drill): the control plane asks the worker to
             # restore one VM or volume into a temporary project of titan-incus once the day's disk backups have ended.
             # Prd turns it on in its own overlay at a release; the code default is off.
             - name: RestoreDrill__Enabled
               value: "true"
+            # Dev's S3, SeaweedFS of gitops/seaweedfs, over TLS with the CA of lima/scripts/bootstrap-secrets.sh (patch-s3-ca.yaml);
+            # the key pair is the Secret control-plane-backup-credentials that the same script writes. SeaweedFS ignores
+            # the region, the S3 client needs one.
             - name: BackupTarget__Endpoint
               value: https://lima-titan-k3s.internal:30833
             - name: BackupTarget__Region
               value: us-east-1
             - name: BackupTarget__Bucket
               value: titan-backup-dev
+            # The function code bucket (titan-ops features/ovc-function/design.md#code-storage): its own bucket on the same
+            # SeaweedFS, with the backup's key pair (SeaweedFS has one identity), read from the Secret the backup target uses.
+            - name: FunctionCode__Endpoint
+              value: https://lima-titan-k3s.internal:30833
+            - name: FunctionCode__Region
+              value: us-east-1
+            - name: FunctionCode__Bucket
+              value: titan-function-dev
+            - name: FunctionCode__AccessKeyId
+              valueFrom:
+                secretKeyRef: {name: control-plane-backup-credentials, key: BackupTarget__AccessKeyId, optional: true}
+            - name: FunctionCode__SecretAccessKey
+              valueFrom:
+                secretKeyRef: {name: control-plane-backup-credentials, key: BackupTarget__SecretAccessKey, optional: true}
+            # The function cluster's registry (function/manifests/cluster/registry.yaml): the control plane pushes at the host's
+            # 127.0.0.1:5100 through Lima's user network, the function cluster's kubelets pull it as localhost:5100.
+            - name: FunctionRegistry__PushUrl
+              value: http://host.lima.internal:5100
+            - name: FunctionRegistry__PullHost
+              value: localhost:5100
+            # A function's URL, http://fn<26>.fn.localhost: Knative's domain of function/manifests/cluster/config-domain.yaml,
+            # reached from the host through Kourier's ClusterIP; no TLS on dev
+            # (titan-ops features/ovc-function/design.md#function-url).
+            - name: FunctionUrl__Scheme
+              value: http
+            - name: FunctionUrl__Domain
+              value: fn.localhost
             - name: Keycloak__Authority
               value: http://auth.localhost:8080/auth/realms/titan
             # The browser's issuer, auth.localhost, does not resolve inside the cluster: the bearer handler reads

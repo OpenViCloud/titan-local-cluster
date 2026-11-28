@@ -94,6 +94,28 @@ class DevRender(unittest.TestCase):
         self.assertEqual(env["BackupTarget__Region"], "us-east-1")
         self.assertEqual(env["BackupTarget__Endpoint"], S3_ENDPOINT)
 
+    def test_dev_runs_the_daily_restore_drill(self):
+        # The code default is off; dev turns it on so a release meets a drill that already ran on dev
+        # (titan-ops features/backup/design.md#restore-drill).
+        env = {e["name"]: e.get("value") for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
+        self.assertEqual(env["RestoreDrill__Enabled"], "true")
+
+    def test_function_code_is_its_own_bucket_on_the_dev_s3_with_the_backup_key_pair(self):
+        env = {e["name"]: e for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
+        self.assertEqual(env["FunctionCode__Endpoint"]["value"], S3_ENDPOINT)
+        self.assertEqual(env["FunctionCode__Bucket"]["value"], "titan-function-dev")
+        self.assertNotEqual(env["FunctionCode__Bucket"]["value"], env["BackupTarget__Bucket"]["value"])
+        for name, key in (("FunctionCode__AccessKeyId", "BackupTarget__AccessKeyId"),
+                          ("FunctionCode__SecretAccessKey", "BackupTarget__SecretAccessKey")):
+            self.assertEqual(env[name]["valueFrom"]["secretKeyRef"],
+                             {"name": "control-plane-backup-credentials", "key": key, "optional": True})
+
+    def test_the_control_plane_pushes_to_the_function_registry_the_kubelets_pull_from(self):
+        env = {e["name"]: e.get("value") for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
+        self.assertEqual(env["FunctionRegistry__PushUrl"], "http://host.lima.internal:5100")
+        self.assertEqual(env["FunctionRegistry__PullHost"], "localhost:5100")
+        self.assertEqual((env["FunctionUrl__Scheme"], env["FunctionUrl__Domain"]), ("http", "fn.localhost"))
+
     def test_the_backup_key_pair_comes_from_an_optional_secret(self):
         refs = [r["secretRef"] for c in containers(render("control-plane"), "control-plane") for r in c["envFrom"] if "secretRef" in r]
         self.assertIn({"name": "control-plane-backup-credentials", "optional": True}, refs)
@@ -540,10 +562,11 @@ class DevS3(unittest.TestCase):
         self.assertEqual(service["type"], "NodePort")
         self.assertEqual([p["nodePort"] for p in service["ports"]], [int(S3_ENDPOINT.rsplit(":", 1)[1])])
 
-    def test_the_bucket_job_makes_the_bucket_the_control_plane_reads(self):
+    def test_the_bucket_job_makes_the_buckets_the_control_plane_reads(self):
         job = first(render("seaweedfs"), "Job", "seaweedfs-bucket")
         script = " ".join(job["spec"]["template"]["spec"]["containers"][0]["args"])
-        self.assertIn("s3.bucket.create -name " + control_plane_env()["BackupTarget__Bucket"], script)
+        for setting in ("BackupTarget__Bucket", "FunctionCode__Bucket"):
+            self.assertIn("s3.bucket.create -name " + control_plane_env()[setting], script)
         self.assertEqual(job["metadata"]["annotations"]["argocd.argoproj.io/hook"], "PostSync")
 
     def test_seaweedfs_is_an_application_synced_before_the_database(self):
