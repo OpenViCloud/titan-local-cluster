@@ -36,7 +36,7 @@ done
 "${kc[@]}" -n registry rollout status deploy/registry --timeout=300s
 "${kc[@]}" apply --server-side --force-conflicts -k "$here/manifests/worker"
 # The token goes through stdin, never argv. The worker reads it at start (envFrom): a rotated token reaches it once
-# the pod restarts (kubectl -n titan-function-system rollout restart deploy/function-worker).
+# the pod restarts (kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml -n titan-function-system rollout restart deploy/function-worker).
 printf 'CP_INTERNAL_TOKEN=%s\n' "$token" |
   "${kc[@]}" -n titan-function-system create secret generic function-worker-secrets --from-env-file=/dev/stdin \
     --dry-run=client -o json |
