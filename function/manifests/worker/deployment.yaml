@@ -1,8 +1,7 @@
 # One worker: it runs the reconciler of this cluster, and two would report each runtime twice (Recreate, so a rollout
 # never runs two). On the node's own network: the dev control plane is reachable only at the host's 127.0.0.1:8080,
-# where Lima forwards titan-k3s's ingress, as api.localhost (docs/network.md); hostAliases pins that name, since the
-# worker resolves through /etc/hosts and the LAN's DNS does not know it. /healthz listens on every interface of the host:
-# the kubelet probes the node's address.
+# where Lima forwards titan-k3s's ingress, as api.localhost (docs/network.md); hostAliases pins that name in the pod's
+# /etc/hosts. /healthz listens on every interface of the host: the kubelet probes the node's address.
 apiVersion: apps/v1
 kind: Deployment
 metadata: {name: function-worker, namespace: titan-function-system}

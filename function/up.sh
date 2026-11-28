@@ -23,7 +23,7 @@ grep -Eq "server:[[:space:]]*['\"]?https://127\.0\.0\.1:6444" "$kubeconfig" || {
 mem=$(bash "$here/../lima/scripts/host-memory.sh" 2>&1) || { echo "$mem" >&2; echo "ERROR: too little memory on the host to grow the function cluster (docs/topology.md#host-memory)." >&2; exit 1; }
 echo "$mem"
 token=""
-if [ -r "$secrets_env" ]; then token=$(sed -n 's/^INTERNAL_TOKEN=//p' "$secrets_env"); fi
+if [ -r "$secrets_env" ]; then token=$(sed -n '/^INTERNAL_TOKEN=/{s///p;q}' "$secrets_env"); fi
 [ -n "$token" ] || { echo "ERROR: no INTERNAL_TOKEN in $secrets_env: bring the local cluster up first (lima/scripts/up.sh)." >&2; exit 1; }
 
 "${kc[@]}" apply --server-side --force-conflicts -k "$here/manifests/crds"
@@ -35,7 +35,8 @@ done
 "${kc[@]}" -n kourier-system rollout status deploy/3scale-kourier-gateway --timeout=300s
 "${kc[@]}" -n registry rollout status deploy/registry --timeout=300s
 "${kc[@]}" apply --server-side --force-conflicts -k "$here/manifests/worker"
-# The token goes through stdin, never argv; the Secret is applied the same way every run, so a rotated token lands.
+# The token goes through stdin, never argv. The worker reads it at start (envFrom): a rotated token reaches it once
+# the pod restarts (kubectl -n titan-function-system rollout restart deploy/function-worker).
 printf 'CP_INTERNAL_TOKEN=%s\n' "$token" |
   "${kc[@]}" -n titan-function-system create secret generic function-worker-secrets --from-env-file=/dev/stdin \
     --dry-run=client -o json |

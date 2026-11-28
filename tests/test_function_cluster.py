@@ -128,11 +128,11 @@ class RenderTest(unittest.TestCase):
 
     def test_the_function_worker_may_read_nodes_and_run_pods_in_its_namespace_only(self):
         roles = {o["metadata"]["name"]: o for o in self.worker if o["kind"] in ("ClusterRole", "Role")}
-        self.assertEqual(roles["titan-function-worker"]["rules"], [{"apiGroups": [""], "resources": ["nodes"], "verbs": ["get", "list"]}])
+        self.assertEqual(roles["titan-function-worker"]["rules"], [{"apiGroups": [""], "resources": ["nodes"], "verbs": ["list"]}])
         pulls = roles["function-worker-pulls"]
         self.assertEqual(pulls["metadata"]["namespace"], "titan-function-system")
         self.assertEqual(pulls["rules"][0]["resources"], ["pods"])
-        self.assertEqual(set(pulls["rules"][0]["verbs"]), {"get", "list", "create", "patch", "delete", "deletecollection"})
+        self.assertEqual(set(pulls["rules"][0]["verbs"]), {"get", "create", "patch", "deletecollection"})
 
     def test_registry_is_ours_and_local(self):
         deploy = [o for o in self.cluster if o["kind"] == "Deployment" and o["metadata"]["name"] == "registry"]
@@ -364,6 +364,8 @@ class ScriptTest(unittest.TestCase):
             self.assertIn("--server-side", line)
         self.assertNotIn("tok-9f3a", calls, "the token never reaches argv")
         self.assertIn("function-worker-secrets --from-env-file=/dev/stdin", calls)
+        for line in calls.splitlines():
+            self.assertIn(str(kubeconfig), line, "every call names the function cluster's kubeconfig, never the default")
 
     def test_up_without_the_internal_token_applies_nothing(self):
         with tempfile.TemporaryDirectory() as work:
@@ -374,9 +376,6 @@ class ScriptTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("INTERNAL_TOKEN", result.stderr)
         self.assertNotIn("apply", calls)
-
-        for line in calls.splitlines():
-            self.assertIn(str(kubeconfig), line, "every call names the function cluster's kubeconfig, never the default")
 
 
 class RuntimesVerifyHarness(unittest.TestCase):

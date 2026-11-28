@@ -15,7 +15,7 @@ It runs **on the host**, not in a Lima VM: a VM would nest KVM, and the cold sta
 | Registry | `127.0.0.1:5100` (loopback only), images as `localhost:5100/<repo>@sha256:…` |
 | Kubeconfig | `/etc/rancher/k3s/k3s.yaml`, a cluster-admin credential readable by every user of the host (mode 0644); the k3s installer also links `/usr/local/bin/kubectl` to `k3s`, so a bare `kubectl` with no `KUBECONFIG` talks to this cluster. Never apply with the dev cluster's kubeconfig (`~/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml`) or a default `kubectl` context |
 | Data | `/var/lib/fn-cluster` (thin pool 30 GiB + 2 GiB metadata on two sparse files, registry data) |
-| Function worker | Namespace `titan-function-system`, one pod on the host's network: it reaches the dev control plane at `http://api.localhost:8080` (Lima forwards `titan-k3s`'s ingress to the host's `127.0.0.1:8080` only, [docs/network.md](../docs/network.md); `hostAliases` pins the name), `/healthz` on `:10390` of every interface. Its token is the control plane's internal token, `INTERNAL_TOKEN` of `secrets.env`; `up.sh` writes it into Secret `function-worker-secrets` through stdin. Image pinned by digest in `manifests/worker/deployment.yaml` (no `pull-images.py`: change the digest by a PR) |
+| Function worker | Namespace `titan-function-system`, one pod on the host's network: it reaches the dev control plane at `http://api.localhost:8080` (Lima forwards `titan-k3s`'s ingress to the host's `127.0.0.1:8080` only, [docs/network.md](../docs/network.md); `hostAliases` pins the name), `/healthz` on `:10390` of every interface. Its token is the control plane's internal token, `INTERNAL_TOKEN` of `secrets.env`; `up.sh` writes it into Secret `function-worker-secrets` through stdin; the worker reads it at start, so a rotated token needs a `rollout restart` of the worker. Image pinned by digest in `manifests/worker/deployment.yaml` (no `pull-images.py`: change the digest by a PR) |
 | RAM | about 2 GiB with Knative idle. Lima's two VMs hold 9 of the host's 15 GiB, so `host-memory.sh` must say `OK` (`install.sh` and `up.sh` run it) |
 
 ## Run it
@@ -38,7 +38,7 @@ sudo bash function/host/uninstall.sh
 ## What is where
 
 - `host/install.sh`, `host/uninstall.sh`: the parts that need root.
-- `manifests/worker`: the function worker (namespace, RBAC: list nodes, run pods in `titan-function-system`; Deployment).
+- `manifests/worker`: the function worker (namespace, RBAC: list nodes, get/create/patch pods and delete them as a collection in `titan-function-system`; Deployment).
 - `manifests/crds`, `manifests/cluster`: kustomize. Knative and net-kourier are not copied here: the kustomizations download
   their release assets (tag-pinned) and `manifests/pins.txt` holds each file's SHA-256. `tests/test_function_cluster.py` (CI)
   checks it; `up.sh` does not, so a tag moved after the fact changes what `up.sh` applies and only CI turns red. net-kourier names `envoy:v1.37-latest`; the kustomization replaces it with a digest.

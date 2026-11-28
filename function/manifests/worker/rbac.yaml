@@ -10,7 +10,7 @@ metadata: {name: titan-function-worker}
 rules:
   - apiGroups: [""]
     resources: [nodes]
-    verbs: [get, list]
+    verbs: [list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -25,7 +25,8 @@ metadata: {name: function-worker-pulls, namespace: titan-function-system}
 rules:
   - apiGroups: [""]
     resources: [pods]
-    verbs: [get, list, create, patch, delete, deletecollection]
+    # create and patch: server-side apply of a pull pod; get: its phase; deletecollection: the pull pods of a runtime.
+    verbs: [get, create, patch, deletecollection]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
