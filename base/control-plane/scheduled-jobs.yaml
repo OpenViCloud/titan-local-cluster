@@ -366,6 +366,53 @@ spec:
                 limits:
                   memory: 64Mi
 ---
+# Every 10 minutes, off the meter's minutes: the zip and the image of each function version no longer kept, and of each
+# deleted function, leave the function code bucket and the registry (titan-ops features/ovc-function/design.md#code-storage).
+# A control plane with no function cluster has none to clean.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: control-plane-job-function-code-cleanup
+spec:
+  schedule: "3-59/10 * * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          priorityClassName: titan-platform
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.0
+              env:
+                - name: INTERNAL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: control-plane-secrets
+                      key: Internal__Token
+              command:
+                - sh
+                - -c
+                - >
+                  curl --fail-with-body -sS --max-time 540 -X POST
+                  http://control-plane/internal/jobs/function-code-cleanup
+                  -H "X-Internal-Token: $INTERNAL_TOKEN"
+                  -H "Content-Type: application/json"
+                  -d '{}'
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi
+---
 # The wallet sweeper (titan-ops features/billing/wallet/design.md#wallet-sweeper): applies the wallet commands whose NATS
 # notify was lost, the only thing that does. Every 2 minutes, WalletSweeper__IntervalSeconds in patch-env.yaml; a pass ends
 # before the next is due. Two passes at once are safe: the consumer reads each command under its row lock and leaves one
