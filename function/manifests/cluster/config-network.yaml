@@ -3,3 +3,6 @@ kind: ConfigMap
 metadata: {name: config-network, namespace: knative-serving}
 data:
   ingress-class: kourier.ingress.networking.knative.dev
+  # fn<26>.fn.localhost, no namespace in the name: fn<26> is unique across the cluster, so one wildcard *.fn.<domain>
+  # covers every function (titan-ops features/ovc-function/design.md#function-url).
+  domain-template: "{{.Name}}.{{.Domain}}"

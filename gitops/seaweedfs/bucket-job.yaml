@@ -1,5 +1,6 @@
-# The bucket the control plane, CNPG and the worker write (BackupTarget__Bucket of gitops/control-plane), made after every sync
-# when it is missing: SeaweedFS keeps it on the host's folder, and creating an existing bucket exits 1 (measured on 4.51).
+# The buckets, made after every sync when missing: the backup bucket the control plane, CNPG and the worker write
+# (BackupTarget__Bucket of gitops/control-plane), and the function code bucket only the control plane writes
+# (FunctionCode__Bucket). SeaweedFS keeps them on the host's folder, and creating an existing bucket exits 1 (measured on 4.51).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -23,7 +24,11 @@ spec:
               if ! shell "s3.bucket.list" | grep -qw titan-backup-dev; then
                 shell "s3.bucket.create -name titan-backup-dev"
               fi
+              if ! shell "s3.bucket.list" | grep -qw titan-function-dev; then
+                shell "s3.bucket.create -name titan-function-dev"
+              fi
               shell "s3.bucket.list" | grep -w titan-backup-dev
+              shell "s3.bucket.list" | grep -w titan-function-dev
           resources:
             requests:
               cpu: 10m

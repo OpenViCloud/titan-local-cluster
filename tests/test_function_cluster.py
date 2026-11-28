@@ -126,9 +126,21 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(container["envFrom"], [{"secretRef": {"name": "function-worker-secrets"}}])
         self.assertEqual(spec["serviceAccountName"], "function-worker")
 
-    def test_the_function_worker_may_read_nodes_and_run_pods_in_its_namespace_only(self):
+    def test_the_function_worker_writes_only_the_templates_objects_and_runs_pods_in_its_namespace_only(self):
         roles = {o["metadata"]["name"]: o for o in self.worker if o["kind"] in ("ClusterRole", "Role")}
-        self.assertEqual(roles["titan-function-worker"]["rules"], [{"apiGroups": [""], "resources": ["nodes"], "verbs": ["list"]}])
+        cluster_wide = {(g, r): set(rule["verbs"]) for rule in roles["titan-function-worker"]["rules"]
+                        for g in rule["apiGroups"] for r in rule["resources"]}
+        self.assertEqual(cluster_wide, {
+            ("", "nodes"): {"list"},
+            ("", "namespaces"): {"create", "patch"},
+            ("", "serviceaccounts"): {"create", "patch"},
+            ("", "resourcequotas"): {"create", "patch"},
+            ("", "limitranges"): {"create", "patch"},
+            ("networking.k8s.io", "networkpolicies"): {"create", "patch"},
+            ("", "secrets"): {"create", "patch", "deletecollection"},
+            ("serving.knative.dev", "services"): {"get", "create", "patch", "delete"},
+            ("serving.knative.dev", "revisions"): {"get"},
+        }, "nothing listed but nodes, nothing watched, no Secret read, no pods outside the worker's namespace")
         pulls = roles["function-worker-pulls"]
         self.assertEqual(pulls["metadata"]["namespace"], "titan-function-system")
         self.assertEqual(pulls["rules"][0]["resources"], ["pods"])
@@ -141,6 +153,22 @@ class RenderTest(unittest.TestCase):
         self.assertTrue(spec["hostNetwork"])
         env = {e["name"]: e.get("value") for e in spec["containers"][0]["env"]}
         self.assertEqual(env["REGISTRY_HTTP_ADDR"], "127.0.0.1:5100")
+        self.assertEqual(env["REGISTRY_STORAGE_DELETE_ENABLED"], "true", "the control plane deletes the image of a version it drops")
+
+    def test_function_urls_carry_no_namespace(self):
+        network = [o for o in self.cluster if o["kind"] == "ConfigMap" and o["metadata"]["name"] == "config-network"][0]
+        self.assertEqual(network["data"]["domain-template"], "{{.Name}}.{{.Domain}}")
+
+    def test_the_worker_knows_the_clusters_ranges(self):
+        deploy = [o for o in self.worker if o["kind"] == "Deployment"][0]
+        env = {e["name"]: e.get("value") for e in deploy["spec"]["template"]["spec"]["containers"][0]["env"]}
+        # The ranges install.sh gives k3s on a host with IPv6.
+        installed = INSTALL.read_text()
+        self.assertIn("--cluster-cidr=10.42.0.0/16,fd42:42::/56", installed)
+        self.assertEqual(env["POD_CIDRS"], "10.42.0.0/16,fd42:42::/56")
+        self.assertEqual(env["SERVICE_CIDRS"], "10.43.0.0/16,fd43:43::/112")
+        self.assertIn("--service-cidr=10.43.0.0/16,fd43:43::/112", installed)
+        self.assertTrue(env["NODE_CIDRS"].startswith("192.168.0.0/24,"))
 
 
 class PinsTest(unittest.TestCase):
