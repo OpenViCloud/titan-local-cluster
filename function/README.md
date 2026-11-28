@@ -1,7 +1,9 @@
 # function/ — the function cluster on the Ubuntu dev machine
 
 A second, separate Kubernetes cluster on the dev machine, for the OVC Function service: Kata Containers with Firecracker
-(`kata-fc`), Knative Serving and net-kourier, and a code registry. It is not part of the dev cluster `local`
+(`kata-fc`), Knative Serving and net-kourier, a code registry, and the function worker
+([OpenViCloud/titan-function-worker](https://github.com/OpenViCloud/titan-function-worker)). The dev control plane knows it
+as function cluster `local-function` (`FunctionClusters__0__Id` in `gitops/control-plane/kustomization.yaml`). It is not part of the dev cluster `local`
 (`titan-k3s`, `titan-incus`); ArgoCD does not read this directory (it is outside `gitops/` and `base/`), and macOS has no
 such cluster: Kata's `fc` shim needs KVM and exists for x86_64 only. Design: [docs/topology.md](../docs/topology.md#function-cluster).
 
@@ -13,13 +15,14 @@ It runs **on the host**, not in a Lima VM: a VM would nest KVM, and the cold sta
 | Registry | `127.0.0.1:5100` (loopback only), images as `localhost:5100/<repo>@sha256:…` |
 | Kubeconfig | `/etc/rancher/k3s/k3s.yaml`, a cluster-admin credential readable by every user of the host (mode 0644); the k3s installer also links `/usr/local/bin/kubectl` to `k3s`, so a bare `kubectl` with no `KUBECONFIG` talks to this cluster. Never apply with the dev cluster's kubeconfig (`~/.lima/titan-k3s/copied-from-guest/kubeconfig.yaml`) or a default `kubectl` context |
 | Data | `/var/lib/fn-cluster` (thin pool 30 GiB + 2 GiB metadata on two sparse files, registry data) |
+| Function worker | Namespace `titan-function-system`, one pod on the host's network: it reaches the dev control plane at `http://api.localhost:8080` (Lima forwards `titan-k3s`'s ingress to the host's `127.0.0.1:8080` only, [docs/network.md](../docs/network.md); `hostAliases` pins the name), `/healthz` on `:10390` of every interface. Its token is the control plane's internal token, `INTERNAL_TOKEN` of `secrets.env`; `up.sh` writes it into Secret `function-worker-secrets` through stdin; the worker reads it at start, so a rotated token needs `kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml -n titan-function-system rollout restart deploy/function-worker`. Image pinned by digest in `manifests/worker/deployment.yaml` (no `pull-images.py`: change the digest by a PR) |
 | RAM | about 2 GiB with Knative idle. Lima's two VMs hold 9 of the host's 15 GiB, so `host-memory.sh` must say `OK` (`install.sh` and `up.sh` run it) |
 
 ## Run it
 
 ```bash
 sudo bash function/host/install.sh      # once: thin pool, k3s (--secrets-encryption), kata-deploy (shim fc, devmapper)
-bash function/up.sh                     # Knative 1.24.0, net-kourier, RuntimeClass kata-fc, registry; run again: changes none of them
+bash function/up.sh                     # Knative 1.24.0, net-kourier, RuntimeClass kata-fc, registry, function worker; the local cluster first (secrets.env)
 bash function/verify.sh                 # a sample function through the registry and Knative; PASS/FAIL per line
 bash function/runtimes-verify.sh <sha>  # the runtime images of OpenViCloud/titan-function-runtimes (python3.15, nodejs26, go) at the full 40-hex commit <sha>, run as Knative Services and CronJobs
 ```
@@ -35,6 +38,7 @@ sudo bash function/host/uninstall.sh
 ## What is where
 
 - `host/install.sh`, `host/uninstall.sh`: the parts that need root.
+- `manifests/worker`: the function worker (namespace, RBAC: list nodes, get/create/patch pods and delete them as a collection in `titan-function-system`; Deployment).
 - `manifests/crds`, `manifests/cluster`: kustomize. Knative and net-kourier are not copied here: the kustomizations download
   their release assets (tag-pinned) and `manifests/pins.txt` holds each file's SHA-256. `tests/test_function_cluster.py` (CI)
   checks it; `up.sh` does not, so a tag moved after the fact changes what `up.sh` applies and only CI turns red. net-kourier names `envoy:v1.37-latest`; the kustomization replaces it with a digest.

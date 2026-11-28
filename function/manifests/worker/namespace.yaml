@@ -1,0 +1,4 @@
+# The worker and the short pods that pull a runtime image onto each node.
+apiVersion: v1
+kind: Namespace
+metadata: {name: titan-function-system}
