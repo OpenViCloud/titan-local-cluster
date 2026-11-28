@@ -49,20 +49,19 @@ spec:
               value: http://host.lima.internal:5100
             - name: FunctionRegistry__PullHost
               value: localhost:5100
-            # A function's URL, http://fn<26>.fn.localhost: Knative's domain (function/manifests/cluster/config-domain.yaml) and
-            # domain template, no namespace (config-network.yaml),
-            # reached from the host through Kourier's ClusterIP; no TLS on dev
-            # (titan-ops features/ovc-function/design.md#function-url).
             # The master key of the customers' function secrets, key k1 (titan-ops
-            # features/ovc-function/design.md#function-secrets), from lima/scripts/bootstrap-secrets.sh. Optional so an
-            # image that does not read it starts without it; one that does, with a function cluster, does not start until
-            # it exists.
+            # features/ovc-function/design.md#function-secrets), from lima/scripts/bootstrap-secrets.sh. Optional, so the
+            # pod starts without the Secret.
             - name: FunctionSecrets__ActiveKeyId
               valueFrom:
                 secretKeyRef: {name: control-plane-function-secrets, key: FunctionSecrets__ActiveKeyId, optional: true}
             - name: FunctionSecrets__Keys__k1
               valueFrom:
                 secretKeyRef: {name: control-plane-function-secrets, key: FunctionSecrets__Keys__k1, optional: true}
+            # A function's URL, http://fn<26>.fn.localhost: Knative's domain (function/manifests/cluster/config-domain.yaml) and
+            # domain template, no namespace (config-network.yaml),
+            # reached from the host through Kourier's ClusterIP; no TLS on dev
+            # (titan-ops features/ovc-function/design.md#function-url).
             - name: FunctionUrl__Scheme
               value: http
             - name: FunctionUrl__Domain

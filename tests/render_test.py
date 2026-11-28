@@ -111,8 +111,7 @@ class DevRender(unittest.TestCase):
                              {"name": "control-plane-backup-credentials", "key": key, "optional": True})
 
     def test_function_secrets_are_encrypted_under_dev_s_key_k1_from_an_optional_secret(self):
-        # (titan-ops features/ovc-function/design.md#function-secrets): an image that does not read the key starts without
-        # the Secret; one that does, with a function cluster configured, does not start until it exists.
+        # (titan-ops features/ovc-function/design.md#function-secrets): optional, so the pod starts without the Secret.
         env = {e["name"]: e for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
         for name in ("FunctionSecrets__ActiveKeyId", "FunctionSecrets__Keys__k1"):
             self.assertEqual(env[name]["valueFrom"]["secretKeyRef"],

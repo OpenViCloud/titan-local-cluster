@@ -3,7 +3,7 @@
 # Needs no vault and no token: the repositories and the images are public.
 # - ~/.config/titan-local-cluster/secrets.env (mode 600) keeps every value generated once: the DB password, the internal
 #   token, the Keycloak admin and the two beta-user passwords, the assistant's DB password, the control plane's
-#   Idempotency hash key. The first run writes them; later runs read
+#   Idempotency hash key and the master key of its function secrets. The first run writes them; later runs read
 #   them and only add a key a newer script needs. The file outlives the VM, so a cluster rebuilt with `limactl delete`
 #   gets the same values, which the database restored from a backup already holds. It also keeps the key pair of dev's S3
 #   (SeaweedFS, gitops/seaweedfs), generated the same way.
