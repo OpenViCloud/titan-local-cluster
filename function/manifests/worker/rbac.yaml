@@ -14,20 +14,21 @@ rules:
   - apiGroups: [""]
     resources: [nodes]
     verbs: [list]
-  # Server-side apply creates (create) or changes (patch) and reads back (get) each object of template 1 and the Secret.
+  # Server-side apply is one PATCH: create when the object is missing, patch when it is there; the worker never reads
+  # these back, so no get (none on Secrets above all).
   - apiGroups: [""]
     resources: [namespaces]
-    verbs: [get, create, patch]
+    verbs: [create, patch]
   - apiGroups: [""]
     resources: [serviceaccounts, resourcequotas, limitranges]
-    verbs: [get, create, patch]
+    verbs: [create, patch]
   - apiGroups: [networking.k8s.io]
     resources: [networkpolicies]
-    verbs: [get, create, patch]
+    verbs: [create, patch]
   # deletecollection: a function's Secrets go by label when it is deleted.
   - apiGroups: [""]
     resources: [secrets]
-    verbs: [get, create, patch, deletecollection]
+    verbs: [create, patch, deletecollection]
   - apiGroups: [serving.knative.dev]
     resources: [services]
     verbs: [get, create, patch, delete]
@@ -48,7 +49,7 @@ metadata: {name: function-worker-pulls, namespace: titan-function-system}
 rules:
   - apiGroups: [""]
     resources: [pods]
-    # create and patch: server-side apply of a pull pod; get: its phase; deletecollection: the pull pods of a runtime.
+    # create and patch: server-side apply of a pull pod; get: its phase; deletecollection: the pull pods of a runtime or of a function version.
     verbs: [get, create, patch, deletecollection]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

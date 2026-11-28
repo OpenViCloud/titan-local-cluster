@@ -49,7 +49,8 @@ spec:
               value: http://host.lima.internal:5100
             - name: FunctionRegistry__PullHost
               value: localhost:5100
-            # A function's URL, http://fn<26>.fn.localhost: Knative's domain of function/manifests/cluster/config-domain.yaml,
+            # A function's URL, http://fn<26>.fn.localhost: Knative's domain (function/manifests/cluster/config-domain.yaml) and
+            # domain template, no namespace (config-network.yaml),
             # reached from the host through Kourier's ClusterIP; no TLS on dev
             # (titan-ops features/ovc-function/design.md#function-url).
             - name: FunctionUrl__Scheme

@@ -110,7 +110,7 @@ class DevRender(unittest.TestCase):
             self.assertEqual(env[name]["valueFrom"]["secretKeyRef"],
                              {"name": "control-plane-backup-credentials", "key": key, "optional": True})
 
-    def test_the_control_plane_pushes_to_the_function_registry_the_kubelets_pull_from(self):
+    def test_the_control_plane_pushes_to_the_registry_the_kubelets_pull_from_and_names_function_urls(self):
         env = {e["name"]: e.get("value") for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
         self.assertEqual(env["FunctionRegistry__PushUrl"], "http://host.lima.internal:5100")
         self.assertEqual(env["FunctionRegistry__PullHost"], "localhost:5100")

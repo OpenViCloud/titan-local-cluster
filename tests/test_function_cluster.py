@@ -132,15 +132,15 @@ class RenderTest(unittest.TestCase):
                         for g in rule["apiGroups"] for r in rule["resources"]}
         self.assertEqual(cluster_wide, {
             ("", "nodes"): {"list"},
-            ("", "namespaces"): {"get", "create", "patch"},
-            ("", "serviceaccounts"): {"get", "create", "patch"},
-            ("", "resourcequotas"): {"get", "create", "patch"},
-            ("", "limitranges"): {"get", "create", "patch"},
-            ("networking.k8s.io", "networkpolicies"): {"get", "create", "patch"},
-            ("", "secrets"): {"get", "create", "patch", "deletecollection"},
+            ("", "namespaces"): {"create", "patch"},
+            ("", "serviceaccounts"): {"create", "patch"},
+            ("", "resourcequotas"): {"create", "patch"},
+            ("", "limitranges"): {"create", "patch"},
+            ("networking.k8s.io", "networkpolicies"): {"create", "patch"},
+            ("", "secrets"): {"create", "patch", "deletecollection"},
             ("serving.knative.dev", "services"): {"get", "create", "patch", "delete"},
             ("serving.knative.dev", "revisions"): {"get"},
-        }, "no list or watch, no pods outside the worker's namespace, nothing it does not write")
+        }, "nothing listed but nodes, nothing watched, no Secret read, no pods outside the worker's namespace")
         pulls = roles["function-worker-pulls"]
         self.assertEqual(pulls["metadata"]["namespace"], "titan-function-system")
         self.assertEqual(pulls["rules"][0]["resources"], ["pods"])

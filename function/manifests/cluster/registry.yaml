@@ -1,9 +1,10 @@
 # CNCF Distribution as the code registry of dev: it takes cross-repository mounts (HTTP 201), which an image
 # function relies on. On the node's own network at 127.0.0.1:5100, so containerd pulls from `localhost:5100`
-# (registries.yaml, function/host/install.sh). Not a Service: off the host, only titan-k3s's pods reach it, at
-# host.lima.internal:5100 through Lima's user network, where the dev control plane pushes function images. No
-# authentication: any pod of titan-k3s could push too, a risk accepted on dev
-# (titan-ops status/known-state.md); the control plane deletes the image of a version it no longer keeps.
+# (registries.yaml, function/host/install.sh). Not a Service: off the host, Lima's VMs reach it at
+# host.lima.internal:5100 through their user network, where the dev control plane (titan-k3s) pushes function images;
+# titan-incus reaches the host at that address too (not measured on this port). No authentication: any of them could
+# push, a risk accepted on dev (titan-ops status/known-state.md#function-registry-dev); the control plane deletes the
+# image of a version it no longer keeps.
 apiVersion: v1
 kind: Namespace
 metadata: {name: registry}
