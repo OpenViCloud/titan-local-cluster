@@ -366,9 +366,9 @@ spec:
                 limits:
                   memory: 64Mi
 ---
-# Every 10 minutes, off the meter's minutes: the zip and the image of each function version no longer kept, and of each
-# deleted function, leave the function code bucket and the registry (titan-ops features/ovc-function/design.md#code-storage).
-# A control plane with no function cluster has none to clean.
+# Every 10 minutes: the zip and the image of each function version no longer kept, and of each deleted function, leave
+# the function code bucket and the registry (titan-ops features/ovc-function/design.md#code-storage). Prd has no
+# function cluster, so no function and nothing to clean.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
