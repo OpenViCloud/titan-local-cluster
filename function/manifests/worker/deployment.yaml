@@ -1,0 +1,41 @@
+# One worker: it runs the reconciler of this cluster, and two would report each runtime twice (Recreate, so a rollout
+# never runs two). On the node's own network: the dev control plane is reachable only at the host's 127.0.0.1:8080,
+# where Lima forwards titan-k3s's ingress, as api.localhost (docs/network.md); hostAliases pins that name, since the
+# worker resolves through /etc/hosts and the LAN's DNS does not know it. /healthz listens on every interface of the host:
+# the kubelet probes the node's address.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: function-worker, namespace: titan-function-system}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: function-worker}}
+  template:
+    metadata: {labels: {app: function-worker}}
+    spec:
+      serviceAccountName: function-worker
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      hostAliases:
+        - {ip: 127.0.0.1, hostnames: [api.localhost]}
+      containers:
+        - name: function-worker
+          # OpenViCloud/titan-function-worker@39c0a68 (main), the digest its CI printed.
+          image: ghcr.io/openvicloud/titan-function-worker@sha256:c57bb3d394fd9e780e1e0f73f0599355cde617b520a622a5a6aad0fb703f7d6d
+          env:
+            - {name: CP_BASE_URL, value: "http://api.localhost:8080"}
+            - {name: FUNCTION_CLUSTER_ID, value: local-function}
+            - {name: HEALTH_ADDR, value: "0.0.0.0:10390"}
+          envFrom:
+            - secretRef: {name: function-worker-secrets}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 10390}
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}

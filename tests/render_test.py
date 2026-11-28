@@ -127,6 +127,18 @@ class DevRender(unittest.TestCase):
             "Clusters__0__Ipv6Block": "2001:db8:0:d400::/56",
         })
 
+    # The function cluster's id is the one its worker names itself by: a command the control plane gives another id fails
+    # for good in the worker, and the worker's reconciler asks the control plane for that id.
+    def test_the_function_cluster_is_the_one_the_function_worker_runs_in(self):
+        listed = cluster_list(render("control-plane"))
+        worker = (REPO / "function/manifests/worker/deployment.yaml").read_text()
+        worker_id = re.search(r"name: FUNCTION_CLUSTER_ID, value: ([\w-]+)", worker).group(1)
+        self.assertEqual({k: v for k, v in listed.items() if k.startswith("FunctionClusters__")}, {
+            "FunctionClusters__0__Id": worker_id,
+            "FunctionClusters__0__Name": "Local functions",
+        })
+        self.assertNotEqual(worker_id, listed["Clusters__0__Id"], "a function cluster's id may not be an Incus cluster's")
+
     # Without the block, a network that asks for public IPv6 (and so every load balancer) answers 422 IPV6_NOT_AVAILABLE.
     # The block is the one lima/provision/incus.sh routes on ovnup: the control plane hands out /64s that titan-incus routes.
     def test_the_clusters_ipv6_block_is_the_one_titan_incus_routes(self):

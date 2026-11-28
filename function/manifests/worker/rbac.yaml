@@ -1,0 +1,35 @@
+# Only what the worker's commands use today: read the nodes and the images their kubelets report, and run the pull
+# pods in its own namespace (function-runtime.sync). Each new command adds its own rule here.
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: function-worker, namespace: titan-function-system}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: titan-function-worker}
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: titan-function-worker}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: titan-function-worker}
+subjects:
+  - {kind: ServiceAccount, name: function-worker, namespace: titan-function-system}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: function-worker-pulls, namespace: titan-function-system}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, create, patch, delete, deletecollection]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: function-worker-pulls, namespace: titan-function-system}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: function-worker-pulls}
+subjects:
+  - {kind: ServiceAccount, name: function-worker, namespace: titan-function-system}

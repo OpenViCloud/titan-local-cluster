@@ -24,6 +24,7 @@ import urllib.request
 REPO = pathlib.Path(__file__).resolve().parent.parent
 FUNCTION = REPO / "function"
 CLUSTER = FUNCTION / "manifests" / "cluster"
+WORKER = FUNCTION / "manifests" / "worker"
 CRDS = FUNCTION / "manifests" / "crds"
 PINS = FUNCTION / "manifests" / "pins.txt"
 INSTALL = FUNCTION / "host" / "install.sh"
@@ -71,6 +72,7 @@ class RenderTest(unittest.TestCase):
     def setUpClass(cls):
         cls.cluster = render(CLUSTER)
         cls.crds = render(CRDS)
+        cls.worker = render(WORKER)
 
     def test_kata_fc_runtimeclass_is_ours(self):
         rc = [o for o in self.cluster if o["kind"] == "RuntimeClass" and o["metadata"]["name"] == "kata-fc"]
@@ -92,7 +94,7 @@ class RenderTest(unittest.TestCase):
 
     def test_no_image_floats(self):
         seen = 0
-        for obj in self.cluster + self.crds:
+        for obj in self.cluster + self.crds + self.worker:
             for image in images_of(obj):
                 seen += 1
                 self.assertIn("@sha256:", image, f"{obj['kind']}/{obj['metadata']['name']}: {image}")
@@ -105,6 +107,32 @@ class RenderTest(unittest.TestCase):
         for image in envoy:
             self.assertRegex(image, r"@sha256:[0-9a-f]{64}$")
             self.assertNotIn("-latest", image, "net-kourier 1.24.0 names envoy:v1.37-latest, a floating tag")
+
+    def test_the_function_worker_is_one_pod_reaching_the_control_plane_on_the_host(self):
+        deploy = [o for o in self.worker if o["kind"] == "Deployment"]
+        self.assertEqual(len(deploy), 1)
+        self.assertEqual(deploy[0]["spec"]["replicas"], 1, "two workers would report each runtime twice")
+        self.assertEqual(deploy[0]["spec"]["strategy"]["type"], "Recreate")
+        spec = deploy[0]["spec"]["template"]["spec"]
+        self.assertTrue(spec["hostNetwork"], "the dev control plane is at the host's 127.0.0.1:8080 only (docs/network.md)")
+        self.assertIn({"ip": "127.0.0.1", "hostnames": ["api.localhost"]}, spec["hostAliases"])
+        container = spec["containers"][0]
+        env = {e["name"]: e.get("value") for e in container["env"]}
+        self.assertEqual(env["CP_BASE_URL"], "http://api.localhost:8080")
+        self.assertEqual(env["FUNCTION_CLUSTER_ID"], "local-function")
+        port = int(env["HEALTH_ADDR"].rsplit(":", 1)[1])
+        self.assertNotIn(port, LIMA_PORTS)
+        self.assertEqual(container["livenessProbe"]["httpGet"]["port"], port)
+        self.assertEqual(container["envFrom"], [{"secretRef": {"name": "function-worker-secrets"}}])
+        self.assertEqual(spec["serviceAccountName"], "function-worker")
+
+    def test_the_function_worker_may_read_nodes_and_run_pods_in_its_namespace_only(self):
+        roles = {o["metadata"]["name"]: o for o in self.worker if o["kind"] in ("ClusterRole", "Role")}
+        self.assertEqual(roles["titan-function-worker"]["rules"], [{"apiGroups": [""], "resources": ["nodes"], "verbs": ["get", "list"]}])
+        pulls = roles["function-worker-pulls"]
+        self.assertEqual(pulls["metadata"]["namespace"], "titan-function-system")
+        self.assertEqual(pulls["rules"][0]["resources"], ["pods"])
+        self.assertEqual(set(pulls["rules"][0]["verbs"]), {"get", "list", "create", "patch", "delete", "deletecollection"})
 
     def test_registry_is_ours_and_local(self):
         deploy = [o for o in self.cluster if o["kind"] == "Deployment" and o["metadata"]["name"] == "registry"]
@@ -317,18 +345,36 @@ class ScriptTest(unittest.TestCase):
         self.assertIn("HOST_MEMORY=LOW", result.stdout + result.stderr)
         self.assertNotIn("apply", calls)
 
-    def test_up_applies_crds_before_the_rest(self):
+    def test_up_applies_crds_then_the_rest_then_the_worker_and_its_token(self):
         with tempfile.TemporaryDirectory() as work:
             kubeconfig = pathlib.Path(work, "kubeconfig")
             kubeconfig.write_text("apiVersion: v1\nclusters:\n- cluster: {server: 'https://127.0.0.1:6444'}\n  name: x\n")
-            result, calls = self.run_script(UP, {"FN_KUBECONFIG": str(kubeconfig), "HOST_MEMINFO": self.meminfo(work, 8000000)},
-                                            stub_kubectl=True)
+            secrets = pathlib.Path(work, "secrets.env")
+            secrets.write_text("TITAN_DB_PASSWORD=x\nINTERNAL_TOKEN=tok-9f3a\n")
+            result, calls = self.run_script(UP, {"FN_KUBECONFIG": str(kubeconfig), "HOST_MEMINFO": self.meminfo(work, 8000000),
+                                                 "FN_SECRETS_ENV": str(secrets)}, stub_kubectl=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
         applies = [line for line in calls.splitlines() if " apply " in f" {line} "]
-        self.assertEqual(len(applies), 2, calls)
+        self.assertEqual(len(applies), 4, calls)
         self.assertIn("manifests/crds", applies[0])
         self.assertIn("manifests/cluster", applies[1])
+        self.assertIn("manifests/worker", applies[2])
+        self.assertTrue(applies[3].endswith("-f -"), "the worker's Secret is applied from stdin")
         for line in applies:
             self.assertIn("--server-side", line)
+        self.assertNotIn("tok-9f3a", calls, "the token never reaches argv")
+        self.assertIn("function-worker-secrets --from-env-file=/dev/stdin", calls)
+
+    def test_up_without_the_internal_token_applies_nothing(self):
+        with tempfile.TemporaryDirectory() as work:
+            kubeconfig = pathlib.Path(work, "kubeconfig")
+            kubeconfig.write_text("apiVersion: v1\nclusters:\n- cluster: {server: 'https://127.0.0.1:6444'}\n  name: x\n")
+            result, calls = self.run_script(UP, {"FN_KUBECONFIG": str(kubeconfig), "HOST_MEMINFO": self.meminfo(work, 8000000),
+                                                 "FN_SECRETS_ENV": str(pathlib.Path(work, "absent.env"))}, stub_kubectl=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("INTERNAL_TOKEN", result.stderr)
+        self.assertNotIn("apply", calls)
+
         for line in calls.splitlines():
             self.assertIn(str(kubeconfig), line, "every call names the function cluster's kubeconfig, never the default")
 

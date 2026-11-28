@@ -24,6 +24,11 @@ configMapGenerator:
       # The /56 that lima/provision/incus.sh routes on ovnup. Without it a network that asks for public IPv6 answers 422,
       # so no load balancer can be made.
       - Clusters__0__Ipv6Block=2001:db8:0:d400::/56
+      # The function cluster of the Ubuntu host (function/, docs/topology.md#function-cluster), whose worker names itself
+      # by the same id (function/manifests/worker/deployment.yaml). macOS has no function cluster: a runtime sync there
+      # stays Syncing, since no worker leases its command.
+      - FunctionClusters__0__Id=local-function
+      - FunctionClusters__0__Name=Local functions
 
 patches:
   - path: patch-env.yaml

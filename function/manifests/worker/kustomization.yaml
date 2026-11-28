@@ -1,0 +1,9 @@
+# The function worker on the function cluster (titan-ops features/ovc-function/design.md#components): the one component
+# that writes this cluster's API, leasing the function service's commands from the dev control plane. function/up.sh
+# applies it after the cluster, then writes its token Secret from secrets.env.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - deployment.yaml
