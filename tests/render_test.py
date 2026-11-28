@@ -110,6 +110,14 @@ class DevRender(unittest.TestCase):
             self.assertEqual(env[name]["valueFrom"]["secretKeyRef"],
                              {"name": "control-plane-backup-credentials", "key": key, "optional": True})
 
+    def test_function_secrets_are_encrypted_under_dev_s_key_k1_from_an_optional_secret(self):
+        # (titan-ops features/ovc-function/design.md#function-secrets): optional, so the pod starts without the Secret.
+        env = {e["name"]: e for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
+        for name in ("FunctionSecrets__ActiveKeyId", "FunctionSecrets__Keys__k1"):
+            self.assertEqual(env[name]["valueFrom"]["secretKeyRef"],
+                             {"name": "control-plane-function-secrets", "key": name, "optional": True})
+            self.assertNotIn("value", env[name])
+
     def test_the_control_plane_pushes_to_the_registry_the_kubelets_pull_from_and_names_function_urls(self):
         env = {e["name"]: e.get("value") for c in containers(render("control-plane"), "control-plane") for e in c["env"]}
         self.assertEqual(env["FunctionRegistry__PushUrl"], "http://host.lima.internal:5100")

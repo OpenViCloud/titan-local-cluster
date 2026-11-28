@@ -19,8 +19,8 @@ spec:
         - {ip: 127.0.0.1, hostnames: [api.localhost]}
       containers:
         - name: function-worker
-          # OpenViCloud/titan-function-worker@e31bff1 (main), the digest its CI printed.
-          image: ghcr.io/openvicloud/titan-function-worker@sha256:7bee4e41dbd06170b680003d1fa15702c47661d25daf9d6ca74552420bbcfaa3
+          # OpenViCloud/titan-function-worker@dfa18230 (main), the digest its CI printed.
+          image: ghcr.io/openvicloud/titan-function-worker@sha256:8641f34d4d5f2249db2b6550198cd93a8ddad0b0cb4cb5f46a6415ad5af8dbb8
           env:
             - {name: CP_BASE_URL, value: "http://api.localhost:8080"}
             - {name: FUNCTION_CLUSTER_ID, value: local-function}

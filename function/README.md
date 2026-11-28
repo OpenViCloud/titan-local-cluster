@@ -39,7 +39,7 @@ sudo bash function/host/uninstall.sh
 ## What is where
 
 - `host/install.sh`, `host/uninstall.sh`: the parts that need root.
-- `manifests/worker`: the function worker (namespace; RBAC: list nodes, get/create/patch pods and delete them as a collection in `titan-function-system`, and cluster-wide the objects of a tenant's namespace, a version's Secret, a function's Knative Service (delete too) and its revisions (read); Deployment with the cluster's ranges for a tenant's `NetworkPolicy`).
+- `manifests/worker`: the function worker (namespace; RBAC: list nodes, get/create/patch pods and delete them as a collection in `titan-function-system`, and cluster-wide the objects of a tenant's namespace, a version's Secret, a function's Knative Service (delete too) and its revisions (read), a function's CronJob (create, patch, delete); Deployment with the cluster's ranges for a tenant's `NetworkPolicy`).
 - `manifests/crds`, `manifests/cluster`: kustomize. Knative and net-kourier are not copied here: the kustomizations download
   their release assets (tag-pinned) and `manifests/pins.txt` holds each file's SHA-256. `tests/test_function_cluster.py` (CI)
   checks it; `up.sh` does not, so a tag moved after the fact changes what `up.sh` applies and only CI turns red. net-kourier names `envoy:v1.37-latest`; the kustomization replaces it with a digest.
