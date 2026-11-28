@@ -140,6 +140,7 @@ class RenderTest(unittest.TestCase):
             ("", "secrets"): {"create", "patch", "deletecollection"},
             ("serving.knative.dev", "services"): {"get", "create", "patch", "delete"},
             ("serving.knative.dev", "revisions"): {"get"},
+            ("batch", "cronjobs"): {"create", "patch", "delete"},
         }, "nothing listed but nodes, nothing watched, no Secret read, no pods outside the worker's namespace")
         pulls = roles["function-worker-pulls"]
         self.assertEqual(pulls["metadata"]["namespace"], "titan-function-system")

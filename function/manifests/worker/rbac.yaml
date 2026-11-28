@@ -1,7 +1,7 @@
 # Only what the worker's commands use: read the nodes and the images their kubelets report, and run the pull pods in its
 # own namespace (function-runtime.sync, function.deploy); write a tenant's namespace and what isolates it (template 1), a
-# version's Secret and a function's Knative Service (template 2), and read the Service's revisions (function.deploy,
-# function.delete, the reconciler). Tenant namespaces are made on the fly, so those rules are cluster-wide
+# version's Secret, a function's Knative Service (template 2) and its CronJob (template 3), and read the Service's
+# revisions (function.deploy, function.delete, the reconciler). Tenant namespaces are made on the fly, so those rules are cluster-wide
 # (titan-ops features/ovc-function/design.md#k8s-templates). Each new command adds its own rule here.
 apiVersion: v1
 kind: ServiceAccount
@@ -35,6 +35,11 @@ rules:
   - apiGroups: [serving.knative.dev]
     resources: [revisions]
     verbs: [get]
+  # A version with a schedule applies the function's CronJob, one without deletes it, and so does function.delete; the
+  # garbage collector removes its Jobs and their pods, so no rule on Jobs.
+  - apiGroups: [batch]
+    resources: [cronjobs]
+    verbs: [create, patch, delete]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

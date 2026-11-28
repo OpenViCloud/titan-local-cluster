@@ -93,7 +93,7 @@ run() {
 value() { sed -n "s/^$2=//p" "$1"; }
 
 KEYS="TITAN_DB_PASSWORD INTERNAL_TOKEN KEYCLOAK_ADMIN_PASSWORD BETA_USER_PASSWORD BETA_USER_2_PASSWORD
-  BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY CHAT_DB_PASSWORD IDEMPOTENCY_HASH_KEY"
+  BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY CHAT_DB_PASSWORD IDEMPOTENCY_HASH_KEY FUNCTION_SECRETS_KEY_K1"
 
 echo "first run on a new cluster: no vault, no GitHub token, no secrets.env"
 mkdir -p "$WORK/fresh"
@@ -122,6 +122,9 @@ printf 'Idempotency__HashKey=%s\n' "$(value "$FILE" IDEMPOTENCY_HASH_KEY)" | cmp
   && ok "the control plane's Idempotency hash key comes from the file" || bad "control-plane-idempotency differs from the file"
 grep -q 'create secret generic control-plane-idempotency -n titan-dev' "$WORK/fresh.kubectl" \
   && ok "in titan-dev, where the control plane reads it" || bad "wrong namespace or name for control-plane-idempotency"
+printf 'FunctionSecrets__ActiveKeyId=k1\nFunctionSecrets__Keys__k1=%s\n' "$(value "$FILE" FUNCTION_SECRETS_KEY_K1)" \
+  | cmp -s - "$WORK/fresh.stdin.control-plane-function-secrets" \
+  && ok "the control plane's function secrets key k1 comes from the file, active" || bad "control-plane-function-secrets differs from the file"
 printf 'CP_INTERNAL_TOKEN=%s\n' "$token" | cmp -s - "$WORK/fresh.stdin.worker-secrets" \
   && ok "the worker gets the same internal token" || bad "worker-secrets differs from the file"
 printf 'admin-password=%s\n' "$(value "$FILE" KEYCLOAK_ADMIN_PASSWORD)" | cmp -s - "$WORK/fresh.stdin.keycloak-admin-secret" \
@@ -199,6 +202,9 @@ done
 # Added after the cluster's other secrets: applied on every run from the file, so a running cluster gets it too.
 printf 'Idempotency__HashKey=%s\n' "$(value "$FILE" IDEMPOTENCY_HASH_KEY)" | cmp -s - "$WORK/running.stdin.control-plane-idempotency" \
   && ok "a running cluster gets the Idempotency hash key from the file" || bad "control-plane-idempotency was not applied on a running cluster"
+printf 'FunctionSecrets__ActiveKeyId=k1\nFunctionSecrets__Keys__k1=%s\n' "$(value "$FILE" FUNCTION_SECRETS_KEY_K1)" \
+  | cmp -s - "$WORK/running.stdin.control-plane-function-secrets" \
+  && ok "a running cluster gets the function secrets key from the file" || bad "control-plane-function-secrets was not applied on a running cluster"
 grep -q 'get secret.*-o \|get secret.*jsonpath\|get secret.*yaml\|get secret.*json' "$WORK/running.kubectl" \
   && bad "the script reads a Secret's content" || ok "the script never reads a Secret's content"
 printf 'password=admin-test-local-only\n' | cmp -s - "$WORK/running.stdin.admin-test-credentials" \
@@ -320,6 +326,8 @@ for real in /opt/homebrew/bin/openssl /usr/bin/openssl; do
   printf '%s' "$text" | grep -q 'TLS Web Server Authentication' && ok "it is a server certificate" || bad "no serverAuth"
   printf '%s' "$ca_text" | grep -q 'CA:TRUE' && ok "the CA says CA:TRUE" || bad "CA basic constraints: $ca_text"
   printf '%s' "$text" | grep -q 'CA:TRUE' && bad "the server certificate is a CA" || ok "the server certificate is not a CA"
+  [ "$(value "$RDIR/secrets.env" FUNCTION_SECRETS_KEY_K1 | base64 -d 2>/dev/null | wc -c)" -eq 32 ] \
+    && ok "the function secrets key is 32 bytes, base64" || bad "FUNCTION_SECRETS_KEY_K1 is not 32 bytes of base64"
 done
 
 echo "PASS=$PASS FAIL=$FAIL"

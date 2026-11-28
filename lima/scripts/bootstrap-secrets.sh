@@ -24,6 +24,8 @@
 #   refuses the value, so every answer is the assistant's busy text. The script never generates a key; one written into
 #   secrets.env by hand as OPENROUTER_API_KEY is used instead.
 # - control-plane-idempotency, the control plane's Idempotency hash key from secrets.env, re-applied every run.
+# - control-plane-function-secrets, the master key of the customers' function secrets (FUNCTION_SECRETS_KEY_K1 in
+#   secrets.env), re-applied every run.
 # Values go through pipes and the file only: no command-line argument, nothing printed.
 # Needs: titan-k3s running.
 set -euo pipefail
@@ -100,6 +102,7 @@ ensure_value BACKUP_S3_ACCESS_KEY_ID openssl rand -hex 10
 ensure_value BACKUP_S3_SECRET_ACCESS_KEY openssl rand -hex 20
 ensure_value CHAT_DB_PASSWORD openssl rand -hex 24
 ensure_value IDEMPOTENCY_HASH_KEY openssl rand -hex 32
+ensure_value FUNCTION_SECRETS_KEY_K1 openssl rand -base64 32
 echo "secrets.env at $SECRETS_FILE"
 
 # ── S3 CA and certificate ─────────────────────────────────────────────────────
@@ -222,6 +225,13 @@ unset chat_db_password openrouter_key
 # value stays as long as secrets.env does; a lost file means a new key, which only makes Idempotency-Keys still kept
 # (about a day: IdempotencyCleanup) answer 422 IDEMPOTENCY_KEY_REUSED. A running control plane reads it only after a restart.
 printf 'Idempotency__HashKey=%s\n' "$(from_file IDEMPOTENCY_HASH_KEY)" | apply_secret titan-dev control-plane-idempotency
+
+# The master key that encrypts the customers' function secrets, AES-256-GCM (titan-ops
+# features/ovc-function/design.md#function-secrets): 32 random bytes, base64, as key k1, the active one. Applied on every
+# run like the hash key above. The value stays as long as secrets.env does; a lost file means a new key, and every
+# function secret encrypted under the old one is lost: its customer sets it again.
+printf 'FunctionSecrets__ActiveKeyId=k1\nFunctionSecrets__Keys__k1=%s\n' "$(from_file FUNCTION_SECRETS_KEY_K1)" |
+  apply_secret titan-dev control-plane-function-secrets
 
 # ── Generated once, applied when the cluster has none ─────────────────────────
 if ! secret_absent titan-dev control-plane-secrets; then
