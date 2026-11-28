@@ -817,7 +817,7 @@ class ScheduledJobs(unittest.TestCase):
 
     JOBS = {"meter", "backup-schedule", "backup-status", "template-sync-never-asked", "idempotency-cleanup",
             "provider-command-retention", "vm-metric-retention", "usage-record-retention", "wallet-sweep",
-            "default-network-backfill"}
+            "default-network-backfill", "function-code-cleanup"}
 
     @staticmethod
     def job_of(cronjob):
